@@ -19,8 +19,16 @@ const (
 )
 
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "get-config":
+			PrintConfig()
+			return
+		}
+	}
+
 	fmt.Printf("%s%sStarting AI Shell...%s\n", ColorBold, ColorCyan, ColorReset)
-	fmt.Printf("%sType 'exit' or 'quit' to leave, or start with '!' to run a shell command.%s\n", ColorYellow, ColorReset)
+	fmt.Printf("%sType 'exit' or 'quit' to leave, 'get-config' to show settings, or start with '!' to run a shell command.%s\n", ColorYellow, ColorReset)
 
 	scanner := bufio.NewScanner(os.Stdin)
 	ctx := context.Background()
@@ -40,6 +48,11 @@ func main() {
 
 		if trimmed == "exit" || trimmed == "quit" {
 			break
+		}
+
+		if trimmed == "get-config" {
+			PrintConfig()
+			continue
 		}
 
 		// Handle shell commands

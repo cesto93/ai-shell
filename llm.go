@@ -174,3 +174,23 @@ func CallOllama(ctx context.Context, prompt string) error {
 	fmt.Println()
 	return nil
 }
+
+// PrintConfig prints the current configuration to the console
+func PrintConfig() {
+	cfg, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("%sError loading config: %v%s\n", ColorYellow, err, ColorReset)
+		return
+	}
+
+	fmt.Printf("%sCurrent Configuration:%s\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("Model: %s%s%s\n", ColorGreen, cfg.LLM.Model, ColorReset)
+
+	// Show config file location
+	configUsed := viper.ConfigFileUsed()
+	if configUsed != "" {
+		fmt.Printf("Config file: %s%s%s\n", ColorBlue, configUsed, ColorReset)
+	} else {
+		fmt.Printf("Config file: %sNone (using defaults)%s\n", ColorYellow, ColorReset)
+	}
+}
