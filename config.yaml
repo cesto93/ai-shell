@@ -1,0 +1,2 @@
+llm:
+  model: "granite4:3b-h"
