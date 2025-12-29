@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/ollama/ollama/api"
 	"github.com/spf13/viper"
@@ -15,13 +17,46 @@ type Config struct {
 	} `mapstructure:"llm"`
 }
 
-// LoadConfig reads the configuration from config.yaml
+// LoadConfig reads the configuration from config.yaml in various locations
 func LoadConfig() (*Config, error) {
-	viper.SetConfigFile("config.yaml")
+	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
-	viper.AddConfigPath(".")
+	viper.AddConfigPath(".") // Current directory
+
+	// Add user-specific config directory
+	userConfigDir, err := os.UserConfigDir()
+	var configPath string
+	if err == nil {
+		configPath = filepath.Join(userConfigDir, "ai-shell")
+		viper.AddConfigPath(configPath)
+	}
 
 	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			// If config not found, return default configuration
+			defaultConfig := &Config{
+				LLM: struct {
+					Model string `mapstructure:"model"`
+				}{
+					Model: "granite4:3b-h",
+				},
+			}
+
+			// Optionally: try to create a default config file in the user config dir
+			if configPath != "" {
+				err := os.MkdirAll(configPath, 0755)
+				if err == nil {
+					defaultConfigFile := filepath.Join(configPath, "config.yaml")
+					if _, err := os.Stat(defaultConfigFile); os.IsNotExist(err) {
+						// Create default config file
+						content := "llm:\n  model: \"granite4:3b-h\"\n"
+						_ = os.WriteFile(defaultConfigFile, []byte(content), 0644)
+					}
+				}
+			}
+
+			return defaultConfig, nil
+		}
 		return nil, fmt.Errorf("error reading config file: %w", err)
 	}
 
