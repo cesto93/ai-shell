@@ -64,7 +64,12 @@ func CallOllama(ctx context.Context, prompt string) error {
 		},
 	}
 
+	distro := GetDistro()
+	shell := GetShell()
+	systemPrompt := fmt.Sprintf("You are a helpful shell assistant. The user is running on %s using %s shell. Use this information to tailor your commands and advice.", distro, shell)
+
 	messages := []api.Message{
+		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: prompt},
 	}
 
