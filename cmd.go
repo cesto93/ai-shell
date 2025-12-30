@@ -109,12 +109,24 @@ func executeShellCommand(commandLine string) {
 		return
 	}
 
+	cfg, err := LoadConfig()
+	if err == nil && cfg.Shell.Confirm {
+		fmt.Printf("%sConfirm execution of: %s%s [y/N]: ", ColorBold, commandLine, ColorReset)
+		var response string
+		fmt.Scanln(&response)
+		response = strings.ToLower(strings.TrimSpace(response))
+		if response != "y" && response != "yes" {
+			fmt.Printf("%sCommand cancelled.%s\n", ColorYellow, ColorReset)
+			return
+		}
+	}
+
 	cmd := exec.Command("bash", "-c", commandLine)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		fmt.Printf("%sCommand failed: %v%s\n", ColorYellow, err, ColorReset)
 	}

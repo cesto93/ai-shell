@@ -69,6 +69,8 @@ Default configuration:
 ```yaml
 llm:
   model: "granite4:3b-h"
+shell:
+  confirm: true
 ```
 
 To change the model, simply update the `model` field in your config file.

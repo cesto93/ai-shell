@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/ollama/ollama/api"
 	"github.com/spf13/viper"
@@ -15,12 +16,17 @@ type Config struct {
 	LLM struct {
 		Model string `mapstructure:"model"`
 	} `mapstructure:"llm"`
+	Shell struct {
+		Confirm bool `mapstructure:"confirm"`
+	} `mapstructure:"shell"`
 }
 
 // LoadConfig reads the configuration from config.yaml in various locations
 func LoadConfig() (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
+	viper.SetDefault("llm.model", "granite4:3b-h")
+	viper.SetDefault("shell.confirm", true)
 	viper.AddConfigPath(".") // Current directory
 
 	// Add user-specific config directory
@@ -40,6 +46,11 @@ func LoadConfig() (*Config, error) {
 				}{
 					Model: "granite4:3b-h",
 				},
+				Shell: struct {
+					Confirm bool `mapstructure:"confirm"`
+				}{
+					Confirm: true, // Default to true for safety
+				},
 			}
 
 			// Optionally: try to create a default config file in the user config dir
@@ -49,7 +60,7 @@ func LoadConfig() (*Config, error) {
 					defaultConfigFile := filepath.Join(configPath, "config.yaml")
 					if _, err := os.Stat(defaultConfigFile); os.IsNotExist(err) {
 						// Create default config file
-						content := "llm:\n  model: \"granite4:3b-h\"\n"
+						content := "llm:\n  model: \"granite4:3b-h\"\nshell:\n  confirm: true\n"
 						_ = os.WriteFile(defaultConfigFile, []byte(content), 0644)
 					}
 				}
@@ -151,7 +162,24 @@ func CallOllama(ctx context.Context, prompt string) error {
 					continue
 				}
 
-				fmt.Printf("\n%s[Executing: %s]%s\n", ColorCyan, cmd, ColorReset)
+				if cfg.Shell.Confirm {
+					fmt.Printf("\n%s[LLM wants to execute: %s]%s\n", ColorCyan, cmd, ColorReset)
+					fmt.Printf("%sConfirm execution? [y/N]: %s", ColorBold, ColorReset)
+					var response string
+					fmt.Scanln(&response)
+					response = strings.ToLower(strings.TrimSpace(response))
+					if response != "y" && response != "yes" {
+						result := "Error: Command execution denied by user"
+						fmt.Printf("%s%s%s\n", ColorYellow, result, ColorReset)
+						messages = append(messages, api.Message{
+							Role:    "tool",
+							Content: result,
+						})
+						continue
+					}
+				} else {
+					fmt.Printf("\n%s[Executing: %s]%s\n", ColorCyan, cmd, ColorReset)
+				}
 				output, err := RunCommand(cmd)
 				if err != nil {
 					result := fmt.Sprintf("Error: %v\nOutput: %s", err, output)
@@ -185,6 +213,7 @@ func PrintConfig() {
 
 	fmt.Printf("%sCurrent Configuration:%s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("Model: %s%s%s\n", ColorGreen, cfg.LLM.Model, ColorReset)
+	fmt.Printf("Confirm Commands: %s%v%s\n", ColorGreen, cfg.Shell.Confirm, ColorReset)
 
 	// Show config file location
 	configUsed := viper.ConfigFileUsed()
