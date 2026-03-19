@@ -18,7 +18,8 @@ type Config struct {
 		Model string `mapstructure:"model"`
 	} `mapstructure:"llm"`
 	Shell struct {
-		Confirm bool `mapstructure:"confirm"`
+		Confirm         bool   `mapstructure:"confirm"`
+		AllowedCommands string `mapstructure:"allowed_commands"`
 	} `mapstructure:"shell"`
 }
 
@@ -28,6 +29,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetConfigType("yaml")
 	viper.SetDefault("llm.model", "granite4:3b-h")
 	viper.SetDefault("shell.confirm", true)
+	viper.SetDefault("shell.allowed_commands", "ls,pwd")
 	viper.AddConfigPath(".") // Current directory
 
 	// Add user-specific config directory
@@ -48,9 +50,11 @@ func LoadConfig() (*Config, error) {
 					Model: "granite4:3b-h",
 				},
 				Shell: struct {
-					Confirm bool `mapstructure:"confirm"`
+					Confirm         bool   `mapstructure:"confirm"`
+					AllowedCommands string `mapstructure:"allowed_commands"`
 				}{
-					Confirm: true, // Default to true for safety
+					Confirm:         true,
+					AllowedCommands: "ls,pwd",
 				},
 			}
 
@@ -61,7 +65,7 @@ func LoadConfig() (*Config, error) {
 					defaultConfigFile := filepath.Join(configPath, "config.yaml")
 					if _, err := os.Stat(defaultConfigFile); os.IsNotExist(err) {
 						// Create default config file
-						content := "llm:\n  model: \"granite4:3b-h\"\nshell:\n  confirm: true\n"
+						content := "llm:\n  model: \"granite4:3b-h\"\nshell:\n  confirm: true\n  allowed_commands: \"ls,pwd\"\n"
 						_ = os.WriteFile(defaultConfigFile, []byte(content), 0644)
 					}
 				}
@@ -163,7 +167,10 @@ func CallOllama(ctx context.Context, prompt string) error {
 					continue
 				}
 
-				if cfg.Shell.Confirm {
+				cmdName := getCommandName(cmd)
+				skipConfirm := isAllowedCommand(cmdName, cfg.Shell.AllowedCommands)
+
+				if cfg.Shell.Confirm && !skipConfirm {
 					fmt.Printf("\n%s[LLM wants to execute: %s]%s\n", ColorCyan, cmd, ColorReset)
 					fmt.Printf("%sConfirm execution? [y/N]: %s", ColorBold, ColorReset)
 					var response string
@@ -215,6 +222,7 @@ func PrintConfig() {
 	fmt.Printf("%sCurrent Configuration:%s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("Model: %s%s%s\n", ColorGreen, cfg.LLM.Model, ColorReset)
 	fmt.Printf("Confirm Commands: %s%v%s\n", ColorGreen, cfg.Shell.Confirm, ColorReset)
+	fmt.Printf("Allowed Commands: %s%s%s\n", ColorGreen, cfg.Shell.AllowedCommands, ColorReset)
 
 	// Show config file location
 	configUsed := viper.ConfigFileUsed()
@@ -314,7 +322,7 @@ func SaveModel(modelName string) error {
 
 	cfg.LLM.Model = modelName
 
-	content := fmt.Sprintf("llm:\n  model: %q\nshell:\n  confirm: %v\n", cfg.LLM.Model, cfg.Shell.Confirm)
+	content := fmt.Sprintf("llm:\n  model: %q\nshell:\n  confirm: %v\n  allowed_commands: %q\n", cfg.LLM.Model, cfg.Shell.Confirm, cfg.Shell.AllowedCommands)
 	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
@@ -333,4 +341,26 @@ func getConfigPath() (string, error) {
 		return "", err
 	}
 	return configPath, nil
+}
+
+func isAllowedCommand(cmd string, allowedList string) bool {
+	if allowedList == "" {
+		return false
+	}
+	allowed := strings.Split(allowedList, ",")
+	for _, a := range allowed {
+		a = strings.TrimSpace(a)
+		if a == cmd {
+			return true
+		}
+	}
+	return false
+}
+
+func getCommandName(cmd string) string {
+	parts := strings.Fields(cmd)
+	if len(parts) > 0 {
+		return parts[0]
+	}
+	return cmd
 }

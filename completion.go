@@ -77,10 +77,11 @@ func (c *completer) completeFiles(prefix string) [][]rune {
 	for _, entry := range entries {
 		name := entry.Name()
 		if strings.HasPrefix(name, prefix) {
+			suffix := strings.TrimPrefix(name, prefix)
 			if entry.IsDir() {
-				results = append(results, []rune(name+"/"))
+				results = append(results, []rune(suffix+"/"))
 			} else {
-				results = append(results, []rune(name))
+				results = append(results, []rune(suffix))
 			}
 		}
 	}
@@ -121,11 +122,12 @@ func (c *completer) completeInDir(dir, prefix string) [][]rune {
 	for _, entry := range entries {
 		name := entry.Name()
 		if strings.HasPrefix(name, prefixBase) {
+			suffix := strings.TrimPrefix(name, prefixBase)
 			fullPath := filepath.Join(dir, name)
 			if entry.IsDir() {
-				results = append(results, []rune(fullPath+"/"))
+				results = append(results, []rune(fullPath+suffix+"/"))
 			} else {
-				results = append(results, []rune(fullPath))
+				results = append(results, []rune(fullPath+suffix))
 			}
 		}
 	}
