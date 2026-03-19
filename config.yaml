@@ -1,4 +1,5 @@
 llm:
-  model: "granite4:3b-h"
+  model: "qwen3.5:2b"
 shell:
   confirm: true
+  allowed_commands: "ls,pwd"

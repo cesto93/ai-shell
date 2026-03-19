@@ -13,7 +13,8 @@ import (
 )
 
 type Config struct {
-	LLM struct {
+	ConfigFile string
+	LLM        struct {
 		Model string `mapstructure:"model"`
 	} `mapstructure:"llm"`
 	Shell struct {
@@ -22,24 +23,33 @@ type Config struct {
 	} `mapstructure:"shell"`
 }
 
-func LoadConfig() (*Config, error) {
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.SetDefault("llm.model", "granite4:3b-h")
-	viper.SetDefault("shell.confirm", true)
-	viper.SetDefault("shell.allowed_commands", "ls,pwd")
-	viper.AddConfigPath(".")
+var configPaths = []string{"."}
 
-	userConfigDir, err := os.UserConfigDir()
+var userConfigDirFunc = os.UserConfigDir
+
+func LoadConfig() (*Config, error) {
+	v := viper.New()
+	v.SetConfigName("config")
+	v.SetConfigType("yaml")
+	v.SetDefault("llm.model", "granite4:3b-h")
+	v.SetDefault("shell.confirm", true)
+	v.SetDefault("shell.allowed_commands", "ls,pwd")
+
+	for _, path := range configPaths {
+		v.AddConfigPath(path)
+	}
+
+	userConfigDir, err := userConfigDirFunc()
 	var configPath string
 	if err == nil {
 		configPath = filepath.Join(userConfigDir, "ai-shell")
-		viper.AddConfigPath(configPath)
+		v.AddConfigPath(configPath)
 	}
 
-	if err := viper.ReadInConfig(); err != nil {
+	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			defaultConfig := &Config{
+				ConfigFile: "",
 				LLM: struct {
 					Model string `mapstructure:"model"`
 				}{
@@ -61,6 +71,7 @@ func LoadConfig() (*Config, error) {
 					if _, err := os.Stat(defaultConfigFile); os.IsNotExist(err) {
 						content := "llm:\n  model: \"granite4:3b-h\"\nshell:\n  confirm: true\n  allowed_commands: \"ls,pwd\"\n"
 						_ = os.WriteFile(defaultConfigFile, []byte(content), 0644)
+						defaultConfig.ConfigFile = defaultConfigFile
 					}
 				}
 			}
@@ -71,9 +82,10 @@ func LoadConfig() (*Config, error) {
 	}
 
 	var config Config
-	if err := viper.Unmarshal(&config); err != nil {
+	if err := v.Unmarshal(&config); err != nil {
 		return nil, fmt.Errorf("error unmarshaling config: %w", err)
 	}
+	config.ConfigFile = v.ConfigFileUsed()
 
 	return &config, nil
 }
@@ -90,13 +102,14 @@ func PrintConfig() {
 	fmt.Printf("Confirm Commands: %s%v%s\n", ColorGreen, cfg.Shell.Confirm, ColorReset)
 	fmt.Printf("Allowed Commands: %s%s%s\n", ColorGreen, cfg.Shell.AllowedCommands, ColorReset)
 
-	configUsed := viper.ConfigFileUsed()
-	if configUsed != "" {
-		fmt.Printf("Config file: %s%s%s\n", ColorBlue, configUsed, ColorReset)
+	if cfg.ConfigFile != "" {
+		fmt.Printf("Config file: %s%s%s\n", ColorBlue, cfg.ConfigFile, ColorReset)
 	} else {
 		fmt.Printf("Config file: %sNone (using defaults)%s\n", ColorYellow, ColorReset)
 	}
 }
+
+var getConfigPathFunc = getConfigPath
 
 func getConfigPath() (string, error) {
 	userConfigDir, err := os.UserConfigDir()
@@ -111,16 +124,18 @@ func getConfigPath() (string, error) {
 }
 
 func SaveModel(modelName string) error {
-	configPath, err := getConfigPath()
-	if err != nil {
-		return fmt.Errorf("failed to get config path: %w", err)
-	}
-
-	configFile := filepath.Join(configPath, "config.yaml")
-
 	cfg, err := LoadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	configFile := cfg.ConfigFile
+	if configFile == "" {
+		configPath, err := getConfigPathFunc()
+		if err != nil {
+			return fmt.Errorf("failed to get config path: %w", err)
+		}
+		configFile = filepath.Join(configPath, "config.yaml")
 	}
 
 	cfg.LLM.Model = modelName
