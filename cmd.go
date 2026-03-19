@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -83,11 +82,6 @@ func startInteractiveShell() {
 				continue
 			}
 
-			if strings.HasPrefix(trimmed, "!") {
-				executeShellCommand(trimmed[1:])
-				continue
-			}
-
 			fmt.Printf("%sUnknown command: /%s%s\n", ColorYellow, trimmed, ColorReset)
 			continue
 		}
@@ -103,11 +97,6 @@ func startInteractiveShell() {
 
 		if trimmed == "help" {
 			PrintInteractiveHelp()
-			continue
-		}
-
-		if strings.HasPrefix(trimmed, "!") {
-			executeShellCommand(trimmed[1:])
 			continue
 		}
 
@@ -127,37 +116,7 @@ func PrintInteractiveHelp() {
 	fmt.Printf("  %s/help%s         - Show this help message\n", ColorGreen, ColorReset)
 	fmt.Printf("  %s/get-config%s   - Show current LLM settings\n", ColorGreen, ColorReset)
 	fmt.Printf("  %s/exit%s, %s/quit%s   - Exit the shell\n", ColorGreen, ColorReset, ColorGreen, ColorReset)
-	fmt.Printf("  %s/! <command>%s   - Execute a system shell command directly\n", ColorGreen, ColorReset)
 	fmt.Printf("  %s/<command>%s     - Use commands (Tab to autocomplete)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %s@<file>%s       - Autocomplete file paths (Tab after @)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %s<text>%s        - Send text to the AI for a response\n\n", ColorGreen, ColorReset)
-}
-
-func executeShellCommand(commandLine string) {
-	commandLine = strings.TrimSpace(commandLine)
-	if commandLine == "" {
-		return
-	}
-
-	cfg, err := LoadConfig()
-	if err == nil && cfg.Shell.Confirm {
-		fmt.Printf("%sConfirm execution of: %s%s [y/N]: ", ColorBold, commandLine, ColorReset)
-		var response string
-		fmt.Scanln(&response)
-		response = strings.ToLower(strings.TrimSpace(response))
-		if response != "y" && response != "yes" {
-			fmt.Printf("%sCommand cancelled.%s\n", ColorYellow, ColorReset)
-			return
-		}
-	}
-
-	cmd := exec.Command("bash", "-c", commandLine)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-
-	err = cmd.Run()
-	if err != nil {
-		fmt.Printf("%sCommand failed: %v%s\n", ColorYellow, err, ColorReset)
-	}
 }

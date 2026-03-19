@@ -6,7 +6,6 @@ An interactive shell powered by AI (**Ollama**) that helps you with commands, ex
 
 - **Interactive AI Chat**: Ask questions about shell commands, scripting, or general knowledge.
 - **System Awareness**: Automatically detects your Linux distribution and shell to provide tailored advice.
-- **Direct Command Execution**: Run system commands without leaving the AI shell using the `!` prefix.
 - **Autonomous Tool Use**: The AI can execute shell commands itself to gather information or perform tasks (enabled via Ollama tool-calling).
 - **Configurable**: Easily switch models via a YAML configuration file.
 
@@ -45,7 +44,6 @@ ai-shell
 Within the `ai-shell >` prompt:
 
 - **Type anything**: Send a request to the AI (e.g., "how do I find large files?").
-- **`! <command>`**: Execute a shell command directly (e.g., `! ls -la`).
 - **`help`**: Show the help menu.
 - **`get-config`**: See current model and configuration file location.
 - **`exit` or `quit`**: Close the shell.
