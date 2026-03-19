@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -162,6 +163,117 @@ func TestIsInCompletion(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCompleteInDir(t *testing.T) {
+	c := &completer{}
+
+	tmpDir := t.TempDir()
+	oldCwd, _ := os.Getwd()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer os.Chdir(oldCwd)
+
+	subDir := filepath.Join(tmpDir, "testdir")
+	if err := os.MkdirAll(subDir, 0755); err != nil {
+		t.Fatalf("Failed to create subdirectory: %v", err)
+	}
+
+	testFiles := []string{"file1.txt", "file2.log", "other.doc"}
+	for _, name := range testFiles {
+		f, err := os.Create(filepath.Join(subDir, name))
+		if err != nil {
+			t.Fatalf("Failed to create test file: %v", err)
+		}
+		f.Close()
+	}
+	os.MkdirAll(filepath.Join(subDir, "subdir"), 0755)
+
+	relDir := filepath.Join(".", "testdir")
+	cwd := filepath.Base(tmpDir)
+
+	tests := []struct {
+		name         string
+		dir          string
+		prefix       string
+		wantLen      int
+		wantContains string
+	}{
+		{
+			name:    "relative dir with file prefix",
+			dir:     relDir,
+			prefix:  "file",
+			wantLen: 2,
+		},
+		{
+			name:    "relative dir with dot prefix",
+			dir:     "./testdir",
+			prefix:  "file",
+			wantLen: 2,
+		},
+		{
+			name:    "absolute dir with file prefix",
+			dir:     subDir,
+			prefix:  "file",
+			wantLen: 2,
+		},
+		{
+			name:         "absolute dir with log extension",
+			dir:          subDir,
+			prefix:       "file2",
+			wantLen:      1,
+			wantContains: "file2.log",
+		},
+		{
+			name:    "no matches",
+			dir:     subDir,
+			prefix:  "nonexistent",
+			wantLen: 0,
+		},
+		{
+			name:    "non-existent directory",
+			dir:     "/nonexistent/path",
+			prefix:  "file",
+			wantLen: 0,
+		},
+		{
+			name:    "prefix matches all files",
+			dir:     subDir,
+			prefix:  "f",
+			wantLen: 2,
+		},
+		{
+			name:         "directory path with subdirectory",
+			dir:          subDir,
+			prefix:       "subdir",
+			wantLen:      1,
+			wantContains: "subdir/",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			results := c.completeInDir(tt.dir, tt.prefix)
+			if len(results) != tt.wantLen {
+				t.Errorf("completeInDir() got %d results, want %d", len(results), tt.wantLen)
+			}
+			if tt.wantContains != "" {
+				found := false
+				for _, r := range results {
+					if strings.Contains(string(r), tt.wantContains) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("completeInDir() expected to find %q in results", tt.wantContains)
+				}
+			}
+		})
+	}
+
+	_ = cwd
 }
 
 func TestCompleteFiles(t *testing.T) {
