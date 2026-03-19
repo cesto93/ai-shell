@@ -42,7 +42,6 @@ func Execute() {
 }
 
 func startInteractiveShell() {
-	fmt.Printf("%s%sStarting AI Shell...%s\n", ColorBold, ColorCyan, ColorReset)
 	PrintInteractiveHelp()
 
 	rl, err := NewReadline()
@@ -123,7 +122,6 @@ func startInteractiveShell() {
 }
 
 func PrintInteractiveHelp() {
-	fmt.Printf("%s%sAI Shell Interactive Mode%s\n", ColorBold, ColorCyan, ColorReset)
 	fmt.Printf("Type your requests to the AI or use special commands below.\n\n")
 	fmt.Printf("%sCommands (slash syntax):%s\n", ColorBold, ColorReset)
 	fmt.Printf("  %s/help%s         - Show this help message\n", ColorGreen, ColorReset)
