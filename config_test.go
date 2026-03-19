@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -90,5 +91,58 @@ llm:
 				t.Errorf("LoadConfig().Shell.Confirm = %v, want %v", cfg.Shell.Confirm, tt.wantConfirm)
 			}
 		})
+	}
+}
+
+func TestSaveModel(t *testing.T) {
+	configPath, err := getConfigPath()
+	if err != nil {
+		t.Fatalf("getConfigPath() error = %v", err)
+	}
+
+	configFile := filepath.Join(configPath, "config.yaml")
+	initialConfig := `llm:
+  model: "initial-model"
+shell:
+  confirm: true
+  allowed_commands: "ls,pwd"
+`
+
+	origData := []byte(`llm:
+  model: "granite4:3b-h"
+shell:
+  confirm: true
+  allowed_commands: "ls,pwd"
+`)
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		origData = nil
+	} else if err == nil {
+		origData, _ = os.ReadFile(configFile)
+	}
+
+	defer func() {
+		if origData != nil {
+			os.WriteFile(configFile, origData, 0644)
+		} else {
+			os.Remove(configFile)
+		}
+	}()
+
+	if err := os.WriteFile(configFile, []byte(initialConfig), 0644); err != nil {
+		t.Fatalf("Failed to write initial config: %v", err)
+	}
+
+	newModel := "new-model:latest"
+	if err := SaveModel(newModel); err != nil {
+		t.Fatalf("SaveModel() error = %v", err)
+	}
+
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Fatalf("Failed to read config file: %v", err)
+	}
+
+	if !bytes.Contains(data, []byte(`model: "new-model:latest"`)) {
+		t.Errorf("config file does not contain new model, got: %s", string(data))
 	}
 }
