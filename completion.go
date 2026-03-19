@@ -43,6 +43,7 @@ func (c *completer) Do(line []rune, pos int) ([][]rune, int) {
 var availableCommands = []string{
 	"help",
 	"get-config",
+	"models",
 	"exit",
 	"quit",
 }

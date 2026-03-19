@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/ollama/ollama/api"
@@ -222,4 +223,114 @@ func PrintConfig() {
 	} else {
 		fmt.Printf("Config file: %sNone (using defaults)%s\n", ColorYellow, ColorReset)
 	}
+}
+
+type ModelInfo struct {
+	Name       string
+	Size       string
+	ModifiedAt string
+}
+
+func GetAvailableModels() ([]ModelInfo, error) {
+	client, err := api.ClientFromEnvironment()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Ollama client: %w", err)
+	}
+
+	models, err := client.List(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to list models: %w", err)
+	}
+
+	var modelList []ModelInfo
+	for _, model := range models.Models {
+		modelList = append(modelList, ModelInfo{
+			Name: model.Name,
+		})
+	}
+
+	return modelList, nil
+}
+
+func SelectModel() error {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	models, err := GetAvailableModels()
+	if err != nil {
+		return err
+	}
+
+	if len(models) == 0 {
+		fmt.Printf("%sNo models found. Please install models using 'ollama pull <model>'%s\n", ColorYellow, ColorReset)
+		return nil
+	}
+
+	fmt.Printf("%sAvailable Models:%s\n\n", ColorBold+ColorCyan, ColorReset)
+
+	for i, model := range models {
+		marker := "  "
+		if model.Name == cfg.LLM.Model {
+			marker = "* "
+		}
+		fmt.Printf("%s[%d]%s %s%s%s\n", ColorCyan, i+1, ColorReset, marker, ColorGreen, model.Name)
+	}
+
+	fmt.Printf("\n%sEnter number to select model (or press Enter to cancel): %s", ColorBold, ColorReset)
+
+	var input string
+	fmt.Scanln(&input)
+	input = strings.TrimSpace(input)
+
+	if input == "" {
+		fmt.Printf("%sSelection cancelled.%s\n", ColorYellow, ColorReset)
+		return nil
+	}
+
+	choice, err := strconv.Atoi(input)
+	if err != nil || choice < 1 || choice > len(models) {
+		fmt.Printf("%sInvalid selection.%s\n", ColorYellow, ColorReset)
+		return nil
+	}
+
+	selectedModel := models[choice-1].Name
+	return SaveModel(selectedModel)
+}
+
+func SaveModel(modelName string) error {
+	configPath, err := getConfigPath()
+	if err != nil {
+		return fmt.Errorf("failed to get config path: %w", err)
+	}
+
+	configFile := filepath.Join(configPath, "config.yaml")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	cfg.LLM.Model = modelName
+
+	content := fmt.Sprintf("llm:\n  model: %q\nshell:\n  confirm: %v\n", cfg.LLM.Model, cfg.Shell.Confirm)
+	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	fmt.Printf("%sModel changed to: %s%s%s\n", ColorGreen, ColorBold, modelName, ColorReset)
+	return nil
+}
+
+func getConfigPath() (string, error) {
+	userConfigDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	configPath := filepath.Join(userConfigDir, "ai-shell")
+	if err := os.MkdirAll(configPath, 0755); err != nil {
+		return "", err
+	}
+	return configPath, nil
 }

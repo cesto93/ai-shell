@@ -82,6 +82,13 @@ func startInteractiveShell() {
 				continue
 			}
 
+			if trimmed == "models" {
+				if err := SelectModel(); err != nil {
+					fmt.Printf("%sError: %v%s\n", ColorYellow, err, ColorReset)
+				}
+				continue
+			}
+
 			fmt.Printf("%sUnknown command: /%s%s\n", ColorYellow, trimmed, ColorReset)
 			continue
 		}
@@ -115,6 +122,7 @@ func PrintInteractiveHelp() {
 	fmt.Printf("%sCommands (slash syntax):%s\n", ColorBold, ColorReset)
 	fmt.Printf("  %s/help%s         - Show this help message\n", ColorGreen, ColorReset)
 	fmt.Printf("  %s/get-config%s   - Show current LLM settings\n", ColorGreen, ColorReset)
+	fmt.Printf("  %s/models%s       - Switch to a different model\n", ColorGreen, ColorReset)
 	fmt.Printf("  %s/exit%s, %s/quit%s   - Exit the shell\n", ColorGreen, ColorReset, ColorGreen, ColorReset)
 	fmt.Printf("  %s/<command>%s     - Use commands (Tab to autocomplete)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %s@<file>%s       - Autocomplete file paths (Tab after @)\n", ColorGreen, ColorReset)
