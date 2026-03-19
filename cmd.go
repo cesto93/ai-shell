@@ -66,6 +66,33 @@ func startInteractiveShell() {
 			continue
 		}
 
+		if strings.HasPrefix(trimmed, "/") {
+			trimmed = trimmed[1:]
+			trimmed = strings.TrimSpace(trimmed)
+
+			if trimmed == "exit" || trimmed == "quit" {
+				break
+			}
+
+			if trimmed == "get-config" {
+				PrintConfig()
+				continue
+			}
+
+			if trimmed == "help" {
+				PrintInteractiveHelp()
+				continue
+			}
+
+			if strings.HasPrefix(trimmed, "!") {
+				executeShellCommand(trimmed[1:])
+				continue
+			}
+
+			fmt.Printf("%sUnknown command: /%s%s\n", ColorYellow, trimmed, ColorReset)
+			continue
+		}
+
 		if trimmed == "exit" || trimmed == "quit" {
 			break
 		}
@@ -98,13 +125,13 @@ func startInteractiveShell() {
 func PrintInteractiveHelp() {
 	fmt.Printf("%s%sAI Shell Interactive Mode%s\n", ColorBold, ColorCyan, ColorReset)
 	fmt.Printf("Type your requests to the AI or use special commands below.\n\n")
-	fmt.Printf("%sCommands:%s\n", ColorBold, ColorReset)
-	fmt.Printf("  %shelp%s           - Show this help message\n", ColorGreen, ColorReset)
-	fmt.Printf("  %sget-config%s     - Show current LLM settings\n", ColorGreen, ColorReset)
-	fmt.Printf("  %sexit%s, %squit%s      - Exit the shell\n", ColorGreen, ColorReset, ColorGreen, ColorReset)
-	fmt.Printf("  %s! <command>%s    - Execute a system shell command directly\n", ColorGreen, ColorReset)
-	fmt.Printf("  %s@<file>%s        - Autocomplete file paths (Tab after @)\n", ColorGreen, ColorReset)
-	fmt.Printf("  %s<text>%s         - Send text to the AI for a response\n\n", ColorGreen, ColorReset)
+	fmt.Printf("%sCommands (slash syntax):%s\n", ColorBold, ColorReset)
+	fmt.Printf("  %s/help%s         - Show this help message\n", ColorGreen, ColorReset)
+	fmt.Printf("  %s/get-config%s   - Show current LLM settings\n", ColorGreen, ColorReset)
+	fmt.Printf("  %s/exit%s, %s/quit%s   - Exit the shell\n", ColorGreen, ColorReset, ColorGreen, ColorReset)
+	fmt.Printf("  %s/! <command>%s   - Execute a system shell command directly\n", ColorGreen, ColorReset)
+	fmt.Printf("  %s@<file>%s       - Autocomplete file paths (Tab after @)\n", ColorGreen, ColorReset)
+	fmt.Printf("  %s<text>%s        - Send text to the AI for a response\n\n", ColorGreen, ColorReset)
 }
 
 func executeShellCommand(commandLine string) {
