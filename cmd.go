@@ -128,6 +128,7 @@ func PrintInteractiveHelp() {
 	fmt.Printf("  %s/get-config%s   - Show current LLM settings\n", ColorGreen, ColorReset)
 	fmt.Printf("  %s/exit%s, %s/quit%s   - Exit the shell\n", ColorGreen, ColorReset, ColorGreen, ColorReset)
 	fmt.Printf("  %s/! <command>%s   - Execute a system shell command directly\n", ColorGreen, ColorReset)
+	fmt.Printf("  %s/<command>%s     - Use commands (Tab to autocomplete)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %s@<file>%s       - Autocomplete file paths (Tab after @)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %s<text>%s        - Send text to the AI for a response\n\n", ColorGreen, ColorReset)
 }

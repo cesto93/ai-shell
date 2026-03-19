@@ -13,6 +13,11 @@ type completer struct{}
 
 func (c *completer) Do(line []rune, pos int) ([][]rune, int) {
 	currentLine := string(line[:pos])
+
+	if strings.HasPrefix(currentLine, "/") {
+		return c.completeCommands(currentLine)
+	}
+
 	lastAt := strings.LastIndex(currentLine, "@")
 
 	if lastAt == -1 {
@@ -33,6 +38,27 @@ func (c *completer) Do(line []rune, pos int) ([][]rune, int) {
 
 	matches := c.completeFiles(partial)
 	return matches, lastAt + 1
+}
+
+var availableCommands = []string{
+	"help",
+	"get-config",
+	"exit",
+	"quit",
+}
+
+func (c *completer) completeCommands(prefix string) ([][]rune, int) {
+	var results [][]rune
+	partial := strings.TrimPrefix(prefix, "/")
+
+	for _, cmd := range availableCommands {
+		if strings.HasPrefix(cmd, partial) {
+			suffix := strings.TrimPrefix(cmd, partial)
+			results = append(results, []rune(suffix))
+		}
+	}
+
+	return results, len(prefix)
 }
 
 func (c *completer) completeFiles(prefix string) [][]rune {
