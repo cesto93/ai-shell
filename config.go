@@ -140,6 +140,8 @@ type ModelInfo struct {
 	ModifiedAt string
 }
 
+var getAvailableModelsFunc = GetAvailableModels
+
 func GetAvailableModels() ([]ModelInfo, error) {
 	client, err := api.ClientFromEnvironment()
 	if err != nil {
@@ -167,7 +169,7 @@ func SelectModel() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	models, err := GetAvailableModels()
+	models, err := getAvailableModelsFunc()
 	if err != nil {
 		return err
 	}

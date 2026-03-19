@@ -146,3 +146,90 @@ shell:
 		t.Errorf("config file does not contain new model, got: %s", string(data))
 	}
 }
+
+func TestSelectModelNoModels(t *testing.T) {
+	origModels := getAvailableModelsFunc
+	getAvailableModelsFunc = func() ([]ModelInfo, error) {
+		return []ModelInfo{}, nil
+	}
+	defer func() { getAvailableModelsFunc = origModels }()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Failed to create pipe: %v", err)
+	}
+	origStdin := os.Stdin
+	defer func() { os.Stdin = origStdin }()
+	os.Stdin = r
+	defer w.Close()
+
+	go func() {
+		w.WriteString("\n")
+		w.Close()
+	}()
+
+	err = SelectModel()
+	if err != nil {
+		t.Fatalf("SelectModel() error = %v", err)
+	}
+}
+
+func TestSelectModelEmptySelection(t *testing.T) {
+	origModels := getAvailableModelsFunc
+	getAvailableModelsFunc = func() ([]ModelInfo, error) {
+		return []ModelInfo{
+			{Name: "model1"},
+			{Name: "model2"},
+		}, nil
+	}
+	defer func() { getAvailableModelsFunc = origModels }()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Failed to create pipe: %v", err)
+	}
+	origStdin := os.Stdin
+	defer func() { os.Stdin = origStdin }()
+	os.Stdin = r
+	defer w.Close()
+
+	go func() {
+		w.WriteString("\n")
+		w.Close()
+	}()
+
+	err = SelectModel()
+	if err != nil {
+		t.Fatalf("SelectModel() error = %v", err)
+	}
+}
+
+func TestSelectModelInvalidInput(t *testing.T) {
+	origModels := getAvailableModelsFunc
+	getAvailableModelsFunc = func() ([]ModelInfo, error) {
+		return []ModelInfo{
+			{Name: "model1"},
+			{Name: "model2"},
+		}, nil
+	}
+	defer func() { getAvailableModelsFunc = origModels }()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Failed to create pipe: %v", err)
+	}
+	origStdin := os.Stdin
+	defer func() { os.Stdin = origStdin }()
+	os.Stdin = r
+	defer w.Close()
+
+	go func() {
+		w.WriteString("999\n")
+		w.Close()
+	}()
+
+	err = SelectModel()
+	if err != nil {
+		t.Fatalf("SelectModel() error = %v", err)
+	}
+}
