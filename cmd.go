@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -46,16 +45,21 @@ func startInteractiveShell() {
 	fmt.Printf("%s%sStarting AI Shell...%s\n", ColorBold, ColorCyan, ColorReset)
 	PrintInteractiveHelp()
 
-	scanner := bufio.NewScanner(os.Stdin)
+	rl, err := NewReadline()
+	if err != nil {
+		fmt.Printf("%sError initializing readline: %v%s\n", ColorYellow, err, ColorReset)
+		os.Exit(1)
+	}
+	defer rl.Close()
+
 	ctx := context.Background()
 
 	for {
-		fmt.Printf("%s%sai-shell > %s", ColorBold, ColorGreen, ColorReset)
-		if !scanner.Scan() {
+		line, err := rl.Readline()
+		if err != nil {
 			break
 		}
 
-		line := scanner.Text()
 		trimmed := strings.TrimSpace(line)
 
 		if trimmed == "" {
@@ -76,14 +80,13 @@ func startInteractiveShell() {
 			continue
 		}
 
-		// Handle shell commands
 		if strings.HasPrefix(trimmed, "!") {
 			executeShellCommand(trimmed[1:])
 			continue
 		}
 
 		fmt.Printf("%sLLM Response:%s\n", ColorBlue, ColorReset)
-		err := CallOllama(ctx, trimmed)
+		err = CallOllama(ctx, trimmed)
 		if err != nil {
 			fmt.Printf("%sError: %v%s\n", ColorYellow, err, ColorReset)
 		}
@@ -100,6 +103,7 @@ func PrintInteractiveHelp() {
 	fmt.Printf("  %sget-config%s     - Show current LLM settings\n", ColorGreen, ColorReset)
 	fmt.Printf("  %sexit%s, %squit%s      - Exit the shell\n", ColorGreen, ColorReset, ColorGreen, ColorReset)
 	fmt.Printf("  %s! <command>%s    - Execute a system shell command directly\n", ColorGreen, ColorReset)
+	fmt.Printf("  %s@<file>%s        - Autocomplete file paths (Tab after @)\n", ColorGreen, ColorReset)
 	fmt.Printf("  %s<text>%s         - Send text to the AI for a response\n\n", ColorGreen, ColorReset)
 }
 

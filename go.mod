@@ -9,6 +9,7 @@ require (
 )
 
 require (
+	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
