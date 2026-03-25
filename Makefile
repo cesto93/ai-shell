@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 build:
 	go build -o ai-shell .
 install:
