@@ -48,6 +48,7 @@ var availableCommands = []string{
 	"help",
 	"get-config",
 	"models",
+	"reset",
 	"exit",
 	"quit",
 }
@@ -219,6 +220,10 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 			m.cfg = newCfg
 		}
 		return m, nil
+
+	case "reset":
+		m.messages = nil
+		return m, nil
 	}
 
 	m.messages = append(m.messages, Message{role: "user", content: value})
@@ -249,6 +254,9 @@ func (m *ShellModel) handleCommand(cmd string) (tea.Model, tea.Cmd) {
 		if newCfg, err := config.LoadConfig(); err == nil {
 			m.cfg = newCfg
 		}
+
+	case "reset":
+		m.messages = nil
 
 	default:
 		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Unknown command: /%s", cmd)})
@@ -362,6 +370,7 @@ Commands:
   /help         - Show this help message
   /get-config   - Show current LLM settings
   /models       - Switch to a different model
+  /reset        - Clear the screen and messages
   /exit, /quit  - Exit the shell
   /<command>    - Execute a shell command
   @<file>       - Autocomplete file paths
