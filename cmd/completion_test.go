@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"os"
@@ -8,7 +8,7 @@ import (
 )
 
 func TestCompleteCommands(t *testing.T) {
-	c := &completer{}
+	c := &Completer{}
 
 	tests := []struct {
 		name     string
@@ -73,7 +73,7 @@ func TestCompleteCommands(t *testing.T) {
 }
 
 func TestDo(t *testing.T) {
-	c := &completer{}
+	c := &Completer{}
 
 	tests := []struct {
 		name      string
@@ -166,7 +166,7 @@ func TestIsInCompletion(t *testing.T) {
 }
 
 func TestCompleteInDir(t *testing.T) {
-	c := &completer{}
+	c := &Completer{}
 
 	tmpDir := t.TempDir()
 	oldCwd, _ := os.Getwd()
@@ -277,7 +277,7 @@ func TestCompleteInDir(t *testing.T) {
 }
 
 func TestCompleteFiles(t *testing.T) {
-	c := &completer{}
+	c := &Completer{}
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get current working directory: %v", err)

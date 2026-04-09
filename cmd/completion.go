@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"os"
@@ -9,9 +9,9 @@ import (
 	"github.com/chzyer/readline"
 )
 
-type completer struct{}
+type Completer struct{}
 
-func (c *completer) Do(line []rune, pos int) ([][]rune, int) {
+func (c *Completer) Do(line []rune, pos int) ([][]rune, int) {
 	currentLine := string(line[:pos])
 
 	if strings.HasPrefix(currentLine, "/") {
@@ -48,7 +48,7 @@ var availableCommands = []string{
 	"quit",
 }
 
-func (c *completer) completeCommands(prefix string) ([][]rune, int) {
+func (c *Completer) completeCommands(prefix string) ([][]rune, int) {
 	var results [][]rune
 	partial := strings.TrimPrefix(prefix, "/")
 
@@ -62,7 +62,7 @@ func (c *completer) completeCommands(prefix string) ([][]rune, int) {
 	return results, len(prefix)
 }
 
-func (c *completer) completeFiles(prefix string) [][]rune {
+func (c *Completer) completeFiles(prefix string) [][]rune {
 	var results [][]rune
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -89,7 +89,7 @@ func (c *completer) completeFiles(prefix string) [][]rune {
 	return results
 }
 
-func (c *completer) completeInDir(dir, prefix string) [][]rune {
+func (c *Completer) completeInDir(dir, prefix string) [][]rune {
 	var results [][]rune
 
 	absDir := dir
@@ -141,17 +141,11 @@ func isInCompletion(line []rune, pos int) (bool, int) {
 	return lastAt != -1, lastAt
 }
 
-func getCompletions(line []rune, pos int) [][]rune {
-	c := &completer{}
-	matches, _ := c.Do(line, pos)
-	return matches
-}
-
 func NewReadline() (*readline.Instance, error) {
 	rl, err := readline.NewEx(&readline.Config{
-		Prompt:          ColorBold + ColorGreen + "ai-shell > " + ColorReset,
+		Prompt:          Prompt,
 		HistoryFile:     getHistoryFile(),
-		AutoComplete:    &completer{},
+		AutoComplete:    &Completer{},
 		InterruptPrompt: "^C",
 		EOFPrompt:       "exit",
 	})

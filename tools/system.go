@@ -1,4 +1,4 @@
-package main
+package tools
 
 import (
 	"bufio"
@@ -6,7 +6,6 @@ import (
 	"strings"
 )
 
-// GetDistro returns the Linux distribution name from /etc/os-release
 func GetDistro() string {
 	file, err := os.Open("/etc/os-release")
 	if err != nil {
@@ -24,7 +23,6 @@ func GetDistro() string {
 	return "Linux"
 }
 
-// GetShell returns the current shell from the SHELL environment variable
 func GetShell() string {
 	shell := os.Getenv("SHELL")
 	if shell == "" {

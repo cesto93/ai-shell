@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"context"
@@ -90,25 +90,6 @@ func LoadConfig() (*Config, error) {
 	return &config, nil
 }
 
-func PrintConfig() {
-	cfg, err := LoadConfig()
-	if err != nil {
-		fmt.Printf("%sError loading config: %v%s\n", ColorYellow, err, ColorReset)
-		return
-	}
-
-	fmt.Printf("%sCurrent Configuration:%s\n", ColorBold+ColorCyan, ColorReset)
-	fmt.Printf("Model: %s%s%s\n", ColorGreen, cfg.LLM.Model, ColorReset)
-	fmt.Printf("Confirm Commands: %s%v%s\n", ColorGreen, cfg.Shell.Confirm, ColorReset)
-	fmt.Printf("Allowed Commands: %s%s%s\n", ColorGreen, cfg.Shell.AllowedCommands, ColorReset)
-
-	if cfg.ConfigFile != "" {
-		fmt.Printf("Config file: %s%s%s\n", ColorBlue, cfg.ConfigFile, ColorReset)
-	} else {
-		fmt.Printf("Config file: %sNone (using defaults)%s\n", ColorYellow, ColorReset)
-	}
-}
-
 var getConfigPathFunc = getConfigPath
 
 func getConfigPath() (string, error) {
@@ -145,7 +126,7 @@ func SaveModel(modelName string) error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("%sModel changed to: %s%s%s\n", ColorGreen, ColorBold, modelName, ColorReset)
+	fmt.Printf("Model changed to: %s\n", modelName)
 	return nil
 }
 
@@ -190,34 +171,34 @@ func SelectModel() error {
 	}
 
 	if len(models) == 0 {
-		fmt.Printf("%sNo models found. Please install models using 'ollama pull <model>'%s\n", ColorYellow, ColorReset)
+		fmt.Printf("No models found. Please install models using 'ollama pull <model>'\n")
 		return nil
 	}
 
-	fmt.Printf("%sAvailable Models:%s\n\n", ColorBold+ColorCyan, ColorReset)
+	fmt.Printf("Available Models:\n\n")
 
 	for i, model := range models {
 		marker := "  "
 		if model.Name == cfg.LLM.Model {
 			marker = "* "
 		}
-		fmt.Printf("%s[%d]%s %s%s%s\n", ColorCyan, i+1, ColorReset, marker, ColorGreen, model.Name)
+		fmt.Printf("[%d] %s%s\n", i+1, marker, model.Name)
 	}
 
-	fmt.Printf("\n%sEnter number to select model (or press Enter to cancel): %s", ColorBold, ColorReset)
+	fmt.Printf("\nEnter number to select model (or press Enter to cancel): ")
 
 	var input string
 	fmt.Scanln(&input)
 	input = strings.TrimSpace(input)
 
 	if input == "" {
-		fmt.Printf("%sSelection cancelled.%s\n", ColorYellow, ColorReset)
+		fmt.Printf("Selection cancelled.\n")
 		return nil
 	}
 
 	choice, err := strconv.Atoi(input)
 	if err != nil || choice < 1 || choice > len(models) {
-		fmt.Printf("%sInvalid selection.%s\n", ColorYellow, ColorReset)
+		fmt.Printf("Invalid selection.\n")
 		return nil
 	}
 
@@ -225,7 +206,7 @@ func SelectModel() error {
 	return SaveModel(selectedModel)
 }
 
-func isAllowedCommand(cmd string, allowedList string) bool {
+func IsAllowedCommand(cmd string, allowedList string) bool {
 	if allowedList == "" {
 		return false
 	}

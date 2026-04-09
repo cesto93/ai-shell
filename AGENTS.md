@@ -49,7 +49,7 @@ go test -cover ./...
 go test -race ./...
 ```
 
-Note: This project currently has no test files. When adding tests:
+When adding tests:
 - Create `*_test.go` files in the same package
 - Use table-driven tests for multiple test cases
 - Use `t.Run()` for subtests
@@ -77,12 +77,16 @@ Note: This project currently has no test files. When adding tests:
 ### File Organization
 
 ```
-main.go       - Entry point, color constants
-cmd.go        - Cobra command definitions
-llm.go        - Ollama API interaction, config loading
-tools.go      - Shell command execution
-system.go     - System info (distro, shell detection)
-completion.go - Readline autocomplete
+main.go       - Entry point, delegates to cmd package
+cmd/
+    cmd.go           - Cobra command definitions
+    interactive.go   - Interactive shell loop, LLM interaction
+    completion.go    - Readline autocomplete
+config/
+    config.go        - Config loading, model management
+tools/
+    tools.go         - Shell command execution
+    system.go        - System info (distro, shell detection)
 ```
 
 ### Imports
@@ -157,7 +161,7 @@ Set sensible defaults with `viper.SetDefault()`.
 
 ### CLI Output
 
-Use color constants defined in `main.go`:
+Use color constants defined in `cmd/interactive.go`:
 - `ColorBlue` - LLM responses
 - `ColorCyan` - System info, prompts
 - `ColorGreen` - Commands, success

@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"bytes"
@@ -139,7 +139,6 @@ shell:
 	}
 }
 
-
 func TestSaveModelCreatesNewFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "ai-shell")
@@ -186,7 +185,6 @@ func TestSaveModelCreatesNewFile(t *testing.T) {
 		t.Errorf("config file does not contain new model, got: %s", string(data))
 	}
 }
-
 
 func TestSelectModelNoModels(t *testing.T) {
 	origModels := getAvailableModelsFunc
@@ -344,5 +342,48 @@ shell:
 
 	if !bytes.Contains(data, []byte(`model: "model2"`)) {
 		t.Errorf("config file does not contain selected model 'model2', got: %s", string(data))
+	}
+}
+
+func TestIsAllowedCommand(t *testing.T) {
+	tests := []struct {
+		name        string
+		cmd         string
+		allowedList string
+		want        bool
+	}{
+		{
+			name:        "command is allowed",
+			cmd:         "ls",
+			allowedList: "ls,pwd,cat",
+			want:        true,
+		},
+		{
+			name:        "command is not allowed",
+			cmd:         "rm",
+			allowedList: "ls,pwd,cat",
+			want:        false,
+		},
+		{
+			name:        "empty allowed list",
+			cmd:         "ls",
+			allowedList: "",
+			want:        false,
+		},
+		{
+			name:        "command with spaces in allowed list",
+			cmd:         "ls",
+			allowedList: "ls , pwd",
+			want:        true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsAllowedCommand(tt.cmd, tt.allowedList)
+			if got != tt.want {
+				t.Errorf("IsAllowedCommand(%q, %q) = %v, want %v", tt.cmd, tt.allowedList, got, tt.want)
+			}
+		})
 	}
 }

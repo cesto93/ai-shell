@@ -1,4 +1,4 @@
-package main
+package tools
 
 import (
 	"bytes"
@@ -6,7 +6,6 @@ import (
 	"os/exec"
 )
 
-// RunCommand executes a shell command and returns its combined output (stdout and stderr).
 func RunCommand(command string) (string, error) {
 	cmd := exec.Command("bash", "-c", command)
 	var out bytes.Buffer
