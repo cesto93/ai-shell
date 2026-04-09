@@ -1,5 +1,5 @@
 llm:
-  model: "qwen3.5:2b"
+  model: "gemma4:e2b"
 shell:
   confirm: true
   allowed_commands: "ls,pwd"

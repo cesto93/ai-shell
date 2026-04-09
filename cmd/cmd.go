@@ -15,7 +15,10 @@ var rootCmd = &cobra.Command{
   ai-shell get-config
   echo "how do I list files?" | ai-shell`,
 	Run: func(cmd *cobra.Command, args []string) {
-		StartInteractiveShell()
+		if err := RunShell(); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 	},
 }
 
