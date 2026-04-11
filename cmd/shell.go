@@ -66,7 +66,10 @@ type Message struct {
 	content string
 }
 
+type responseReadyMsg struct{}
+
 type ShellModel struct {
+	teaProgram         *tea.Program
 	input              textinput.Model
 	messages           []Message
 	history            []string
@@ -120,12 +123,20 @@ func NewShellModel() (*ShellModel, error) {
 	return m, nil
 }
 
+func (m *ShellModel) SetProgram(p *tea.Program) {
+	m.teaProgram = p
+}
+
 func (m *ShellModel) Init() tea.Cmd {
 	return textinput.Blink
 }
 
 func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case responseReadyMsg:
+		m.loading = false
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -593,6 +604,9 @@ func (m *ShellModel) callOllama(prompt string) {
 	messages = append(messages, api.Message{Role: "user", Content: prompt})
 
 	m.messages = append(m.messages, Message{role: "system", content: "Thinking..."})
+	if m.teaProgram != nil {
+		m.teaProgram.Send(responseReadyMsg{})
+	}
 
 	for {
 		req := &api.ChatRequest{
@@ -719,6 +733,7 @@ func RunShell() error {
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
+	m.SetProgram(p)
 
 	_, err = p.Run()
 	return err
