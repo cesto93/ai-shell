@@ -80,6 +80,8 @@ type ShellModel struct {
 	suggestions        []string
 	selectedIndex      int
 	showSuggestions    bool
+	loading            bool
+	cancelChan         chan struct{}
 	modelMenu          struct {
 		active      bool
 		models      []config.ModelInfo
@@ -166,6 +168,12 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleAutocomplete()
 
 		case tea.KeyEscape:
+			if m.loading {
+				close(m.cancelChan)
+				m.loading = false
+				m.messages = append(m.messages, Message{role: "system", content: "Request cancelled."})
+				return m, nil
+			}
 			if m.modelMenu.active {
 				m.modelMenu.active = false
 				return m, nil
@@ -255,7 +263,11 @@ func (m *ShellModel) View() string {
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString(m.input.View())
+	if m.loading {
+		sb.WriteString(systemStyle.Render("Thinking... (Press Esc to cancel)\n"))
+	} else {
+		sb.WriteString(m.input.View())
+	}
 	sb.WriteString("\n")
 
 	return sb.String()
@@ -264,6 +276,10 @@ func (m *ShellModel) View() string {
 func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 	value := strings.TrimSpace(m.input.Value())
 	if value == "" {
+		return m, nil
+	}
+
+	if m.loading {
 		return m, nil
 	}
 
@@ -302,6 +318,9 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 	}
 
 	m.messages = append(m.messages, Message{role: "user", content: value})
+
+	m.loading = true
+	m.cancelChan = make(chan struct{})
 
 	go m.callOllama(value)
 
@@ -531,7 +550,15 @@ func (m *ShellModel) selectModel() {
 }
 
 func (m *ShellModel) callOllama(prompt string) {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		select {
+		case <-m.cancelChan:
+			cancel()
+		}
+	}()
 
 	runCommandTool := api.Tool{
 		Type: "function",
@@ -565,7 +592,7 @@ func (m *ShellModel) callOllama(prompt string) {
 	}
 	messages = append(messages, api.Message{Role: "user", Content: prompt})
 
-	tea.Println(systemStyle.Render("Thinking..."))
+	m.messages = append(m.messages, Message{role: "system", content: "Thinking..."})
 
 	for {
 		req := &api.ChatRequest{
@@ -584,6 +611,7 @@ func (m *ShellModel) callOllama(prompt string) {
 
 		if err := m.client.Chat(ctx, req, respFunc); err != nil {
 			m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})
+			m.loading = false
 			return
 		}
 
@@ -593,6 +621,7 @@ func (m *ShellModel) callOllama(prompt string) {
 			if response.Message.Content != "" {
 				m.messages = append(m.messages, Message{role: "assistant", content: response.Message.Content})
 			}
+			m.loading = false
 			break
 		}
 
