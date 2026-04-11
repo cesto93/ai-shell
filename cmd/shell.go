@@ -80,6 +80,11 @@ type ShellModel struct {
 	suggestions        []string
 	selectedIndex      int
 	showSuggestions    bool
+	modelMenu          struct {
+		active      bool
+		models      []config.ModelInfo
+		selectedIdx int
+	}
 }
 
 func NewShellModel() (*ShellModel, error) {
@@ -153,8 +158,28 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleAutocomplete()
 
 		case tea.KeyEscape:
+			if m.modelMenu.active {
+				m.modelMenu.active = false
+				return m, nil
+			}
 			m.input.SetValue("")
 			m.showSuggestions = false
+			return m, nil
+		}
+
+		if m.modelMenu.active {
+			switch msg.String() {
+			case "j", "down":
+				if m.modelMenu.selectedIdx < len(m.modelMenu.models)-1 {
+					m.modelMenu.selectedIdx++
+				}
+			case "k", "up":
+				if m.modelMenu.selectedIdx > 0 {
+					m.modelMenu.selectedIdx--
+				}
+			case "enter":
+				m.selectModel()
+			}
 			return m, nil
 		}
 	}
@@ -196,7 +221,21 @@ func (m *ShellModel) View() string {
 		}
 	}
 
-	if m.showSuggestions && len(m.suggestions) > 0 {
+	if m.modelMenu.active {
+		sb.WriteString(systemStyle.Render("Select Model (↑/↓ to navigate, Enter to select, Esc to cancel):\n"))
+		for i, model := range m.modelMenu.models {
+			marker := "  "
+			if model.Name == m.cfg.LLM.Model {
+				marker = "* "
+			}
+			if i == m.modelMenu.selectedIdx {
+				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(fmt.Sprintf(" %s%s ", marker, model.Name)))
+			} else {
+				sb.WriteString(userStyle.Render(fmt.Sprintf(" %s%s ", marker, model.Name)))
+			}
+			sb.WriteString("\n")
+		}
+	} else if m.showSuggestions && len(m.suggestions) > 0 {
 		sb.WriteString(dimStyle.Render("Suggestions: "))
 		for i, suggestion := range m.suggestions {
 			if i == m.selectedIndex {
@@ -246,12 +285,7 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "models":
-		if err := config.SelectModel(); err != nil {
-			m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})
-		}
-		if newCfg, err := config.LoadConfig(); err == nil {
-			m.cfg = newCfg
-		}
+		m.openModelMenu()
 		return m, nil
 
 	case "reset":
@@ -281,12 +315,7 @@ func (m *ShellModel) handleCommand(cmd string) (tea.Model, tea.Cmd) {
 		m.showHelp()
 
 	case "models":
-		if err := config.SelectModel(); err != nil {
-			m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})
-		}
-		if newCfg, err := config.LoadConfig(); err == nil {
-			m.cfg = newCfg
-		}
+		m.openModelMenu()
 
 	case "reset":
 		m.messages = nil
@@ -405,6 +434,7 @@ func (m *ShellModel) selectSuggestion() (tea.Model, tea.Cmd) {
 	if m.selectedIndex >= 0 && m.selectedIndex < len(m.suggestions) {
 		m.input.SetValue(m.suggestions[m.selectedIndex])
 		m.showSuggestions = false
+		return m.handleSubmit()
 	}
 	return m, nil
 }
@@ -454,6 +484,42 @@ func (m *ShellModel) showConfig() {
 	sb.WriteString(fmt.Sprintf("Confirm Commands: %v\n", m.cfg.Shell.Confirm))
 	sb.WriteString(fmt.Sprintf("Allowed Commands: %s\n", m.cfg.Shell.AllowedCommands))
 	m.messages = append(m.messages, Message{role: "system", content: sb.String()})
+}
+
+func (m *ShellModel) openModelMenu() {
+	models, err := config.GetAvailableModels()
+	if err != nil {
+		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error loading models: %v", err)})
+		return
+	}
+
+	if len(models) == 0 {
+		m.messages = append(m.messages, Message{role: "system", content: "No models found. Please install models using 'ollama pull <model>'"})
+		return
+	}
+
+	m.modelMenu.models = models
+	m.modelMenu.active = true
+	m.modelMenu.selectedIdx = 0
+	m.input.SetValue("")
+}
+
+func (m *ShellModel) selectModel() {
+	if m.modelMenu.selectedIdx < 0 || m.modelMenu.selectedIdx >= len(m.modelMenu.models) {
+		return
+	}
+
+	selectedModel := m.modelMenu.models[m.modelMenu.selectedIdx].Name
+	if err := config.SaveModel(selectedModel); err != nil {
+		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error saving model: %v", err)})
+	} else {
+		m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Switched to model: %s", selectedModel)})
+		if newCfg, err := config.LoadConfig(); err == nil {
+			m.cfg = newCfg
+		}
+	}
+
+	m.modelMenu.active = false
 }
 
 func (m *ShellModel) callOllama(prompt string) {
