@@ -77,6 +77,9 @@ type ShellModel struct {
 	quitting           bool
 	cfg                *config.Config
 	client             *api.Client
+	suggestions        []string
+	selectedIndex      int
+	showSuggestions    bool
 }
 
 func NewShellModel() (*ShellModel, error) {
@@ -128,12 +131,22 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case tea.KeyEnter:
+			if m.showSuggestions && len(m.suggestions) > 0 {
+				m.selectSuggestion()
+				return m, nil
+			}
 			return m.handleSubmit()
 
 		case tea.KeyUp:
+			if m.showSuggestions && len(m.suggestions) > 0 {
+				return m.navigateSuggestions(-1)
+			}
 			return m.navigateHistory(-1)
 
 		case tea.KeyDown:
+			if m.showSuggestions && len(m.suggestions) > 0 {
+				return m.navigateSuggestions(1)
+			}
 			return m.navigateHistory(1)
 
 		case tea.KeyTab:
@@ -141,12 +154,20 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case tea.KeyEscape:
 			m.input.SetValue("")
+			m.showSuggestions = false
 			return m, nil
 		}
 	}
 
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
+
+	if value := m.input.Value(); strings.HasPrefix(value, "/") {
+		m.updateSuggestions(strings.TrimPrefix(value, "/"))
+	} else {
+		m.showSuggestions = false
+	}
+
 	return m, cmd
 }
 
@@ -173,6 +194,18 @@ func (m *ShellModel) View() string {
 			sb.WriteString(cmdStyle.Render(msg.content))
 			sb.WriteString("\n")
 		}
+	}
+
+	if m.showSuggestions && len(m.suggestions) > 0 {
+		sb.WriteString(dimStyle.Render("Suggestions: "))
+		for i, suggestion := range m.suggestions {
+			if i == m.selectedIndex {
+				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(" " + suggestion + " "))
+			} else {
+				sb.WriteString(helpStyle.Render(" " + suggestion + " "))
+			}
+		}
+		sb.WriteString("\n")
 	}
 
 	sb.WriteString(m.input.View())
@@ -338,6 +371,42 @@ func (m *ShellModel) completeFiles(dir, prefix string) []string {
 	}
 
 	return results
+}
+
+func (m *ShellModel) updateSuggestions(filter string) {
+	var matches []string
+	for _, cmd := range availableCommands {
+		if strings.HasPrefix(cmd, filter) {
+			matches = append(matches, "/"+cmd)
+		}
+	}
+
+	if len(matches) > 0 {
+		m.suggestions = matches
+		m.showSuggestions = true
+		m.selectedIndex = 0
+	} else {
+		m.showSuggestions = false
+	}
+}
+
+func (m *ShellModel) navigateSuggestions(dir int) (tea.Model, tea.Cmd) {
+	newIndex := m.selectedIndex + dir
+	if newIndex < 0 {
+		newIndex = len(m.suggestions) - 1
+	} else if newIndex >= len(m.suggestions) {
+		newIndex = 0
+	}
+	m.selectedIndex = newIndex
+	return m, nil
+}
+
+func (m *ShellModel) selectSuggestion() (tea.Model, tea.Cmd) {
+	if m.selectedIndex >= 0 && m.selectedIndex < len(m.suggestions) {
+		m.input.SetValue(m.suggestions[m.selectedIndex])
+		m.showSuggestions = false
+	}
+	return m, nil
 }
 
 func (m *ShellModel) navigateHistory(dir int) (tea.Model, tea.Cmd) {
