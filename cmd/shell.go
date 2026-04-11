@@ -136,6 +136,10 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case tea.KeyEnter:
+			if m.modelMenu.active {
+				m.selectModel()
+				return m, nil
+			}
 			if m.showSuggestions && len(m.suggestions) > 0 {
 				m.selectSuggestion()
 				return m, nil
@@ -143,16 +147,20 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSubmit()
 
 		case tea.KeyUp:
-			if m.showSuggestions && len(m.suggestions) > 0 {
+			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active {
 				return m.navigateSuggestions(-1)
 			}
-			return m.navigateHistory(-1)
+			if !m.modelMenu.active {
+				return m.navigateHistory(-1)
+			}
 
 		case tea.KeyDown:
-			if m.showSuggestions && len(m.suggestions) > 0 {
+			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active {
 				return m.navigateSuggestions(1)
 			}
-			return m.navigateHistory(1)
+			if !m.modelMenu.active {
+				return m.navigateHistory(1)
+			}
 
 		case tea.KeyTab:
 			return m.handleAutocomplete()
