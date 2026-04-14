@@ -16,7 +16,8 @@ import (
 type Config struct {
 	ConfigFile string
 	LLM        struct {
-		Model string `mapstructure:"model"`
+		Provider string `mapstructure:"provider"`
+		Model    string `mapstructure:"model"`
 	} `mapstructure:"llm"`
 	Shell struct {
 		Confirm         bool   `mapstructure:"confirm"`
@@ -46,6 +47,7 @@ func LoadConfig() (*Config, error) {
 	v := viper.New()
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
+	v.SetDefault("llm.provider", "ollama")
 	v.SetDefault("llm.model", "granite4:3b-h")
 	v.SetDefault("shell.confirm", true)
 	v.SetDefault("shell.allowed_commands", "ls,pwd")
@@ -66,9 +68,11 @@ func LoadConfig() (*Config, error) {
 			defaultConfig := &Config{
 				ConfigFile: "",
 				LLM: struct {
-					Model string `mapstructure:"model"`
+					Provider string `mapstructure:"provider"`
+					Model    string `mapstructure:"model"`
 				}{
-					Model: "granite4:3b-h",
+					Provider: "ollama",
+					Model:    "granite4:3b-h",
 				},
 				Shell: struct {
 					Confirm         bool   `mapstructure:"confirm"`
@@ -84,7 +88,7 @@ func LoadConfig() (*Config, error) {
 				if err == nil {
 					defaultConfigFile := filepath.Join(configPath, "config.yaml")
 					if _, err := os.Stat(defaultConfigFile); os.IsNotExist(err) {
-						content := "llm:\n  model: \"granite4:3b-h\"\nshell:\n  confirm: true\n  allowed_commands: \"ls,pwd\"\n"
+						content := "llm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\nshell:\n  confirm: true\n  allowed_commands: \"ls,pwd\"\n"
 						_ = os.WriteFile(defaultConfigFile, []byte(content), 0644)
 						defaultConfig.ConfigFile = defaultConfigFile
 					}
@@ -136,7 +140,7 @@ func SaveModel(modelName string) error {
 
 	cfg.LLM.Model = modelName
 
-	content := fmt.Sprintf("llm:\n  model: %q\nshell:\n  confirm: %v\n  allowed_commands: %q\n", cfg.LLM.Model, cfg.Shell.Confirm, cfg.Shell.AllowedCommands)
+	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\nshell:\n  confirm: %v\n  allowed_commands: %q\n", cfg.LLM.Provider, cfg.LLM.Model, cfg.Shell.Confirm, cfg.Shell.AllowedCommands)
 	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}

@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ollama/ollama/api"
+	"google.golang.org/genai"
 )
 
 var (
@@ -120,7 +121,8 @@ type ShellModel struct {
 	height             int
 	quitting           bool
 	cfg                *config.Config
-	client             *api.Client
+	ollamaClient       *api.Client
+	geminiClient       *genai.Client
 	suggestions        []string
 	selectedIndex      int
 	showSuggestions    bool
@@ -139,9 +141,20 @@ func NewShellModel() (*ShellModel, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	client, err := api.ClientFromEnvironment()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Ollama client: %w", err)
+	var ollamaClient *api.Client
+	var geminiClient *genai.Client
+
+	if cfg.LLM.Provider == "gemini" {
+		ctx := context.Background()
+		geminiClient, err = llm.NewGeminiClient(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Gemini client: %w", err)
+		}
+	} else {
+		ollamaClient, err = api.ClientFromEnvironment()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Ollama client: %w", err)
+		}
 	}
 
 	ti := textinput.New()
@@ -158,7 +171,8 @@ func NewShellModel() (*ShellModel, error) {
 		historyIndex:       -1,
 		commandHistoryPath: historyPath,
 		cfg:                cfg,
-		client:             client,
+		ollamaClient:       ollamaClient,
+		geminiClient:       geminiClient,
 	}
 
 	return m, nil
@@ -559,6 +573,7 @@ Commands:
 
 func (m *ShellModel) showConfig() {
 	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Provider: %s\n", m.cfg.LLM.Provider))
 	sb.WriteString(fmt.Sprintf("Model: %s\n", m.cfg.LLM.Model))
 	sb.WriteString(fmt.Sprintf("Confirm Commands: %v\n", m.cfg.Shell.Confirm))
 	sb.WriteString(fmt.Sprintf("Allowed Commands: %s\n", m.cfg.Shell.AllowedCommands))
@@ -616,23 +631,44 @@ func (m *ShellModel) callOllama(prompt string) {
 	shell := tools.GetShell()
 	systemPrompt := fmt.Sprintf("You are a helpful shell assistant. The user is running on %s using %s shell.", distro, shell)
 
-	var apiMessages []api.Message
-	for _, msg := range m.messages {
-		if msg.role == "user" || msg.role == "assistant" || msg.role == "tool" {
-			apiMessages = append(apiMessages, api.Message{Role: msg.role, Content: msg.content})
-		}
-	}
-	apiMessages = append(apiMessages, api.Message{Role: "user", Content: prompt})
-
 	m.messages = append(m.messages, Message{role: "system", content: "Thinking..."})
 	if m.teaProgram != nil {
 		m.teaProgram.Send(responseReadyMsg{})
 	}
 
 	executor := &ShellExecutorForLLM{m: m}
-	caller := llm.NewOllamaCaller(m.client, m.cfg.LLM.Model, executor)
 
-	resultMessages, err := caller.Call(ctx, systemPrompt, apiMessages)
+	var resultMessages []llm.Message
+	var err error
+
+	if m.cfg.LLM.Provider == "gemini" {
+		geminiCaller := llm.NewGeminiCaller(m.geminiClient, m.cfg.LLM.Model, executor)
+		var geminiMessages []llm.Message
+		for _, msg := range m.messages {
+			if msg.role == "user" || msg.role == "assistant" || msg.role == "tool" {
+				geminiMessages = append(geminiMessages, llm.Message{Role: msg.role, Content: msg.content})
+			}
+		}
+		geminiMessages = append(geminiMessages, llm.Message{Role: "user", Content: prompt})
+		resultMessages, err = geminiCaller.Call(ctx, systemPrompt, geminiMessages)
+	} else {
+		ollamaCaller := llm.NewOllamaCaller(m.ollamaClient, m.cfg.LLM.Model, executor)
+		var apiMessages []api.Message
+		for _, msg := range m.messages {
+			if msg.role == "user" || msg.role == "assistant" || msg.role == "tool" {
+				apiMessages = append(apiMessages, api.Message{Role: msg.role, Content: msg.content})
+			}
+		}
+		apiMessages = append(apiMessages, api.Message{Role: "user", Content: prompt})
+		var ollamaMsgs []api.Message
+		ollamaMsgs, err = ollamaCaller.Call(ctx, systemPrompt, apiMessages)
+		if err == nil {
+			for _, msg := range ollamaMsgs {
+				resultMessages = append(resultMessages, llm.Message{Role: msg.Role, Content: msg.Content})
+			}
+		}
+	}
+
 	if err != nil {
 		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})
 		m.loading = false
