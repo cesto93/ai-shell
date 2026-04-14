@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"google.golang.org/genai"
 )
@@ -88,7 +89,7 @@ func (g *GeminiCaller) Call(ctx context.Context, systemPrompt string, messages [
 			}
 		}
 
-		responseText := resp.Text()
+		responseText := extractTextFromResponse(resp)
 		if responseText == "" {
 			return nil, fmt.Errorf("empty response")
 		}
@@ -109,6 +110,25 @@ func (g *GeminiCaller) Call(ctx context.Context, systemPrompt string, messages [
 			Parts: []*genai.Part{{Text: toolResult}},
 		})
 	}
+}
+
+func extractTextFromResponse(resp *genai.GenerateContentResponse) string {
+	if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil {
+		return ""
+	}
+
+	content := resp.Candidates[0].Content
+	if len(content.Parts) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	for _, part := range content.Parts {
+		if part.Text != "" {
+			sb.WriteString(part.Text)
+		}
+	}
+	return sb.String()
 }
 
 func (g *GeminiCaller) processTools(resp *genai.GenerateContentResponse, history []*genai.Content) (bool, string) {
