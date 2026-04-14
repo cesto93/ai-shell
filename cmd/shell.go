@@ -645,11 +645,6 @@ func (m *ShellModel) callOllama(prompt string) {
 	shell := tools.GetShell()
 	systemPrompt := fmt.Sprintf("You are a helpful shell assistant. The user is running on %s using %s shell.", distro, shell)
 
-	m.messages = append(m.messages, Message{role: "system", content: "Thinking..."})
-	if m.teaProgram != nil {
-		m.teaProgram.Send(responseReadyMsg{})
-	}
-
 	executor := &ShellExecutorForLLM{m: m}
 
 	var resultMessages []llm.Message
@@ -686,6 +681,9 @@ func (m *ShellModel) callOllama(prompt string) {
 	if err != nil {
 		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})
 		m.loading = false
+		if m.teaProgram != nil {
+			m.teaProgram.Send(responseReadyMsg{})
+		}
 		return
 	}
 
@@ -701,6 +699,9 @@ func (m *ShellModel) callOllama(prompt string) {
 	}
 
 	m.loading = false
+	if m.teaProgram != nil {
+		m.teaProgram.Send(responseReadyMsg{})
+	}
 }
 
 func askConfirmation(cmd string) bool {
