@@ -10,6 +10,7 @@ import (
 
 	"github.com/ollama/ollama/api"
 	"github.com/spf13/viper"
+	"github.com/subosito/gotenv"
 )
 
 type Config struct {
@@ -27,7 +28,21 @@ var configPaths = []string{"."}
 
 var userConfigDirFunc = os.UserConfigDir
 
+var loadEnvFunc = loadEnv
+
+func loadEnv() error {
+	envPath := ".env"
+	if _, err := os.Stat(envPath); err == nil {
+		return gotenv.Load(envPath)
+	}
+	return nil
+}
+
 func LoadConfig() (*Config, error) {
+	if err := loadEnvFunc(); err != nil {
+		return nil, fmt.Errorf("error loading .env file: %w", err)
+	}
+
 	v := viper.New()
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
