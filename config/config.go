@@ -124,6 +124,19 @@ func getConfigPath() (string, error) {
 }
 
 func SaveModel(modelName string) error {
+	return SaveModelWithProvider(modelName, "")
+}
+
+func IsGeminiModel(modelName string) bool {
+	for _, m := range GeminiModels {
+		if m.Name == modelName {
+			return true
+		}
+	}
+	return false
+}
+
+func SaveModelWithProvider(modelName, provider string) error {
 	cfg, err := LoadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -139,6 +152,11 @@ func SaveModel(modelName string) error {
 	}
 
 	cfg.LLM.Model = modelName
+	if provider != "" {
+		cfg.LLM.Provider = provider
+	} else if IsGeminiModel(modelName) {
+		cfg.LLM.Provider = "gemini"
+	}
 
 	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\nshell:\n  confirm: %v\n  allowed_commands: %q\n", cfg.LLM.Provider, cfg.LLM.Model, cfg.Shell.Confirm, cfg.Shell.AllowedCommands)
 	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
@@ -153,6 +171,11 @@ type ModelInfo struct {
 	Name       string
 	Size       string
 	ModifiedAt string
+}
+
+var GeminiModels = []ModelInfo{
+	{Name: "gemini-3-flash-preview"},
+	{Name: "gemini-3.1-flash-lite-preview"},
 }
 
 var getAvailableModelsFunc = GetAvailableModels

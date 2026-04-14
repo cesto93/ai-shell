@@ -587,6 +587,8 @@ func (m *ShellModel) openModelMenu() {
 		return
 	}
 
+	models = append(models, config.GeminiModels...)
+
 	if len(models) == 0 {
 		m.messages = append(m.messages, Message{role: "system", content: "No models found. Please install models using 'ollama pull <model>'"})
 		return
@@ -604,12 +606,24 @@ func (m *ShellModel) selectModel() {
 	}
 
 	selectedModel := m.modelMenu.models[m.modelMenu.selectedIdx].Name
-	if err := config.SaveModel(selectedModel); err != nil {
+	provider := ""
+	if config.IsGeminiModel(selectedModel) {
+		provider = "gemini"
+	}
+	if err := config.SaveModelWithProvider(selectedModel, provider); err != nil {
 		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error saving model: %v", err)})
 	} else {
 		m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Switched to model: %s", selectedModel)})
 		if newCfg, err := config.LoadConfig(); err == nil {
 			m.cfg = newCfg
+			if m.cfg.LLM.Provider == "gemini" && m.geminiClient == nil {
+				ctx := context.Background()
+				m.geminiClient, err = llm.NewGeminiClient(ctx)
+				if err != nil {
+					m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error creating Gemini client: %v", err)})
+					return
+				}
+			}
 		}
 	}
 
