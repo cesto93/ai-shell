@@ -28,46 +28,37 @@ func (g *GeminiCaller) Call(ctx context.Context, systemPrompt string, messages [
 		return nil, fmt.Errorf("Gemini client is not initialized")
 	}
 
-	runCommandTool := []*genai.Tool{
-		{
-			FunctionDeclarations: []*genai.FunctionDeclaration{
-				{
-					Name:        "RunCommand",
-					Description: "Execute a shell command and return its output",
-					Parameters: &genai.Schema{
-						Type: genai.TypeObject,
-						Properties: map[string]*genai.Schema{
-							"command": {
-								Type:        genai.TypeString,
-								Description: "The shell command to execute (e.g., 'ls -la', 'echo hello')",
-							},
+	runCommandTool := &genai.Tool{
+		FunctionDeclarations: []*genai.FunctionDeclaration{
+			{
+				Name:        "RunCommand",
+				Description: "Execute a shell command and return its output",
+				Parameters: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"command": {
+							Type:        genai.TypeString,
+							Description: "The shell command to execute (e.g., 'ls -la', 'echo hello')",
 						},
-						Required: []string{"command"},
 					},
+					Required: []string{"command"},
 				},
 			},
 		},
 	}
 
 	config := &genai.GenerateContentConfig{
-		Tools: runCommandTool,
-		ToolConfig: &genai.ToolConfig{
-			FunctionCallingConfig: &genai.FunctionCallingConfig{
-				Mode: genai.FunctionCallingConfigModeAuto,
-			},
+		Tools: []*genai.Tool{runCommandTool},
+		SystemInstruction: &genai.Content{
+			Parts: []*genai.Part{{Text: systemPrompt}},
 		},
 	}
 
-	history := make([]*genai.Content, 0, len(messages)+1)
-
-	history = append(history, &genai.Content{
-		Role:  "user",
-		Parts: []*genai.Part{{Text: systemPrompt}},
-	})
-
-	for _, msg := range messages {
-		role := msg.Role
-		if role == "system" {
+	history := make([]*genai.Content, 0)
+	for i := 0; i < len(messages)-1; i++ {
+		msg := messages[i]
+		role := "user"
+		if msg.Role == "assistant" {
 			role = "model"
 		}
 		history = append(history, &genai.Content{
@@ -81,38 +72,43 @@ func (g *GeminiCaller) Call(ctx context.Context, systemPrompt string, messages [
 		return nil, fmt.Errorf("failed to create chat: %w", err)
 	}
 
+	lastUserMsg := messages[len(messages)-1].Content
+	newMessages := []Message{}
+
+	resp, err := chat.SendMessage(ctx, genai.Part{Text: lastUserMsg})
+	if err != nil {
+		return nil, fmt.Errorf("send message error: %w", err)
+	}
+
 	for {
-		lastMsg := history[len(history)-1]
-		userContent := lastMsg.Parts[0].Text
-
-		var resp *genai.GenerateContentResponse
-		for resp == nil {
-			resp, err = chat.SendMessage(ctx, genai.Part{Text: userContent})
-			if err != nil {
-				return nil, fmt.Errorf("send message error: %w", err)
-			}
-		}
-
-		responseText := extractTextFromResponse(resp)
-		if responseText == "" {
-			return nil, fmt.Errorf("empty response")
-		}
-
-		assistantMsg := Message{Role: "assistant", Content: responseText}
-		history = append(history, &genai.Content{
-			Role:  "model",
-			Parts: []*genai.Part{{Text: responseText}},
-		})
-
-		hasToolCall, toolResult := g.processTools(resp, history)
+		hasToolCall, toolCallPart, toolResult := g.processTools(resp)
+		
 		if !hasToolCall {
-			return []Message{{Role: "user", Content: messages[len(messages)-1].Content}, assistantMsg}, nil
+			responseText := extractTextFromResponse(resp)
+			if responseText == "" {
+				if len(resp.Candidates) > 0 {
+					newMessages = append(newMessages, Message{Role: "assistant", Content: "(no text response)"})
+					return newMessages, nil
+				}
+				return nil, fmt.Errorf("empty response from Gemini")
+			}
+			newMessages = append(newMessages, Message{Role: "assistant", Content: responseText})
+			return newMessages, nil
 		}
 
-		history = append(history, &genai.Content{
-			Role:  "user",
-			Parts: []*genai.Part{{Text: toolResult}},
+		newMessages = append(newMessages, Message{Role: "tool", Content: toolResult})
+
+		resp, err = chat.SendMessage(ctx, genai.Part{
+			FunctionResponse: &genai.FunctionResponse{
+				Name: toolCallPart.FunctionCall.Name,
+				Response: map[string]any{
+					"output": toolResult,
+				},
+			},
 		})
+		if err != nil {
+			return nil, fmt.Errorf("error sending tool response: %w", err)
+		}
 	}
 }
 
@@ -121,13 +117,8 @@ func extractTextFromResponse(resp *genai.GenerateContentResponse) string {
 		return ""
 	}
 
-	content := resp.Candidates[0].Content
-	if len(content.Parts) == 0 {
-		return ""
-	}
-
 	var sb strings.Builder
-	for _, part := range content.Parts {
+	for _, part := range resp.Candidates[0].Content.Parts {
 		if part.Text != "" {
 			sb.WriteString(part.Text)
 		}
@@ -135,41 +126,44 @@ func extractTextFromResponse(resp *genai.GenerateContentResponse) string {
 	return sb.String()
 }
 
-func (g *GeminiCaller) processTools(resp *genai.GenerateContentResponse, history []*genai.Content) (bool, string) {
+func (g *GeminiCaller) processTools(resp *genai.GenerateContentResponse) (bool, *genai.Part, string) {
 	if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil {
-		return false, ""
+		return false, nil, ""
 	}
 
 	content := resp.Candidates[0].Content
-	if len(content.Parts) == 0 {
-		return false, ""
+	var toolPart *genai.Part
+	for _, part := range content.Parts {
+		if part.FunctionCall != nil {
+			toolPart = part
+			break
+		}
 	}
 
-	part := content.Parts[0]
-	if part.FunctionCall == nil {
-		return false, ""
+	if toolPart == nil {
+		return false, nil, ""
 	}
 
-	fc := part.FunctionCall
+	fc := toolPart.FunctionCall
 	if fc.Name != "RunCommand" {
-		return false, ""
+		return false, toolPart, "Error: Unknown tool"
 	}
 
 	args := fc.Args
 	if args == nil {
-		return true, "Error: Invalid tool arguments"
+		return true, toolPart, "Error: Invalid tool arguments"
 	}
 
 	cmd, ok := args["command"].(string)
 	if !ok {
-		return true, "Error: Invalid tool arguments"
+		return true, toolPart, "Error: Invalid tool arguments"
 	}
 
 	skipConfirm := g.executor.IsAllowedCommand(cmd)
 	if !skipConfirm {
 		confirm := g.executor.AskConfirmation(cmd)
 		if !confirm {
-			return true, "Error: Command execution denied by user"
+			return true, toolPart, "Error: Command execution denied by user"
 		}
 	}
 
@@ -179,9 +173,9 @@ func (g *GeminiCaller) processTools(resp *genai.GenerateContentResponse, history
 	}
 	output, err := g.executor.ExecuteTool(call)
 	if err != nil {
-		return true, fmt.Sprintf("Error: %v\nOutput: %s", err, output)
+		return true, toolPart, fmt.Sprintf("Error: %v\nOutput: %s", err, output)
 	}
-	return true, output
+	return true, toolPart, output
 }
 
 type Message struct {

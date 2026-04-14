@@ -300,6 +300,9 @@ func (m *ShellModel) View() string {
 		case "tool":
 			sb.WriteString(cmdStyle.Render(msg.content))
 			sb.WriteString("\n")
+		case "error":
+			sb.WriteString(errorStyle.Render("Error: " + msg.content))
+			sb.WriteString("\n")
 		}
 	}
 
@@ -388,7 +391,7 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 	m.loading = true
 	m.cancelChan = make(chan struct{})
 
-	go m.callOllama(value)
+	go m.callLLM(value)
 
 	return m, nil
 }
@@ -636,7 +639,7 @@ func (m *ShellModel) selectModel() {
 	m.modelMenu.active = false
 }
 
-func (m *ShellModel) callOllama(prompt string) {
+func (m *ShellModel) callLLM(prompt string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -660,11 +663,11 @@ func (m *ShellModel) callOllama(prompt string) {
 		geminiCaller := llm.NewGeminiCaller(m.geminiClient, m.cfg.LLM.Model, executor)
 		var geminiMessages []llm.Message
 		for _, msg := range m.messages {
-			if msg.role == "user" || msg.role == "assistant" || msg.role == "tool" {
+			// Only include user and assistant messages in history for Gemini to avoid role sequence issues
+			if msg.role == "user" || msg.role == "assistant" {
 				geminiMessages = append(geminiMessages, llm.Message{Role: msg.role, Content: msg.content})
 			}
 		}
-		geminiMessages = append(geminiMessages, llm.Message{Role: "user", Content: prompt})
 		resultMessages, err = geminiCaller.Call(ctx, systemPrompt, geminiMessages)
 	} else {
 		ollamaCaller := llm.NewOllamaCaller(m.ollamaClient, m.cfg.LLM.Model, executor)
@@ -674,7 +677,6 @@ func (m *ShellModel) callOllama(prompt string) {
 				apiMessages = append(apiMessages, api.Message{Role: msg.role, Content: msg.content})
 			}
 		}
-		apiMessages = append(apiMessages, api.Message{Role: "user", Content: prompt})
 		var ollamaMsgs []api.Message
 		ollamaMsgs, err = ollamaCaller.Call(ctx, systemPrompt, apiMessages)
 		if err == nil {
@@ -700,7 +702,7 @@ func (m *ShellModel) callOllama(prompt string) {
 		case "assistant":
 			m.messages = append(m.messages, Message{role: "assistant", content: msg.Content})
 		case "tool":
-			m.messages = append(m.messages, Message{role: "tool", content: cmdStyle.Render(msg.Content)})
+			m.messages = append(m.messages, Message{role: "tool", content: msg.Content})
 		}
 	}
 

@@ -1,6 +1,0 @@
-llm:
-  provider: "ollama"
-  model: "granite4:tiny-h"
-shell:
-  confirm: true
-  allowed_commands: "ls,pwd"

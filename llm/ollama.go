@@ -59,6 +59,7 @@ func (o *OllamaCaller) Call(ctx context.Context, systemPrompt string, messages [
 		{Role: "system", Content: systemPrompt},
 	}
 	allMessages = append(allMessages, messages...)
+	originalCount := len(allMessages)
 
 	for {
 		req := &api.ChatRequest{
@@ -82,7 +83,7 @@ func (o *OllamaCaller) Call(ctx context.Context, systemPrompt string, messages [
 		allMessages = append(allMessages, response.Message)
 
 		if len(response.Message.ToolCalls) == 0 {
-			return allMessages[1:], nil
+			return allMessages[originalCount:], nil
 		}
 
 		for _, tc := range response.Message.ToolCalls {
