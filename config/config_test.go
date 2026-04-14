@@ -125,7 +125,7 @@ shell:
 	}
 
 	newModel := "new-model:latest"
-	if err := SaveModel(newModel); err != nil {
+	if err := SaveModelWithProvider(newModel, ""); err != nil {
 		t.Fatalf("SaveModel() error = %v", err)
 	}
 
@@ -168,7 +168,7 @@ func TestSaveModelCreatesNewFile(t *testing.T) {
 	}
 
 	newModel := "brand-new-model:latest"
-	if err := SaveModel(newModel); err != nil {
+	if err := SaveModelWithProvider(newModel, ""); err != nil {
 		t.Fatalf("SaveModel() error = %v", err)
 	}
 

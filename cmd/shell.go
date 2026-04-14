@@ -606,7 +606,7 @@ func (m *ShellModel) selectModel() {
 	}
 
 	selectedModel := m.modelMenu.models[m.modelMenu.selectedIdx].Name
-	provider := ""
+	provider := "ollama"
 	if config.IsGeminiModel(selectedModel) {
 		provider = "gemini"
 	}

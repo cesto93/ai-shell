@@ -123,10 +123,6 @@ func getConfigPath() (string, error) {
 	return configPath, nil
 }
 
-func SaveModel(modelName string) error {
-	return SaveModelWithProvider(modelName, "")
-}
-
 func IsGeminiModel(modelName string) bool {
 	for _, m := range GeminiModels {
 		if m.Name == modelName {
@@ -156,6 +152,8 @@ func SaveModelWithProvider(modelName, provider string) error {
 		cfg.LLM.Provider = provider
 	} else if IsGeminiModel(modelName) {
 		cfg.LLM.Provider = "gemini"
+	} else {
+		cfg.LLM.Provider = "ollama"
 	}
 
 	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\nshell:\n  confirm: %v\n  allowed_commands: %q\n", cfg.LLM.Provider, cfg.LLM.Model, cfg.Shell.Confirm, cfg.Shell.AllowedCommands)
@@ -245,7 +243,7 @@ func SelectModel() error {
 	}
 
 	selectedModel := models[choice-1].Name
-	return SaveModel(selectedModel)
+	return SaveModelWithProvider(selectedModel, "ollama")
 }
 
 func IsAllowedCommand(cmd string, allowedList string) bool {
