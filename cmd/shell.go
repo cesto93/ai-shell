@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"ai-shell/config"
+	"ai-shell/llm"
 	"ai-shell/tools"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -51,6 +52,46 @@ var availableCommands = []string{
 	"reset",
 	"exit",
 	"quit",
+}
+
+type ShellExecutorForLLM struct {
+	m *ShellModel
+}
+
+func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
+	cmd, ok := call.Arguments["command"].(string)
+	if !ok {
+		return "Error: Invalid tool arguments", nil
+	}
+
+	confirmMsg := fmt.Sprintf("[Executing: %s]", cmd)
+	e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
+
+	if e.m.cfg.Shell.Confirm {
+		cmdName := getCommandName(cmd)
+		skipConfirm := config.IsAllowedCommand(cmdName, e.m.cfg.Shell.AllowedCommands)
+		if !skipConfirm {
+			confirm := askConfirmation(cmd)
+			if !confirm {
+				return "Error: Command execution denied by user", nil
+			}
+		}
+	}
+
+	output, err := tools.RunCommand(cmd)
+	if err != nil {
+		return fmt.Sprintf("Error: %v\nOutput: %s", err, output), nil
+	}
+	return output, nil
+}
+
+func (e *ShellExecutorForLLM) IsAllowedCommand(cmd string) bool {
+	cmdName := getCommandName(cmd)
+	return config.IsAllowedCommand(cmdName, e.m.cfg.Shell.AllowedCommands)
+}
+
+func (e *ShellExecutorForLLM) AskConfirmation(cmd string) bool {
+	return askConfirmation(cmd)
 }
 
 func getHistoryFile() string {
@@ -571,111 +612,45 @@ func (m *ShellModel) callOllama(prompt string) {
 		}
 	}()
 
-	runCommandTool := api.Tool{
-		Type: "function",
-		Function: api.ToolFunction{
-			Name:        "RunCommand",
-			Description: "Execute a shell command and return its output",
-			Parameters: api.ToolFunctionParameters{
-				Type:     "object",
-				Required: []string{"command"},
-				Properties: map[string]api.ToolProperty{
-					"command": {
-						Type:        api.PropertyType{"string"},
-						Description: "The shell command to execute (e.g., 'ls -la', 'echo hello')",
-					},
-				},
-			},
-		},
-	}
-
 	distro := tools.GetDistro()
 	shell := tools.GetShell()
 	systemPrompt := fmt.Sprintf("You are a helpful shell assistant. The user is running on %s using %s shell.", distro, shell)
 
-	messages := []api.Message{
-		{Role: "system", Content: systemPrompt},
-	}
+	var apiMessages []api.Message
 	for _, msg := range m.messages {
 		if msg.role == "user" || msg.role == "assistant" || msg.role == "tool" {
-			messages = append(messages, api.Message{Role: msg.role, Content: msg.content})
+			apiMessages = append(apiMessages, api.Message{Role: msg.role, Content: msg.content})
 		}
 	}
-	messages = append(messages, api.Message{Role: "user", Content: prompt})
+	apiMessages = append(apiMessages, api.Message{Role: "user", Content: prompt})
 
 	m.messages = append(m.messages, Message{role: "system", content: "Thinking..."})
 	if m.teaProgram != nil {
 		m.teaProgram.Send(responseReadyMsg{})
 	}
 
-	for {
-		req := &api.ChatRequest{
-			Model:    m.cfg.LLM.Model,
-			Messages: messages,
-			Tools:    []api.Tool{runCommandTool},
-			Stream:   new(bool),
-		}
-		*req.Stream = false
+	executor := &ShellExecutorForLLM{m: m}
+	caller := llm.NewOllamaCaller(m.client, m.cfg.LLM.Model, executor)
 
-		var response api.ChatResponse
-		respFunc := func(resp api.ChatResponse) error {
-			response = resp
-			return nil
-		}
+	resultMessages, err := caller.Call(ctx, systemPrompt, apiMessages)
+	if err != nil {
+		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})
+		m.loading = false
+		return
+	}
 
-		if err := m.client.Chat(ctx, req, respFunc); err != nil {
-			m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})
-			m.loading = false
-			return
-		}
-
-		messages = append(messages, response.Message)
-
-		if len(response.Message.ToolCalls) == 0 {
-			if response.Message.Content != "" {
-				m.messages = append(m.messages, Message{role: "assistant", content: response.Message.Content})
-			}
-			m.loading = false
-			break
-		}
-
-		for _, tc := range response.Message.ToolCalls {
-			if tc.Function.Name == "RunCommand" {
-				cmd, ok := tc.Function.Arguments["command"].(string)
-				if !ok {
-					result := "Error: Invalid tool arguments"
-					m.messages = append(m.messages, Message{role: "tool", content: errorStyle.Render(result)})
-					messages = append(messages, api.Message{Role: "tool", Content: result})
-					continue
-				}
-
-				cmdName := getCommandName(cmd)
-				skipConfirm := config.IsAllowedCommand(cmdName, m.cfg.Shell.AllowedCommands)
-
-				confirmMsg := fmt.Sprintf("[Executing: %s]", cmd)
-				m.messages = append(m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
-
-				if m.cfg.Shell.Confirm && !skipConfirm {
-					confirm := askConfirmation(cmd)
-					if !confirm {
-						result := "Error: Command execution denied by user"
-						m.messages = append(m.messages, Message{role: "tool", content: errorStyle.Render(result)})
-						messages = append(messages, api.Message{Role: "tool", Content: result})
-						continue
-					}
-				}
-
-				output, err := tools.RunCommand(cmd)
-				if err != nil {
-					result := fmt.Sprintf("Error: %v\nOutput: %s", err, output)
-					m.messages = append(m.messages, Message{role: "tool", content: errorStyle.Render(result)})
-				} else {
-					m.messages = append(m.messages, Message{role: "tool", content: cmdStyle.Render(output)})
-				}
-				messages = append(messages, api.Message{Role: "tool", Content: output})
-			}
+	for _, msg := range resultMessages {
+		switch msg.Role {
+		case "user":
+			m.messages = append(m.messages, Message{role: "user", content: msg.Content})
+		case "assistant":
+			m.messages = append(m.messages, Message{role: "assistant", content: msg.Content})
+		case "tool":
+			m.messages = append(m.messages, Message{role: "tool", content: cmdStyle.Render(msg.Content)})
 		}
 	}
+
+	m.loading = false
 }
 
 func askConfirmation(cmd string) bool {
