@@ -33,6 +33,10 @@ func NewOllamaCaller(client *api.Client, model string, executor ToolExecutor) *O
 }
 
 func (o *OllamaCaller) Call(ctx context.Context, systemPrompt string, messages []api.Message) ([]api.Message, error) {
+	if o.client == nil {
+		return nil, fmt.Errorf("Ollama client is not initialized")
+	}
+
 	runCommandTool := api.Tool{
 		Type: "function",
 		Function: api.ToolFunction{

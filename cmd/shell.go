@@ -623,6 +623,12 @@ func (m *ShellModel) selectModel() {
 					m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error creating Gemini client: %v", err)})
 					return
 				}
+			} else if m.cfg.LLM.Provider == "ollama" && m.ollamaClient == nil {
+				m.ollamaClient, err = api.ClientFromEnvironment()
+				if err != nil {
+					m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error creating Ollama client: %v", err)})
+					return
+				}
 			}
 		}
 	}

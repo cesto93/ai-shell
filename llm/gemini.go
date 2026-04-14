@@ -24,6 +24,10 @@ func NewGeminiCaller(client *genai.Client, model string, executor ToolExecutor) 
 }
 
 func (g *GeminiCaller) Call(ctx context.Context, systemPrompt string, messages []Message) ([]Message, error) {
+	if g.client == nil {
+		return nil, fmt.Errorf("Gemini client is not initialized")
+	}
+
 	runCommandTool := []*genai.Tool{
 		{
 			FunctionDeclarations: []*genai.FunctionDeclaration{
