@@ -270,8 +270,7 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if m.showSuggestions && len(m.suggestions) > 0 {
-				m.selectSuggestion()
-				return m, nil
+				return m.selectSuggestion()
 			}
 			return m.handleSubmit()
 
