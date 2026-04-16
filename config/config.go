@@ -132,6 +132,15 @@ func IsGeminiModel(modelName string) bool {
 	return false
 }
 
+func IsMistralModel(modelName string) bool {
+	for _, m := range MistralModels {
+		if m.Name == modelName {
+			return true
+		}
+	}
+	return false
+}
+
 func SaveModelWithProvider(modelName, provider string) error {
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -152,6 +161,8 @@ func SaveModelWithProvider(modelName, provider string) error {
 		cfg.LLM.Provider = provider
 	} else if IsGeminiModel(modelName) {
 		cfg.LLM.Provider = "gemini"
+	} else if IsMistralModel(modelName) {
+		cfg.LLM.Provider = "mistral"
 	} else {
 		cfg.LLM.Provider = "ollama"
 	}
@@ -174,6 +185,11 @@ type ModelInfo struct {
 var GeminiModels = []ModelInfo{
 	{Name: "gemini-3-flash-preview"},
 	{Name: "gemini-3.1-flash-lite-preview"},
+}
+
+var MistralModels = []ModelInfo{
+	{Name: "mistral-small"},
+	{Name: "mistral-large"},
 }
 
 var getAvailableModelsFunc = GetAvailableModels
