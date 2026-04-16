@@ -3,6 +3,7 @@ package tools
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 )
 
@@ -18,4 +19,12 @@ func RunCommand(command string) (string, error) {
 	}
 
 	return out.String(), nil
+}
+
+func WriteFile(path string, content string) (string, error) {
+	err := os.WriteFile(path, []byte(content), 0644)
+	if err != nil {
+		return "", fmt.Errorf("failed to write file: %w", err)
+	}
+	return fmt.Sprintf("File written successfully to %s", path), nil
 }

@@ -28,7 +28,7 @@ func (g *GeminiCaller) Call(ctx context.Context, systemPrompt string, messages [
 		return nil, fmt.Errorf("Gemini client is not initialized")
 	}
 
-	runCommandTool := &genai.Tool{
+	tools := &genai.Tool{
 		FunctionDeclarations: []*genai.FunctionDeclaration{
 			{
 				Name:        "RunCommand",
@@ -44,11 +44,29 @@ func (g *GeminiCaller) Call(ctx context.Context, systemPrompt string, messages [
 					Required: []string{"command"},
 				},
 			},
+			{
+				Name:        "WriteFile",
+				Description: "Write content to a file at the specified path",
+				Parameters: &genai.Schema{
+					Type: genai.TypeObject,
+					Properties: map[string]*genai.Schema{
+						"path": {
+							Type:        genai.TypeString,
+							Description: "The absolute or relative path to the file",
+						},
+						"content": {
+							Type:        genai.TypeString,
+							Description: "The content to write to the file",
+						},
+					},
+					Required: []string{"path", "content"},
+				},
+			},
 		},
 	}
 
 	config := &genai.GenerateContentConfig{
-		Tools: []*genai.Tool{runCommandTool},
+		Tools: []*genai.Tool{tools},
 		SystemInstruction: &genai.Content{
 			Parts: []*genai.Part{{Text: systemPrompt}},
 		},
@@ -145,37 +163,53 @@ func (g *GeminiCaller) processTools(resp *genai.GenerateContentResponse) (bool, 
 	}
 
 	fc := toolPart.FunctionCall
-	if fc.Name != "RunCommand" {
+	switch fc.Name {
+	case "RunCommand":
+		args := fc.Args
+		if args == nil {
+			return true, toolPart, "Error: Invalid tool arguments"
+		}
+
+		cmd, ok := args["command"].(string)
+		if !ok {
+			return true, toolPart, "Error: Invalid tool arguments"
+		}
+
+		call := ToolCall{
+			Name:      "RunCommand",
+			Arguments: map[string]any{"command": cmd},
+		}
+		output, err := g.executor.ExecuteTool(call)
+		if err != nil {
+			return true, toolPart, fmt.Sprintf("Error: %v\nOutput: %s", err, output)
+		}
+		return true, toolPart, output
+
+	case "WriteFile":
+		args := fc.Args
+		if args == nil {
+			return true, toolPart, "Error: Invalid tool arguments"
+		}
+
+		path, ok1 := args["path"].(string)
+		content, ok2 := args["content"].(string)
+		if !ok1 || !ok2 {
+			return true, toolPart, "Error: Invalid tool arguments"
+		}
+
+		call := ToolCall{
+			Name:      "WriteFile",
+			Arguments: map[string]any{"path": path, "content": content},
+		}
+		output, err := g.executor.ExecuteTool(call)
+		if err != nil {
+			return true, toolPart, fmt.Sprintf("Error: %v\nOutput: %s", err, output)
+		}
+		return true, toolPart, output
+
+	default:
 		return false, toolPart, "Error: Unknown tool"
 	}
-
-	args := fc.Args
-	if args == nil {
-		return true, toolPart, "Error: Invalid tool arguments"
-	}
-
-	cmd, ok := args["command"].(string)
-	if !ok {
-		return true, toolPart, "Error: Invalid tool arguments"
-	}
-
-	skipConfirm := g.executor.IsAllowedCommand(cmd)
-	if !skipConfirm {
-		confirm := g.executor.AskConfirmation(cmd)
-		if !confirm {
-			return true, toolPart, "Error: Command execution denied by user"
-		}
-	}
-
-	call := ToolCall{
-		Name:      "RunCommand",
-		Arguments: map[string]any{"command": cmd},
-	}
-	output, err := g.executor.ExecuteTool(call)
-	if err != nil {
-		return true, toolPart, fmt.Sprintf("Error: %v\nOutput: %s", err, output)
-	}
-	return true, toolPart, output
 }
 
 type Message struct {

@@ -121,13 +121,36 @@ func (m *MistralCaller) Call(ctx context.Context, systemPrompt string, messages 
 	}
 	runCommandTool.Function.Parameters.Required = []string{"command"}
 
+	writeFileTool := MistralTool{
+		Type: "function",
+		Function: MistralToolFunction{
+			Name:        "WriteFile",
+			Description: "Write content to a file at the specified path",
+		},
+	}
+	writeFileTool.Function.Parameters.Type = "object"
+	writeFileTool.Function.Parameters.Properties = map[string]struct {
+		Type        string `json:"type"`
+		Description string `json:"description"`
+	}{
+		"path": {
+			Type:        "string",
+			Description: "The absolute or relative path to the file",
+		},
+		"content": {
+			Type:        "string",
+			Description: "The content to write to the file",
+		},
+	}
+	writeFileTool.Function.Parameters.Required = []string{"path", "content"}
+
 	originalCount := len(allMessages)
 
 	for {
 		reqBody := MistralRequest{
 			Model:    m.model,
 			Messages: allMessages,
-			Tools:    []MistralTool{runCommandTool},
+			Tools:    []MistralTool{runCommandTool, writeFileTool},
 		}
 
 		jsonBody, err := json.Marshal(reqBody)
@@ -184,7 +207,8 @@ func (m *MistralCaller) Call(ctx context.Context, systemPrompt string, messages 
 		}
 
 		for _, tc := range toolCalls {
-			if tc.Function.Name == "RunCommand" {
+			switch tc.Function.Name {
+			case "RunCommand":
 				argsStr, ok := tc.Function.Arguments.(string)
 				if !ok {
 					result := "Error: Invalid tool arguments"
@@ -206,20 +230,44 @@ func (m *MistralCaller) Call(ctx context.Context, systemPrompt string, messages 
 					continue
 				}
 
-				skipConfirm := m.executor.IsAllowedCommand(cmd)
-
-				if !skipConfirm {
-					confirm := m.executor.AskConfirmation(cmd)
-					if !confirm {
-						result := "Error: Command execution denied by user"
-						allMessages = append(allMessages, MistralMessage{Role: "tool", Content: result})
-						continue
-					}
-				}
-
 				call := ToolCall{
 					Name:      "RunCommand",
 					Arguments: map[string]any{"command": cmd},
+				}
+				output, err := m.executor.ExecuteTool(call)
+				if err != nil {
+					result := fmt.Sprintf("Error: %v\nOutput: %s", err, output)
+					allMessages = append(allMessages, MistralMessage{Role: "tool", Content: result})
+				} else {
+					allMessages = append(allMessages, MistralMessage{Role: "tool", Content: output})
+				}
+
+			case "WriteFile":
+				argsStr, ok := tc.Function.Arguments.(string)
+				if !ok {
+					result := "Error: Invalid tool arguments"
+					allMessages = append(allMessages, MistralMessage{Role: "tool", Content: result})
+					continue
+				}
+
+				var args map[string]any
+				if err := json.Unmarshal([]byte(argsStr), &args); err != nil {
+					result := "Error: Invalid tool arguments"
+					allMessages = append(allMessages, MistralMessage{Role: "tool", Content: result})
+					continue
+				}
+
+				path, ok1 := args["path"].(string)
+				content, ok2 := args["content"].(string)
+				if !ok1 || !ok2 {
+					result := "Error: Invalid tool arguments"
+					allMessages = append(allMessages, MistralMessage{Role: "tool", Content: result})
+					continue
+				}
+
+				call := ToolCall{
+					Name:      "WriteFile",
+					Arguments: map[string]any{"path": path, "content": content},
 				}
 				output, err := m.executor.ExecuteTool(call)
 				if err != nil {
@@ -234,11 +282,7 @@ func (m *MistralCaller) Call(ctx context.Context, systemPrompt string, messages 
 }
 
 func (m *MistralCaller) extractToolCalls(msg MistralMessage) []MistralToolCall {
-	var toolCalls []MistralToolCall
-	for _, tc := range toolCalls {
-		toolCalls = append(toolCalls, tc)
-	}
-	return toolCalls
+	return msg.ToolCalls
 }
 
 func NewMistralClient() (*http.Client, error) {

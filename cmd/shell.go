@@ -61,30 +61,55 @@ type ShellExecutorForLLM struct {
 }
 
 func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
-	cmd, ok := call.Arguments["command"].(string)
-	if !ok {
-		return "Error: Invalid tool arguments", nil
-	}
+	switch call.Name {
+	case "RunCommand":
+		cmd, ok := call.Arguments["command"].(string)
+		if !ok {
+			return "Error: Invalid tool arguments", nil
+		}
 
-	if e.m.cfg.Shell.Confirm {
-		cmdName := getCommandName(cmd)
-		skipConfirm := config.IsAllowedCommand(cmdName, e.m.cfg.Shell.AllowedCommands)
-		if !skipConfirm {
-			confirm := e.AskConfirmation(cmd)
-			if !confirm {
-				return "Error: Command execution denied by user", nil
+		if e.m.cfg.Shell.Confirm {
+			cmdName := getCommandName(cmd)
+			skipConfirm := config.IsAllowedCommand(cmdName, e.m.cfg.Shell.AllowedCommands)
+			if !skipConfirm {
+				confirm := e.AskConfirmation(cmd)
+				if !confirm {
+					return "Error: Command execution denied by user", nil
+				}
 			}
 		}
-	}
 
-	confirmMsg := fmt.Sprintf("[Executing: %s]", cmd)
-	e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
+		confirmMsg := fmt.Sprintf("[Executing: %s]", cmd)
+		e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
 
-	output, err := tools.RunCommand(cmd)
-	if err != nil {
-		return fmt.Sprintf("Error: %v\nOutput: %s", err, output), nil
+		output, err := tools.RunCommand(cmd)
+		if err != nil {
+			return fmt.Sprintf("Error: %v\nOutput: %s", err, output), nil
+		}
+		return output, nil
+
+	case "WriteFile":
+		path, ok1 := call.Arguments["path"].(string)
+		content, ok2 := call.Arguments["content"].(string)
+		if !ok1 || !ok2 {
+			return "Error: Invalid tool arguments", nil
+		}
+
+		if e.m.cfg.Shell.Confirm {
+			confirm := e.AskConfirmation(fmt.Sprintf("Write to file %s?", path))
+			if !confirm {
+				return "Error: File write denied by user", nil
+			}
+		}
+
+		confirmMsg := fmt.Sprintf("[Writing to file: %s]", path)
+		e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
+
+		return tools.WriteFile(path, content)
+
+	default:
+		return fmt.Sprintf("Error: Unknown tool %s", call.Name), nil
 	}
-	return output, nil
 }
 
 func (e *ShellExecutorForLLM) IsAllowedCommand(cmd string) bool {

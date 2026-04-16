@@ -55,6 +55,28 @@ func (o *OllamaCaller) Call(ctx context.Context, systemPrompt string, messages [
 		},
 	}
 
+	writeFileTool := api.Tool{
+		Type: "function",
+		Function: api.ToolFunction{
+			Name:        "WriteFile",
+			Description: "Write content to a file at the specified path",
+			Parameters: api.ToolFunctionParameters{
+				Type:     "object",
+				Required: []string{"path", "content"},
+				Properties: map[string]api.ToolProperty{
+					"path": {
+						Type:        api.PropertyType{"string"},
+						Description: "The absolute or relative path to the file",
+					},
+					"content": {
+						Type:        api.PropertyType{"string"},
+						Description: "The content to write to the file",
+					},
+				},
+			},
+		},
+	}
+
 	allMessages := []api.Message{
 		{Role: "system", Content: systemPrompt},
 	}
@@ -65,7 +87,7 @@ func (o *OllamaCaller) Call(ctx context.Context, systemPrompt string, messages [
 		req := &api.ChatRequest{
 			Model:    o.model,
 			Messages: allMessages,
-			Tools:    []api.Tool{runCommandTool},
+			Tools:    []api.Tool{runCommandTool, writeFileTool},
 			Stream:   new(bool),
 		}
 		*req.Stream = false
@@ -87,7 +109,8 @@ func (o *OllamaCaller) Call(ctx context.Context, systemPrompt string, messages [
 		}
 
 		for _, tc := range response.Message.ToolCalls {
-			if tc.Function.Name == "RunCommand" {
+			switch tc.Function.Name {
+			case "RunCommand":
 				cmd, ok := tc.Function.Arguments["command"].(string)
 				if !ok {
 					result := "Error: Invalid tool arguments"
@@ -95,20 +118,30 @@ func (o *OllamaCaller) Call(ctx context.Context, systemPrompt string, messages [
 					continue
 				}
 
-				skipConfirm := o.executor.IsAllowedCommand(cmd)
-
-				if !skipConfirm {
-					confirm := o.executor.AskConfirmation(cmd)
-					if !confirm {
-						result := "Error: Command execution denied by user"
-						allMessages = append(allMessages, api.Message{Role: "tool", Content: result})
-						continue
-					}
-				}
-
 				call := ToolCall{
 					Name:      "RunCommand",
 					Arguments: map[string]any{"command": cmd},
+				}
+				output, err := o.executor.ExecuteTool(call)
+				if err != nil {
+					result := fmt.Sprintf("Error: %v\nOutput: %s", err, output)
+					allMessages = append(allMessages, api.Message{Role: "tool", Content: result})
+				} else {
+					allMessages = append(allMessages, api.Message{Role: "tool", Content: output})
+				}
+
+			case "WriteFile":
+				path, ok1 := tc.Function.Arguments["path"].(string)
+				content, ok2 := tc.Function.Arguments["content"].(string)
+				if !ok1 || !ok2 {
+					result := "Error: Invalid tool arguments"
+					allMessages = append(allMessages, api.Message{Role: "tool", Content: result})
+					continue
+				}
+
+				call := ToolCall{
+					Name:      "WriteFile",
+					Arguments: map[string]any{"path": path, "content": content},
 				}
 				output, err := o.executor.ExecuteTool(call)
 				if err != nil {
