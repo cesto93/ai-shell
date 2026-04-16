@@ -321,16 +321,17 @@ func (m *ShellModel) View() string {
 	}
 
 	if m.modelMenu.active {
-		sb.WriteString(systemStyle.Render("Select Model (↑/↓ to navigate, Enter to select, Esc to cancel):\n"))
+		sb.WriteString(systemStyle.Render("Select Model (↑/↓ to navigate, Enter to select, Esc to cancel):"))
+		sb.WriteString("\n")
 		for i, model := range m.modelMenu.models {
-			marker := "  "
+			marker := " "
 			if model.Name == m.cfg.LLM.Model {
-				marker = "* "
+				marker = "*"
 			}
 			if i == m.modelMenu.selectedIdx {
-				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(fmt.Sprintf(" %s%s ", marker, model.Name)))
+				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(fmt.Sprintf(" %s %s ", marker, model.Name)))
 			} else {
-				sb.WriteString(userStyle.Render(fmt.Sprintf(" %s%s ", marker, model.Name)))
+				sb.WriteString(userStyle.Render(fmt.Sprintf(" %s %s ", marker, model.Name)))
 			}
 			sb.WriteString("\n")
 		}
@@ -347,7 +348,8 @@ func (m *ShellModel) View() string {
 	}
 
 	if m.loading {
-		sb.WriteString(systemStyle.Render("Thinking... (Press Esc to cancel)\n"))
+		sb.WriteString(systemStyle.Render("Thinking... (Press Esc to cancel)"))
+		sb.WriteString("\n")
 	} else {
 		sb.WriteString(m.input.View())
 	}
