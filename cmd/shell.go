@@ -66,19 +66,19 @@ func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
 		return "Error: Invalid tool arguments", nil
 	}
 
-	confirmMsg := fmt.Sprintf("[Executing: %s]", cmd)
-	e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
-
 	if e.m.cfg.Shell.Confirm {
 		cmdName := getCommandName(cmd)
 		skipConfirm := config.IsAllowedCommand(cmdName, e.m.cfg.Shell.AllowedCommands)
 		if !skipConfirm {
-			confirm := askConfirmation(cmd)
+			confirm := e.AskConfirmation(cmd)
 			if !confirm {
 				return "Error: Command execution denied by user", nil
 			}
 		}
 	}
+
+	confirmMsg := fmt.Sprintf("[Executing: %s]", cmd)
+	e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
 
 	output, err := tools.RunCommand(cmd)
 	if err != nil {
@@ -93,7 +93,19 @@ func (e *ShellExecutorForLLM) IsAllowedCommand(cmd string) bool {
 }
 
 func (e *ShellExecutorForLLM) AskConfirmation(cmd string) bool {
-	return askConfirmation(cmd)
+	e.m.pendingCommand = cmd
+	e.m.waitingConfirm = true
+	if e.m.teaProgram != nil {
+		e.m.teaProgram.Send(confirmationMsg{cmd: cmd})
+	}
+
+	select {
+	case result := <-e.m.confirmationChan:
+		return result
+	case <-e.m.cancelChan:
+		e.m.waitingConfirm = false
+		return false
+	}
 }
 
 func getHistoryFile() string {
@@ -110,6 +122,9 @@ type Message struct {
 }
 
 type responseReadyMsg struct{}
+type confirmationMsg struct {
+	cmd string
+}
 
 type ShellModel struct {
 	teaProgram         *tea.Program
@@ -131,6 +146,9 @@ type ShellModel struct {
 	showSuggestions    bool
 	loading            bool
 	cancelChan         chan struct{}
+	confirmationChan   chan bool
+	pendingCommand     string
+	waitingConfirm     bool
 	modelMenu          struct {
 		active      bool
 		models      []config.ModelInfo
@@ -187,6 +205,7 @@ func NewShellModel() (*ShellModel, error) {
 		geminiClient:       geminiClient,
 		mistralClient:      mistralClient,
 		mistralAPIKey:      mistralAPIKey,
+		confirmationChan:   make(chan bool, 1),
 	}
 
 	return m, nil
@@ -206,12 +225,40 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		return m, nil
 
+	case confirmationMsg:
+		m.waitingConfirm = true
+		m.pendingCommand = msg.cmd
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.waitingConfirm {
+			switch msg.Type {
+			case tea.KeyEnter:
+				// Default to No for safety
+				m.waitingConfirm = false
+				m.confirmationChan <- false
+				return m, nil
+			case tea.KeyEscape:
+				m.waitingConfirm = false
+				m.confirmationChan <- false
+				return m, nil
+			}
+
+			switch msg.String() {
+			case "y", "Y":
+				m.waitingConfirm = false
+				m.confirmationChan <- true
+			case "n", "N":
+				m.waitingConfirm = false
+				m.confirmationChan <- false
+			}
+			return m, nil
+		}
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyCtrlD:
 			m.quitting = true
@@ -347,7 +394,12 @@ func (m *ShellModel) View() string {
 		sb.WriteString("\n")
 	}
 
-	if m.loading {
+	if m.waitingConfirm {
+		sb.WriteString(systemStyle.Render(fmt.Sprintf("[LLM wants to execute: %s]", m.pendingCommand)))
+		sb.WriteString("\n")
+		sb.WriteString(dimStyle.Render("Confirm execution? [y/N]"))
+		sb.WriteString("\n")
+	} else if m.loading {
 		sb.WriteString(systemStyle.Render("Thinking... (Press Esc to cancel)"))
 		sb.WriteString("\n")
 	} else {
@@ -752,17 +804,6 @@ func (m *ShellModel) callLLM(prompt string) {
 	if m.teaProgram != nil {
 		m.teaProgram.Send(responseReadyMsg{})
 	}
-}
-
-func askConfirmation(cmd string) bool {
-	fmt.Printf("\n%s[LLM wants to execute: %s]%s\n", systemStyle.Render(""), cmd, "")
-	fmt.Printf("%sConfirm execution? [y/N]: %s", dimStyle.Render(""), "")
-
-	var response string
-	fmt.Scanln(&response)
-	response = strings.ToLower(strings.TrimSpace(response))
-
-	return response == "y" || response == "yes"
 }
 
 func getCommandName(cmd string) string {
