@@ -1,18 +1,22 @@
 # AI-Shell 🤖🐚
 
-An interactive shell powered by AI (**Ollama**) that helps you with commands, explanations, and automation directly from your terminal.
+An interactive shell powered by AI (**Ollama, Gemini, Mistral**) that helps you with commands, explanations, and automation directly from your terminal.
 
 ## Features
 
 - **Interactive AI Chat**: Ask questions about shell commands, scripting, or general knowledge.
 - **System Awareness**: Automatically detects your Linux distribution and shell to provide tailored advice.
-- **Autonomous Tool Use**: The AI can execute shell commands itself to gather information or perform tasks (enabled via Ollama tool-calling).
+- **Autonomous Tool Use**: The AI can execute shell commands itself to gather information or perform tasks (enabled via OpenAI-compatible tool-calling).
+- **Multi-Provider Support**: Supports Ollama (local), Google Gemini, and Mistral through a unified API.
 - **Configurable**: Easily switch models via a YAML configuration file.
 
 ## Prerequisites
 
-- **Go**: Version 1.21 or later.
-- **Ollama**: Must be installed and running. You can download it from [ollama.com](https://ollama.com).
+- **Go**: Version 1.25.5 or later.
+- **Providers**:
+  - **Ollama**: Must be installed and running for local models.
+  - **Gemini**: Requires `GEMINI_API_KEY` environment variable.
+  - **Mistral**: Requires `MISTRAL_KEY` environment variable.
 - **LLM Model**: By default, it expects the `granite4:3b-h` model, but this can be changed in the config.
 
 ## Installation
@@ -75,7 +79,7 @@ To change the model, simply update the `model` field in your config file.
 
 ## How it works
 
-AI-Shell uses the [Ollama Go API](https://github.com/ollama/ollama) to communicate with your local models. It uses a system prompt to inform the LLM about your environment (e.g., "running on Ubuntu 22.04 using /bin/bash"). When the LLM decides it needs to run a command, it uses a defined `RunCommand` tool, which executes the command and feeds the output back to the LLM.
+AI-Shell uses a unified OpenAI-compatible API to communicate with your LLM models (Ollama, Gemini, or Mistral). It uses a system prompt to inform the LLM about your environment (e.g., "running on Ubuntu 22.04 using /bin/bash"). When the LLM decides it needs to run a command, it uses a defined `RunCommand` tool, which executes the command and feeds the output back to the LLM.
 
 ## License
 

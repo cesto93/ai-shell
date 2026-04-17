@@ -11,7 +11,7 @@ This document provides essential context and instructions for AI agents interact
 - **CLI Framework:** [Cobra](https://github.com/spf13/cobra)
 - **TUI Framework:** [Bubbletea](https://github.com/charmbracelet/bubbletea), [Bubbles](https://github.com/charmbracelet/bubbles), and [Lipgloss](https://github.com/charmbracelet/lipgloss)
 - **Configuration:** [Viper](https://github.com/spf13/viper) (YAML/Environment variables)
-- **AI Integrations:** Ollama Go SDK, Google GenAI SDK, Mistral API
+- **AI Integrations:** Unified OpenAI-compatible API (Ollama, Gemini, Mistral)
 
 ### Architecture
 - **`cmd/`**: Contains the CLI entry points and the TUI implementation (`shell.go`).

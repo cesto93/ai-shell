@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -16,8 +15,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/ollama/ollama/api"
-	"google.golang.org/genai"
 )
 
 var (
@@ -162,10 +159,6 @@ type ShellModel struct {
 	height             int
 	quitting           bool
 	cfg                *config.Config
-	ollamaClient       *api.Client
-	geminiClient       *genai.Client
-	mistralClient      *http.Client
-	mistralAPIKey      string
 	suggestions        []string
 	selectedIndex      int
 	showSuggestions    bool
@@ -187,31 +180,6 @@ func NewShellModel() (*ShellModel, error) {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
-	var ollamaClient *api.Client
-	var geminiClient *genai.Client
-	var mistralClient *http.Client
-	var mistralAPIKey string
-
-	switch cfg.LLM.Provider {
-	case "gemini":
-		ctx := context.Background()
-		geminiClient, err = llm.NewGeminiClient(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create Gemini client: %w", err)
-		}
-	case "mistral":
-		mistralClient, err = llm.NewMistralClient()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create Mistral client: %w", err)
-		}
-		mistralAPIKey = os.Getenv("MISTRAL_KEY")
-	default:
-		ollamaClient, err = api.ClientFromEnvironment()
-		if err != nil {
-			return nil, fmt.Errorf("failed to create Ollama client: %w", err)
-		}
-	}
-
 	ti := textinput.New()
 	ti.Placeholder = "Ask the AI..."
 	ti.Focus()
@@ -226,10 +194,6 @@ func NewShellModel() (*ShellModel, error) {
 		historyIndex:       -1,
 		commandHistoryPath: historyPath,
 		cfg:                cfg,
-		ollamaClient:       ollamaClient,
-		geminiClient:       geminiClient,
-		mistralClient:      mistralClient,
-		mistralAPIKey:      mistralAPIKey,
 		confirmationChan:   make(chan bool, 1),
 	}
 
@@ -714,34 +678,6 @@ func (m *ShellModel) selectModel() {
 		m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Switched to model: %s", selectedModel)})
 		if newCfg, err := config.LoadConfig(); err == nil {
 			m.cfg = newCfg
-			switch m.cfg.LLM.Provider {
-			case "gemini":
-				if m.geminiClient == nil {
-					ctx := context.Background()
-					m.geminiClient, err = llm.NewGeminiClient(ctx)
-					if err != nil {
-						m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error creating Gemini client: %v", err)})
-						return
-					}
-				}
-			case "mistral":
-				if m.mistralClient == nil {
-					m.mistralClient, err = llm.NewMistralClient()
-					if err != nil {
-						m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error creating Mistral client: %v", err)})
-						return
-					}
-					m.mistralAPIKey = os.Getenv("MISTRAL_KEY")
-				}
-			case "ollama":
-				if m.ollamaClient == nil {
-					m.ollamaClient, err = api.ClientFromEnvironment()
-					if err != nil {
-						m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error creating Ollama client: %v", err)})
-						return
-					}
-				}
-			}
 		}
 	}
 
@@ -765,44 +701,24 @@ func (m *ShellModel) callLLM(prompt string) {
 
 	executor := &ShellExecutorForLLM{m: m}
 
-	var resultMessages []llm.Message
-	var err error
-
+	var caller llm.Caller
 	switch m.cfg.LLM.Provider {
 	case "gemini":
-		geminiCaller := llm.NewGeminiCaller(m.geminiClient, m.cfg.LLM.Model, executor)
-		var geminiMessages []llm.Message
-		for _, msg := range m.messages {
-			if msg.role == "user" || msg.role == "assistant" {
-				geminiMessages = append(geminiMessages, llm.Message{Role: msg.role, Content: msg.content})
-			}
-		}
-		resultMessages, err = geminiCaller.Call(ctx, systemPrompt, geminiMessages)
+		caller = llm.NewGeminiCaller(m.cfg.LLM.Model, executor)
 	case "mistral":
-		mistralCaller := llm.NewMistralCaller(m.mistralClient, m.cfg.LLM.Model, m.mistralAPIKey, executor)
-		var mistralMessages []llm.Message
-		for _, msg := range m.messages {
-			if msg.role == "user" || msg.role == "assistant" || msg.role == "tool" {
-				mistralMessages = append(mistralMessages, llm.Message{Role: msg.role, Content: msg.content})
-			}
-		}
-		resultMessages, err = mistralCaller.Call(ctx, systemPrompt, mistralMessages)
+		caller = llm.NewMistralCaller(m.cfg.LLM.Model, executor)
 	default:
-		ollamaCaller := llm.NewOllamaCaller(m.ollamaClient, m.cfg.LLM.Model, executor)
-		var apiMessages []api.Message
-		for _, msg := range m.messages {
-			if msg.role == "user" || msg.role == "assistant" || msg.role == "tool" {
-				apiMessages = append(apiMessages, api.Message{Role: msg.role, Content: msg.content})
-			}
-		}
-		var ollamaMsgs []api.Message
-		ollamaMsgs, err = ollamaCaller.Call(ctx, systemPrompt, apiMessages)
-		if err == nil {
-			for _, msg := range ollamaMsgs {
-				resultMessages = append(resultMessages, llm.Message{Role: msg.Role, Content: msg.Content})
-			}
+		caller = llm.NewOllamaCaller(m.cfg.LLM.Model, executor)
+	}
+
+	var commonMessages []llm.Message
+	for _, msg := range m.messages {
+		if msg.role == "user" || msg.role == "assistant" || msg.role == "tool" {
+			commonMessages = append(commonMessages, llm.Message{Role: msg.role, Content: msg.content})
 		}
 	}
+
+	resultMessages, err := caller.Call(ctx, systemPrompt, commonMessages)
 
 	if err != nil {
 		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})
