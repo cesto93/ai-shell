@@ -28,3 +28,11 @@ func WriteFile(path string, content string) (string, error) {
 	}
 	return fmt.Sprintf("File written successfully to %s", path), nil
 }
+
+func ReadFile(path string) (string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %w", err)
+	}
+	return string(content), nil
+}

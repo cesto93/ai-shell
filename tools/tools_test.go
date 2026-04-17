@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -78,4 +79,39 @@ func TestRunCommand(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFileOperations(t *testing.T) {
+	tempFile := "test_file.txt"
+	content := "test content"
+
+	t.Run("WriteFile", func(t *testing.T) {
+		msg, err := WriteFile(tempFile, content)
+		if err != nil {
+			t.Errorf("WriteFile() error = %v", err)
+		}
+		if !strings.Contains(msg, "successfully") {
+			t.Errorf("WriteFile() output = %q, expected success message", msg)
+		}
+	})
+
+	t.Run("ReadFile", func(t *testing.T) {
+		got, err := ReadFile(tempFile)
+		if err != nil {
+			t.Errorf("ReadFile() error = %v", err)
+		}
+		if got != content {
+			t.Errorf("ReadFile() = %q, want %q", got, content)
+		}
+	})
+
+	t.Run("ReadFile Non-existent", func(t *testing.T) {
+		_, err := ReadFile("non_existent_file.txt")
+		if err == nil {
+			t.Error("ReadFile() expected error for non-existent file, got nil")
+		}
+	})
+
+	// Cleanup
+	os.Remove(tempFile)
 }
