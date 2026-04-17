@@ -46,63 +46,7 @@ func (o *OpenAICaller) Call(ctx context.Context, systemPrompt string, messages [
 	}
 	allMessages = append(allMessages, messages...)
 
-	tools := []any{
-		map[string]any{
-			"type": "function",
-			"function": map[string]any{
-				"name":        "RunCommand",
-				"description": "Execute a shell command and return its output",
-				"parameters": map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"command": map[string]any{
-							"type":        "string",
-							"description": "The shell command to execute (e.g., 'ls -la', 'echo hello')",
-						},
-					},
-					"required": []string{"command"},
-				},
-			},
-		},
-		map[string]any{
-			"type": "function",
-			"function": map[string]any{
-				"name":        "WriteFile",
-				"description": "Write content to a file at the specified path",
-				"parameters": map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"path": map[string]any{
-							"type":        "string",
-							"description": "The absolute or relative path to the file",
-						},
-						"content": map[string]any{
-							"type":        "string",
-							"description": "The content to write to the file",
-						},
-					},
-					"required": []string{"path", "content"},
-				},
-			},
-		},
-		map[string]any{
-			"type": "function",
-			"function": map[string]any{
-				"name":        "ReadFile",
-				"description": "Read the content of a file at the specified path",
-				"parameters": map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"path": map[string]any{
-							"type":        "string",
-							"description": "The absolute or relative path to the file",
-						},
-					},
-					"required": []string{"path"},
-				},
-			},
-		},
-	}
+	tools := GetDefaultTools()
 
 	originalCount := len(allMessages)
 

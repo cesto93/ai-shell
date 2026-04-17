@@ -706,20 +706,18 @@ func (m *ShellModel) callLLM(prompt string) {
 		}
 	}()
 
-	distro := tools.GetDistro()
-	shell := tools.GetShell()
-	systemPrompt := fmt.Sprintf("You are a helpful shell assistant. The user is running on %s using %s shell.", distro, shell)
+	agent := llm.NewAgent(m.cfg.LLM.Model, m.cfg.LLM.Provider)
 
 	executor := &ShellExecutorForLLM{m: m}
 
 	var caller llm.Caller
-	switch m.cfg.LLM.Provider {
+	switch agent.Provider {
 	case "gemini":
-		caller = llm.NewGeminiCaller(m.cfg.LLM.Model, executor)
+		caller = llm.NewGeminiCaller(agent.Model, executor)
 	case "mistral":
-		caller = llm.NewMistralCaller(m.cfg.LLM.Model, executor)
+		caller = llm.NewMistralCaller(agent.Model, executor)
 	default:
-		caller = llm.NewOllamaCaller(m.cfg.LLM.Model, executor)
+		caller = llm.NewOllamaCaller(agent.Model, executor)
 	}
 
 	var commonMessages []llm.Message
@@ -729,7 +727,7 @@ func (m *ShellModel) callLLM(prompt string) {
 		}
 	}
 
-	resultMessages, err := caller.Call(ctx, systemPrompt, commonMessages)
+	resultMessages, err := caller.Call(ctx, agent.Prompt, commonMessages)
 
 	if err != nil {
 		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})
