@@ -104,6 +104,17 @@ func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
 
 		return tools.WriteFile(path, content)
 
+	case "ReadFile":
+		path, ok := call.Arguments["path"].(string)
+		if !ok {
+			return "Error: Invalid tool arguments", nil
+		}
+
+		confirmMsg := fmt.Sprintf("[Reading file: %s]", path)
+		e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
+
+		return tools.ReadFile(path)
+
 	default:
 		return fmt.Sprintf("Error: Unknown tool %s", call.Name), nil
 	}

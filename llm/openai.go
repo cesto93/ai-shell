@@ -85,6 +85,23 @@ func (o *OpenAICaller) Call(ctx context.Context, systemPrompt string, messages [
 				},
 			},
 		},
+		map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "ReadFile",
+				"description": "Read the content of a file at the specified path",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"path": map[string]any{
+							"type":        "string",
+							"description": "The absolute or relative path to the file",
+						},
+					},
+					"required": []string{"path"},
+				},
+			},
+		},
 	}
 
 	originalCount := len(allMessages)
