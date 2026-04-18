@@ -50,6 +50,7 @@ var availableCommands = []string{
 	"get-config",
 	"models",
 	"reset",
+	"add-cmd",
 	"exit",
 	"quit",
 }
@@ -184,6 +185,12 @@ type ShellModel struct {
 		models      []config.ModelInfo
 		selectedIdx int
 	}
+	addCmdMode struct {
+		active bool
+		step   int // 0: name, 1: prompt
+		name   string
+		prompt string
+	}
 }
 
 func NewShellModel() (*ShellModel, error) {
@@ -276,18 +283,18 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSubmit()
 
 		case tea.KeyUp:
-			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active {
+			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active && !m.addCmdMode.active {
 				return m.navigateSuggestions(-1)
 			}
-			if !m.modelMenu.active {
+			if !m.modelMenu.active && !m.addCmdMode.active {
 				return m.navigateHistory(-1)
 			}
 
 		case tea.KeyDown:
-			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active {
+			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active && !m.addCmdMode.active {
 				return m.navigateSuggestions(1)
 			}
-			if !m.modelMenu.active {
+			if !m.modelMenu.active && !m.addCmdMode.active {
 				return m.navigateHistory(1)
 			}
 
@@ -303,6 +310,12 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.modelMenu.active {
 				m.modelMenu.active = false
+				return m, nil
+			}
+			if m.addCmdMode.active {
+				m.addCmdMode.active = false
+				m.input.Prompt = "ai-shell > "
+				m.input.SetValue("")
 				return m, nil
 			}
 			m.input.SetValue("")
@@ -330,7 +343,7 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 
-	if value := m.input.Value(); strings.HasPrefix(value, "/") {
+	if value := m.input.Value(); strings.HasPrefix(value, "/") && !m.addCmdMode.active {
 		m.updateSuggestions(strings.TrimPrefix(value, "/"))
 	} else {
 		m.showSuggestions = false
@@ -394,6 +407,11 @@ func (m *ShellModel) View() string {
 		sb.WriteString("\n")
 	}
 
+	if m.addCmdMode.active {
+		sb.WriteString(dimStyle.Render("(Esc to cancel adding command)"))
+		sb.WriteString("\n")
+	}
+
 	if m.waitingConfirm {
 		sb.WriteString(systemStyle.Render(fmt.Sprintf("[LLM wants to execute: %s]", m.pendingCommand)))
 		sb.WriteString("\n")
@@ -418,6 +436,30 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 
 	if m.loading {
 		return m, nil
+	}
+
+	if m.addCmdMode.active {
+		if m.addCmdMode.step == 0 {
+			m.addCmdMode.name = strings.TrimPrefix(value, "/")
+			m.addCmdMode.step = 1
+			m.input.SetValue("")
+			m.input.Prompt = fmt.Sprintf("Enter prompt for /%s: ", m.addCmdMode.name)
+			return m, nil
+		} else {
+			m.addCmdMode.prompt = value
+			if err := config.SaveCommand(m.addCmdMode.name, m.addCmdMode.prompt); err != nil {
+				m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error saving command: %v", err)})
+			} else {
+				m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Command /%s added successfully!", m.addCmdMode.name)})
+				if newCfg, err := config.LoadConfig(); err == nil {
+					m.cfg = newCfg
+				}
+			}
+			m.addCmdMode.active = false
+			m.input.Prompt = "ai-shell > "
+			m.input.SetValue("")
+			return m, nil
+		}
 	}
 
 	if m.history == nil || len(m.history) == 0 || m.history[len(m.history)-1] != value {
@@ -485,6 +527,12 @@ func (m *ShellModel) handleCommand(input string) (tea.Model, tea.Cmd) {
 
 	case "models":
 		m.openModelMenu()
+
+	case "add-cmd":
+		m.addCmdMode.active = true
+		m.addCmdMode.step = 0
+		m.input.SetValue("")
+		m.input.Prompt = "Enter command name: /"
 
 	case "reset":
 		m.messages = nil
@@ -680,6 +728,7 @@ func (m *ShellModel) showHelp() {
 	sb.WriteString("  /help         - Show this help message\n")
 	sb.WriteString("  /get-config   - Show current LLM settings\n")
 	sb.WriteString("  /models       - Switch to a different model\n")
+	sb.WriteString("  /add-cmd      - Configure a new command\n")
 	sb.WriteString("  /reset        - Clear the screen and messages\n")
 	sb.WriteString("  /exit, /quit  - Exit the shell\n")
 	sb.WriteString("  /<command>    - Execute a shell command\n")

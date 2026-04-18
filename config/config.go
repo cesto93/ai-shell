@@ -194,6 +194,41 @@ func SaveModelWithProvider(modelName, provider string) error {
 	return nil
 }
 
+func SaveCommand(name, prompt string) error {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	configFile := cfg.ConfigFile
+	if configFile == "" {
+		configPath, err := getConfigPathFunc()
+		if err != nil {
+			return fmt.Errorf("failed to get config path: %w", err)
+		}
+		configFile = filepath.Join(configPath, "config.yaml")
+	}
+
+	if cfg.Commands == nil {
+		cfg.Commands = make(map[string]string)
+	}
+	cfg.Commands[name] = prompt
+
+	var commandsYaml strings.Builder
+	commandsYaml.WriteString("commands:\n")
+	for k, v := range cfg.Commands {
+		commandsYaml.WriteString(fmt.Sprintf("  %s: %q\n", k, v))
+	}
+
+	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\nshell:\n  confirm: %v\n  allowed_commands: %q\n%s",
+		cfg.LLM.Provider, cfg.LLM.Model, cfg.Shell.Confirm, cfg.Shell.AllowedCommands, commandsYaml.String())
+	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	return nil
+}
+
 type ModelInfo struct {
 	Name       string
 	Size       string
