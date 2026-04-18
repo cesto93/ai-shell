@@ -5,16 +5,17 @@ An interactive shell powered by AI (**Ollama, Gemini, Mistral**) that helps you 
 ## Features
 
 - **Interactive AI Chat**: Ask questions about shell commands, scripting, or general knowledge.
+- **Rich TUI**: Built with Bubbletea, featuring a modern interface with command history, autocomplete, and real-time feedback.
 - **System Awareness**: Automatically detects your Linux distribution and shell to provide tailored advice.
-- **Autonomous Tool Use**: The AI can execute shell commands itself to gather information or perform tasks (enabled via OpenAI-compatible tool-calling).
+- **Autonomous Tool Use**: The AI can execute shell commands (`RunCommand`), read files (`ReadFile`), and write files (`WriteFile`) autonomously (with your confirmation).
 - **Multi-Provider Support**: Supports Ollama (local), Google Gemini, and Mistral through a unified API.
-- **Configurable**: Easily switch models via a YAML configuration file.
+- **Configurable**: Easily switch models and providers via a YAML configuration file.
 
 ## Prerequisites
 
 - **Go**: Version 1.25.5 or later.
 - **Providers**:
-  - **Ollama**: Must be installed and running for local models.
+  - **Ollama**: Must be installed and running for local models (default).
   - **Gemini**: Requires `GEMINI_API_KEY` environment variable.
   - **Mistral**: Requires `MISTRAL_KEY` environment variable.
 - **LLM Model**: By default, it expects the `granite4:3b-h` model, but this can be changed in the config.
@@ -45,12 +46,21 @@ ai-shell
 
 ### Interactive Commands
 
-Within the `ai-shell >` prompt:
+Within the `ai-shell >` prompt, you can use the following commands (with or without the `/` prefix):
 
 - **Type anything**: Send a request to the AI (e.g., "how do I find large files?").
 - **`help`**: Show the help menu.
 - **`get-config`**: See current model and configuration file location.
+- **`models`**: Open a menu to select the model.
+- **`reset`**: Clear the chat history.
 - **`exit` or `quit`**: Close the shell.
+
+### TUI Shortcuts
+
+- **Arrows (↑/↓)**: Navigate through command history.
+- **Tab**: Trigger autocomplete for commands.
+- **Ctrl+C**: Stop the current operation or exit.
+- **Esc**: Cancel the current request or clear the input.
 
 ### Pipe Support
 
@@ -70,16 +80,30 @@ Default configuration:
 
 ```yaml
 llm:
+  provider: "ollama"
   model: "granite4:3b-h"
 shell:
   confirm: true
+  allowed_commands: "ls,pwd"
 ```
 
-To change the model, simply update the `model` field in your config file.
+### Configuration Options
+
+- **`llm.provider`**: The AI provider to use (`ollama`, `gemini`, or `mistral`).
+- **`llm.model`**: The specific model name.
+- **`shell.confirm`**: If `true`, the application will always ask for confirmation before executing an AI-suggested command.
+- **`shell.allowed_commands`**: A comma-separated list of safe commands that the AI can execute without requiring user confirmation (e.g., "ls,pwd,date").
 
 ## How it works
 
-AI-Shell uses a unified OpenAI-compatible API to communicate with your LLM models (Ollama, Gemini, or Mistral). It uses a system prompt to inform the LLM about your environment (e.g., "running on Ubuntu 22.04 using /bin/bash"). When the LLM decides it needs to run a command, it uses a defined `RunCommand` tool, which executes the command and feeds the output back to the LLM.
+AI-Shell uses a unified OpenAI-compatible API to communicate with your LLM models. It uses a system prompt to inform the LLM about your environment (e.g., "running on Ubuntu 22.04 using /bin/bash"). 
+
+When the LLM decides it needs to perform an action, it can use the following tools:
+- **`RunCommand`**: Executes a shell command and returns the output.
+- **`ReadFile`**: Reads the content of a specified file.
+- **`WriteFile`**: Writes content to a specified file.
+
+Commands are executed via `bash -c`. For safety, execution of commands not in `allowed_commands` always requires explicit user confirmation (`y/N`).
 
 ## License
 
