@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"ai-shell/config"
@@ -463,8 +464,13 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *ShellModel) handleCommand(cmd string) (tea.Model, tea.Cmd) {
-	cmd = strings.TrimSpace(cmd)
+func (m *ShellModel) handleCommand(input string) (tea.Model, tea.Cmd) {
+	parts := strings.Fields(input)
+	if len(parts) == 0 {
+		return m, nil
+	}
+	cmd := parts[0]
+	args := strings.Join(parts[1:], " ")
 
 	switch cmd {
 	case "exit", "quit":
@@ -484,6 +490,17 @@ func (m *ShellModel) handleCommand(cmd string) (tea.Model, tea.Cmd) {
 		m.messages = nil
 
 	default:
+		if prompt, ok := m.cfg.Commands[cmd]; ok {
+			fullPrompt := prompt
+			if args != "" {
+				fullPrompt = prompt + " " + args
+			}
+			m.messages = append(m.messages, Message{role: "user", content: fullPrompt})
+			m.loading = true
+			m.cancelChan = make(chan struct{})
+			go m.callLLM(fullPrompt)
+			return m, nil
+		}
 		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Unknown command: /%s", cmd)})
 	}
 
@@ -495,10 +512,24 @@ func (m *ShellModel) handleAutocomplete() (tea.Model, tea.Cmd) {
 
 	if strings.HasPrefix(value, "/") {
 		partial := strings.TrimPrefix(value, "/")
+		// Check built-in commands
 		for _, cmd := range availableCommands {
 			if strings.HasPrefix(cmd, partial) {
 				m.input.SetValue("/" + cmd)
-				break
+				return m, nil
+			}
+		}
+		// Check custom commands (sorted for consistency)
+		var customCmds []string
+		for cmd := range m.cfg.Commands {
+			customCmds = append(customCmds, cmd)
+		}
+		sort.Strings(customCmds)
+
+		for _, cmd := range customCmds {
+			if strings.HasPrefix(cmd, partial) {
+				m.input.SetValue("/" + cmd)
+				return m, nil
 			}
 		}
 		return m, nil
@@ -567,9 +598,26 @@ func (m *ShellModel) completeFiles(dir, prefix string) []string {
 
 func (m *ShellModel) updateSuggestions(filter string) {
 	var matches []string
+	// Add built-in commands
 	for _, cmd := range availableCommands {
 		if strings.HasPrefix(cmd, filter) {
 			matches = append(matches, "/"+cmd)
+		}
+	}
+	// Add custom commands
+	for cmd := range m.cfg.Commands {
+		if strings.HasPrefix(cmd, filter) {
+			// Avoid duplicates
+			exists := false
+			for _, m := range matches {
+				if m == "/"+cmd {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				matches = append(matches, "/"+cmd)
+			}
 		}
 	}
 
@@ -627,18 +675,25 @@ func (m *ShellModel) navigateHistory(dir int) (tea.Model, tea.Cmd) {
 }
 
 func (m *ShellModel) showHelp() {
-	help := `
-Commands:
-  /help         - Show this help message
-  /get-config   - Show current LLM settings
-  /models       - Switch to a different model
-  /reset        - Clear the screen and messages
-  /exit, /quit  - Exit the shell
-  /<command>    - Execute a shell command
-  @<file>       - Autocomplete file paths
-  <text>        - Send text to the AI for a response
-`
-	m.messages = append(m.messages, Message{role: "system", content: help})
+	var sb strings.Builder
+	sb.WriteString("\nCommands:\n")
+	sb.WriteString("  /help         - Show this help message\n")
+	sb.WriteString("  /get-config   - Show current LLM settings\n")
+	sb.WriteString("  /models       - Switch to a different model\n")
+	sb.WriteString("  /reset        - Clear the screen and messages\n")
+	sb.WriteString("  /exit, /quit  - Exit the shell\n")
+	sb.WriteString("  /<command>    - Execute a shell command\n")
+	sb.WriteString("  @<file>       - Autocomplete file paths\n")
+	sb.WriteString("  <text>        - Send text to the AI for a response\n")
+
+	if len(m.cfg.Commands) > 0 {
+		sb.WriteString("\nUser Commands:\n")
+		for cmd := range m.cfg.Commands {
+			sb.WriteString(fmt.Sprintf("  /%-12s - %s\n", cmd, m.cfg.Commands[cmd]))
+		}
+	}
+
+	m.messages = append(m.messages, Message{role: "system", content: sb.String()})
 }
 
 func (m *ShellModel) showConfig() {

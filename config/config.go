@@ -23,6 +23,7 @@ type Config struct {
 		Confirm         bool   `mapstructure:"confirm"`
 		AllowedCommands string `mapstructure:"allowed_commands"`
 	} `mapstructure:"shell"`
+	Commands map[string]string `mapstructure:"commands"`
 }
 
 var configPaths = []string{"."}
@@ -51,6 +52,11 @@ func LoadConfig() (*Config, error) {
 	v.SetDefault("llm.model", "granite4:3b-h")
 	v.SetDefault("shell.confirm", true)
 	v.SetDefault("shell.allowed_commands", "ls,pwd")
+	v.SetDefault("commands", map[string]string{
+		"explain": "Explain the following code or concept in detail:",
+		"fix":     "Find and fix any bugs or issues in the following code:",
+		"tests":   "Generate unit tests for the following code:",
+	})
 
 	for _, path := range configPaths {
 		v.AddConfigPath(path)
@@ -81,6 +87,11 @@ func LoadConfig() (*Config, error) {
 					Confirm:         true,
 					AllowedCommands: "ls,pwd",
 				},
+				Commands: map[string]string{
+					"explain": "Explain the following code or concept in detail:",
+					"fix":     "Find and fix any bugs or issues in the following code:",
+					"tests":   "Generate unit tests for the following code:",
+				},
 			}
 
 			if configPath != "" {
@@ -88,7 +99,7 @@ func LoadConfig() (*Config, error) {
 				if err == nil {
 					defaultConfigFile := filepath.Join(configPath, "config.yaml")
 					if _, err := os.Stat(defaultConfigFile); os.IsNotExist(err) {
-						content := "llm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\nshell:\n  confirm: true\n  allowed_commands: \"ls,pwd\"\n"
+						content := "llm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\nshell:\n  confirm: true\n  allowed_commands: \"ls,pwd\"\ncommands:\n  explain: \"Explain the following code or concept in detail:\"\n  fix: \"Find and fix any bugs or issues in the following code:\"\n  tests: \"Generate unit tests for the following code:\"\n"
 						_ = os.WriteFile(defaultConfigFile, []byte(content), 0644)
 						defaultConfig.ConfigFile = defaultConfigFile
 					}
@@ -167,7 +178,14 @@ func SaveModelWithProvider(modelName, provider string) error {
 		cfg.LLM.Provider = "ollama"
 	}
 
-	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\nshell:\n  confirm: %v\n  allowed_commands: %q\n", cfg.LLM.Provider, cfg.LLM.Model, cfg.Shell.Confirm, cfg.Shell.AllowedCommands)
+	var commandsYaml strings.Builder
+	commandsYaml.WriteString("commands:\n")
+	for k, v := range cfg.Commands {
+		commandsYaml.WriteString(fmt.Sprintf("  %s: %q\n", k, v))
+	}
+
+	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\nshell:\n  confirm: %v\n  allowed_commands: %q\n%s",
+		cfg.LLM.Provider, cfg.LLM.Model, cfg.Shell.Confirm, cfg.Shell.AllowedCommands, commandsYaml.String())
 	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
