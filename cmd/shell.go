@@ -343,8 +343,8 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 
-	if value := m.input.Value(); strings.HasPrefix(value, "/") && !m.addCmdMode.active {
-		m.updateSuggestions(strings.TrimPrefix(value, "/"))
+	if !m.addCmdMode.active {
+		m.updateSuggestions()
 	} else {
 		m.showSuggestions = false
 	}
@@ -398,10 +398,15 @@ func (m *ShellModel) View() string {
 	} else if m.showSuggestions && len(m.suggestions) > 0 {
 		sb.WriteString(dimStyle.Render("Suggestions: "))
 		for i, suggestion := range m.suggestions {
+			display := suggestion
+			if lastAt := strings.LastIndex(suggestion, "@"); lastAt != -1 {
+				display = suggestion[lastAt:]
+			}
+
 			if i == m.selectedIndex {
-				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(" " + suggestion + " "))
+				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(" " + display + " "))
 			} else {
-				sb.WriteString(helpStyle.Render(" " + suggestion + " "))
+				sb.WriteString(helpStyle.Render(" " + display + " "))
 			}
 		}
 		sb.WriteString("\n")
@@ -558,7 +563,7 @@ func (m *ShellModel) handleCommand(input string) (tea.Model, tea.Cmd) {
 func (m *ShellModel) handleAutocomplete() (tea.Model, tea.Cmd) {
 	value := m.input.Value()
 
-	if strings.HasPrefix(value, "/") {
+	if strings.HasPrefix(value, "/") && !strings.Contains(value, " ") {
 		partial := strings.TrimPrefix(value, "/")
 		// Check built-in commands
 		for _, cmd := range availableCommands {
@@ -586,16 +591,7 @@ func (m *ShellModel) handleAutocomplete() (tea.Model, tea.Cmd) {
 	lastAt := strings.LastIndex(value, "@")
 	if lastAt != -1 {
 		partial := value[lastAt+1:]
-		dir := "."
-		base := partial
-
-		if strings.Contains(partial, "/") {
-			dir = filepath.Dir(partial)
-			base = filepath.Base(partial)
-			if dir == "." {
-				dir = "."
-			}
-		}
+		dir, base := filepath.Split(partial)
 
 		matches := m.completeFiles(dir, base)
 		if len(matches) > 0 {
@@ -623,15 +619,9 @@ func (m *ShellModel) completeFiles(dir, prefix string) []string {
 		return results
 	}
 
-	prefixBase := filepath.Base(prefix)
-	prefixDir := filepath.Dir(prefix)
-	if prefixDir == "." {
-		prefixDir = ""
-	}
-
 	for _, entry := range entries {
 		name := entry.Name()
-		if strings.HasPrefix(name, prefixBase) {
+		if strings.HasPrefix(name, prefix) {
 			fullPath := filepath.Join(dir, name)
 			if entry.IsDir() {
 				results = append(results, fullPath+"/")
@@ -644,35 +634,56 @@ func (m *ShellModel) completeFiles(dir, prefix string) []string {
 	return results
 }
 
-func (m *ShellModel) updateSuggestions(filter string) {
+func (m *ShellModel) updateSuggestions() {
+	value := m.input.Value()
 	var matches []string
-	// Add built-in commands
-	for _, cmd := range availableCommands {
-		if strings.HasPrefix(cmd, filter) {
-			matches = append(matches, "/"+cmd)
-		}
-	}
-	// Add custom commands
-	for cmd := range m.cfg.Commands {
-		if strings.HasPrefix(cmd, filter) {
-			// Avoid duplicates
-			exists := false
-			for _, m := range matches {
-				if m == "/"+cmd {
-					exists = true
-					break
-				}
-			}
-			if !exists {
+
+	// Command suggestions: only if starts with / and no space yet
+	if strings.HasPrefix(value, "/") && !strings.Contains(value, " ") {
+		filter := strings.TrimPrefix(value, "/")
+		for _, cmd := range availableCommands {
+			if strings.HasPrefix(cmd, filter) {
 				matches = append(matches, "/"+cmd)
 			}
+		}
+		var customCmds []string
+		for cmd := range m.cfg.Commands {
+			customCmds = append(customCmds, cmd)
+		}
+		sort.Strings(customCmds)
+		for _, cmd := range customCmds {
+			if strings.HasPrefix(cmd, filter) {
+				exists := false
+				for _, m := range matches {
+					if m == "/"+cmd {
+						exists = true
+						break
+					}
+				}
+				if !exists {
+					matches = append(matches, "/"+cmd)
+				}
+			}
+		}
+	}
+
+	// File suggestions: if @ is present
+	if lastAt := strings.LastIndex(value, "@"); lastAt != -1 {
+		partial := value[lastAt+1:]
+		dir, base := filepath.Split(partial)
+
+		fileMatches := m.completeFiles(dir, base)
+		for _, fm := range fileMatches {
+			matches = append(matches, value[:lastAt+1]+fm)
 		}
 	}
 
 	if len(matches) > 0 {
 		m.suggestions = matches
 		m.showSuggestions = true
-		m.selectedIndex = 0
+		if m.selectedIndex >= len(m.suggestions) {
+			m.selectedIndex = 0
+		}
 	} else {
 		m.showSuggestions = false
 	}
@@ -691,9 +702,14 @@ func (m *ShellModel) navigateSuggestions(dir int) (tea.Model, tea.Cmd) {
 
 func (m *ShellModel) selectSuggestion() (tea.Model, tea.Cmd) {
 	if m.selectedIndex >= 0 && m.selectedIndex < len(m.suggestions) {
-		m.input.SetValue(m.suggestions[m.selectedIndex])
+		suggestion := m.suggestions[m.selectedIndex]
+		m.input.SetValue(suggestion)
 		m.showSuggestions = false
-		return m.handleSubmit()
+
+		if strings.HasPrefix(suggestion, "/") && !strings.Contains(suggestion, "@") {
+			return m.handleSubmit()
+		}
+		return m, nil
 	}
 	return m, nil
 }
