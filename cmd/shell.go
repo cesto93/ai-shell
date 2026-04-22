@@ -94,6 +94,11 @@ func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
 			return "Error: Invalid tool arguments", nil
 		}
 
+		// Handle @ prefix from autocomplete
+		if strings.HasPrefix(path, "@") {
+			path = strings.TrimPrefix(path, "@")
+		}
+
 		if e.m.cfg.Shell.Confirm {
 			confirm := e.AskConfirmation(fmt.Sprintf("Write to file %s?", path))
 			if !confirm {
@@ -110,6 +115,11 @@ func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
 		path, ok := call.Arguments["path"].(string)
 		if !ok {
 			return "Error: Invalid tool arguments", nil
+		}
+
+		// Handle @ prefix from autocomplete
+		if strings.HasPrefix(path, "@") {
+			path = strings.TrimPrefix(path, "@")
 		}
 
 		confirmMsg := fmt.Sprintf("[Reading file: %s]", path)
@@ -437,6 +447,17 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 	value := strings.TrimSpace(m.input.Value())
 	if value == "" {
 		return m, nil
+	}
+
+	// Clean up @ prefix from autocomplete
+	if strings.Contains(value, "@") {
+		parts := strings.Split(value, " ")
+		for i, part := range parts {
+			if strings.HasPrefix(part, "@") {
+				parts[i] = strings.TrimPrefix(part, "@")
+			}
+		}
+		value = strings.Join(parts, " ")
 	}
 
 	if m.loading {
