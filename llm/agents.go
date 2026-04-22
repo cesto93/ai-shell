@@ -3,6 +3,7 @@ package llm
 import (
 	"ai-shell/tools"
 	"fmt"
+	"os"
 )
 
 // Agent represents an AI agent with its prompt, model, provider, and tools.
@@ -74,11 +75,12 @@ func GetDefaultTools() []any {
 	}
 }
 
-// GetDefaultSystemPrompt returns the default system prompt based on distro and shell.
+// GetDefaultSystemPrompt returns the default system prompt based on distro, shell, and current directory.
 func GetDefaultSystemPrompt() string {
 	distro := tools.GetDistro()
 	shell := tools.GetShell()
-	return fmt.Sprintf("You are a helpful shell assistant. The user is running on %s using %s shell.", distro, shell)
+	cwd, _ := os.Getwd()
+	return fmt.Sprintf("You are a helpful shell assistant. The user is running on %s using %s shell. Current working directory: %s", distro, shell, cwd)
 }
 
 // NewAgent creates a new Agent with the given parameters.
