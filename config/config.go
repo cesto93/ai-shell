@@ -152,12 +152,7 @@ func IsMistralModel(modelName string) bool {
 	return false
 }
 
-func SaveModelWithProvider(modelName, provider string) error {
-	cfg, err := LoadConfig()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
+func SaveConfig(cfg *Config) error {
 	configFile := cfg.ConfigFile
 	if configFile == "" {
 		configPath, err := getConfigPathFunc()
@@ -165,6 +160,34 @@ func SaveModelWithProvider(modelName, provider string) error {
 			return fmt.Errorf("failed to get config path: %w", err)
 		}
 		configFile = filepath.Join(configPath, "config.yaml")
+	}
+
+	var commandsYaml strings.Builder
+	if len(cfg.Commands) > 0 {
+		commandsYaml.WriteString("commands:\n")
+		// Sort commands for consistent output
+		var keys []string
+		for k := range cfg.Commands {
+			keys = append(keys, k)
+		}
+		for _, k := range keys {
+			commandsYaml.WriteString(fmt.Sprintf("  %s: %q\n", k, cfg.Commands[k]))
+		}
+	}
+
+	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\nshell:\n  confirm: %v\n  allowed_commands: %q\n%s",
+		cfg.LLM.Provider, cfg.LLM.Model, cfg.Shell.Confirm, cfg.Shell.AllowedCommands, commandsYaml.String())
+	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	return nil
+}
+
+func SaveModelWithProvider(modelName, provider string) error {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	cfg.LLM.Model = modelName
@@ -178,20 +201,7 @@ func SaveModelWithProvider(modelName, provider string) error {
 		cfg.LLM.Provider = "ollama"
 	}
 
-	var commandsYaml strings.Builder
-	commandsYaml.WriteString("commands:\n")
-	for k, v := range cfg.Commands {
-		commandsYaml.WriteString(fmt.Sprintf("  %s: %q\n", k, v))
-	}
-
-	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\nshell:\n  confirm: %v\n  allowed_commands: %q\n%s",
-		cfg.LLM.Provider, cfg.LLM.Model, cfg.Shell.Confirm, cfg.Shell.AllowedCommands, commandsYaml.String())
-	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
-	}
-
-	fmt.Printf("Model changed to: %s\n", modelName)
-	return nil
+	return SaveConfig(cfg)
 }
 
 func SaveCommand(name, prompt string) error {
@@ -200,33 +210,12 @@ func SaveCommand(name, prompt string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	configFile := cfg.ConfigFile
-	if configFile == "" {
-		configPath, err := getConfigPathFunc()
-		if err != nil {
-			return fmt.Errorf("failed to get config path: %w", err)
-		}
-		configFile = filepath.Join(configPath, "config.yaml")
-	}
-
 	if cfg.Commands == nil {
 		cfg.Commands = make(map[string]string)
 	}
 	cfg.Commands[name] = prompt
 
-	var commandsYaml strings.Builder
-	commandsYaml.WriteString("commands:\n")
-	for k, v := range cfg.Commands {
-		commandsYaml.WriteString(fmt.Sprintf("  %s: %q\n", k, v))
-	}
-
-	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\nshell:\n  confirm: %v\n  allowed_commands: %q\n%s",
-		cfg.LLM.Provider, cfg.LLM.Model, cfg.Shell.Confirm, cfg.Shell.AllowedCommands, commandsYaml.String())
-	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
-	}
-
-	return nil
+	return SaveConfig(cfg)
 }
 
 type ModelInfo struct {

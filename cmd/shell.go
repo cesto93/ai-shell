@@ -48,6 +48,7 @@ var (
 var availableCommands = []string{
 	"help",
 	"get-config",
+	"config",
 	"models",
 	"reset",
 	"add-cmd",
@@ -190,13 +191,22 @@ type ShellModel struct {
 	confirmationChan   chan bool
 	pendingCommand     string
 	waitingConfirm     bool
-	modelMenu          struct {
+	modelMenu struct {
 		active      bool
 		models      []config.ModelInfo
 		selectedIdx int
 	}
+	configMenu struct {
+		active      bool
+		selectedIdx int
+		options     []string
+	}
+	allowedCmdMode struct {
+		active bool
+	}
 	addCmdMode struct {
 		active bool
+
 		step   int // 0: name, 1: prompt
 		name   string
 		prompt string
@@ -287,24 +297,28 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selectModel()
 				return m, nil
 			}
+			if m.configMenu.active {
+				m.selectConfigOption()
+				return m, nil
+			}
 			if m.showSuggestions && len(m.suggestions) > 0 {
 				return m.selectSuggestion()
 			}
 			return m.handleSubmit()
 
 		case tea.KeyUp:
-			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active && !m.addCmdMode.active {
+			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active && !m.configMenu.active && !m.addCmdMode.active {
 				return m.navigateSuggestions(-1)
 			}
-			if !m.modelMenu.active && !m.addCmdMode.active {
+			if !m.modelMenu.active && !m.configMenu.active && !m.addCmdMode.active {
 				return m.navigateHistory(-1)
 			}
 
 		case tea.KeyDown:
-			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active && !m.addCmdMode.active {
+			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active && !m.configMenu.active && !m.addCmdMode.active {
 				return m.navigateSuggestions(1)
 			}
-			if !m.modelMenu.active && !m.addCmdMode.active {
+			if !m.modelMenu.active && !m.configMenu.active && !m.addCmdMode.active {
 				return m.navigateHistory(1)
 			}
 
@@ -320,6 +334,16 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.modelMenu.active {
 				m.modelMenu.active = false
+				return m, nil
+			}
+			if m.configMenu.active {
+				m.configMenu.active = false
+				return m, nil
+			}
+			if m.allowedCmdMode.active {
+				m.allowedCmdMode.active = false
+				m.input.Prompt = "ai-shell > "
+				m.input.SetValue("")
 				return m, nil
 			}
 			if m.addCmdMode.active {
@@ -348,12 +372,28 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+
+		if m.configMenu.active {
+			switch msg.String() {
+			case "j", "down":
+				if m.configMenu.selectedIdx < len(m.configMenu.options)-1 {
+					m.configMenu.selectedIdx++
+				}
+			case "k", "up":
+				if m.configMenu.selectedIdx > 0 {
+					m.configMenu.selectedIdx--
+				}
+			case "enter":
+				m.selectConfigOption()
+			}
+			return m, nil
+		}
 	}
 
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 
-	if !m.addCmdMode.active {
+	if !m.addCmdMode.active && !m.allowedCmdMode.active {
 		m.updateSuggestions()
 	} else {
 		m.showSuggestions = false
@@ -402,6 +442,17 @@ func (m *ShellModel) View() string {
 				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(fmt.Sprintf(" %s %s ", marker, model.Name)))
 			} else {
 				sb.WriteString(userStyle.Render(fmt.Sprintf(" %s %s ", marker, model.Name)))
+			}
+			sb.WriteString("\n")
+		}
+	} else if m.configMenu.active {
+		sb.WriteString(systemStyle.Render("Configuration Menu (↑/↓ to navigate, Enter to select, Esc to cancel):"))
+		sb.WriteString("\n")
+		for i, opt := range m.configMenu.options {
+			if i == m.configMenu.selectedIdx {
+				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(fmt.Sprintf(" > %s ", opt)))
+			} else {
+				sb.WriteString(userStyle.Render(fmt.Sprintf("   %s ", opt)))
 			}
 			sb.WriteString("\n")
 		}
@@ -464,6 +515,19 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.allowedCmdMode.active {
+		m.cfg.Shell.AllowedCommands = value
+		if err := config.SaveConfig(m.cfg); err != nil {
+			m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error saving config: %v", err)})
+		} else {
+			m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Allowed commands updated to: %s", value)})
+		}
+		m.allowedCmdMode.active = false
+		m.input.Prompt = "ai-shell > "
+		m.input.SetValue("")
+		return m, nil
+	}
+
 	if m.addCmdMode.active {
 		if m.addCmdMode.step == 0 {
 			m.addCmdMode.name = strings.TrimPrefix(value, "/")
@@ -509,6 +573,10 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 		m.showConfig()
 		return m, nil
 
+	case "config":
+		m.openConfigMenu()
+		return m, nil
+
 	case "help":
 		m.showHelp()
 		return m, nil
@@ -547,6 +615,9 @@ func (m *ShellModel) handleCommand(input string) (tea.Model, tea.Cmd) {
 
 	case "get-config":
 		m.showConfig()
+
+	case "config":
+		m.openConfigMenu()
 
 	case "help":
 		m.showHelp()
@@ -763,6 +834,7 @@ func (m *ShellModel) showHelp() {
 	var sb strings.Builder
 	sb.WriteString("\nCommands:\n")
 	sb.WriteString("  /help         - Show this help message\n")
+	sb.WriteString("  /config       - Show configuration menu\n")
 	sb.WriteString("  /get-config   - Show current LLM settings\n")
 	sb.WriteString("  /models       - Switch to a different model\n")
 	sb.WriteString("  /add-cmd      - Configure a new command\n")
@@ -810,6 +882,41 @@ func (m *ShellModel) openModelMenu() {
 	m.modelMenu.active = true
 	m.modelMenu.selectedIdx = 0
 	m.input.SetValue("")
+}
+
+func (m *ShellModel) openConfigMenu() {
+	m.configMenu.options = []string{
+		fmt.Sprintf("Confirm Commands: %v", m.cfg.Shell.Confirm),
+		fmt.Sprintf("Allowed Commands: %s", m.cfg.Shell.AllowedCommands),
+		"Change Model",
+		"Back",
+	}
+	m.configMenu.active = true
+	m.configMenu.selectedIdx = 0
+	m.input.SetValue("")
+}
+
+func (m *ShellModel) selectConfigOption() {
+	switch m.configMenu.selectedIdx {
+	case 0: // Toggle Confirm
+		m.cfg.Shell.Confirm = !m.cfg.Shell.Confirm
+		if err := config.SaveConfig(m.cfg); err != nil {
+			m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error saving config: %v", err)})
+		} else {
+			m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Confirm Commands set to: %v", m.cfg.Shell.Confirm)})
+		}
+		m.configMenu.active = false
+	case 1: // Edit Allowed Commands
+		m.allowedCmdMode.active = true
+		m.input.SetValue(m.cfg.Shell.AllowedCommands)
+		m.input.Prompt = "Allowed commands (comma separated): "
+		m.configMenu.active = false
+	case 2: // Change Model
+		m.configMenu.active = false
+		m.openModelMenu()
+	case 3: // Back
+		m.configMenu.active = false
+	}
 }
 
 func (m *ShellModel) selectModel() {
