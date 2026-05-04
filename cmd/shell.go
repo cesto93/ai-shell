@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/user"
@@ -165,6 +166,7 @@ func getHistoryFile() string {
 type Message struct {
 	role    string
 	content string
+	images  []string // Base64 encoded images or paths
 }
 
 type responseReadyMsg struct{}
@@ -500,12 +502,19 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Clean up @ prefix from autocomplete
+	// Clean up @ prefix from autocomplete and detect images
+	var images []string
 	if strings.Contains(value, "@") {
 		parts := strings.Split(value, " ")
 		for i, part := range parts {
 			if strings.HasPrefix(part, "@") {
-				parts[i] = strings.TrimPrefix(part, "@")
+				path := strings.TrimPrefix(part, "@")
+				if isImage(path) {
+					if encoded, err := encodeImage(path); err == nil {
+						images = append(images, encoded)
+					}
+				}
+				parts[i] = path
 			}
 		}
 		value = strings.Join(parts, " ")
@@ -590,12 +599,12 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	m.messages = append(m.messages, Message{role: "user", content: value})
+	m.messages = append(m.messages, Message{role: "user", content: value, images: images})
 
 	m.loading = true
 	m.cancelChan = make(chan struct{})
 
-	go m.callLLM(value)
+	go m.callLLM(value, images)
 
 	return m, nil
 }
@@ -643,7 +652,7 @@ func (m *ShellModel) handleCommand(input string) (tea.Model, tea.Cmd) {
 			m.messages = append(m.messages, Message{role: "user", content: fullPrompt})
 			m.loading = true
 			m.cancelChan = make(chan struct{})
-			go m.callLLM(fullPrompt)
+			go m.callLLM(fullPrompt, nil)
 			return m, nil
 		}
 		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Unknown command: /%s", cmd)})
@@ -946,7 +955,7 @@ func (m *ShellModel) selectModel() {
 	m.modelMenu.active = false
 }
 
-func (m *ShellModel) callLLM(prompt string) {
+func (m *ShellModel) callLLM(prompt string, images []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -976,7 +985,20 @@ func (m *ShellModel) callLLM(prompt string) {
 	var commonMessages []llm.Message
 	for _, msg := range m.messages {
 		if msg.role == "user" || msg.role == "assistant" || msg.role == "tool" {
-			commonMessages = append(commonMessages, llm.Message{Role: msg.role, Content: msg.content})
+			var content any = msg.content
+			if len(msg.images) > 0 {
+				parts := []llm.ContentPart{
+					{Type: "text", Text: msg.content},
+				}
+				for _, img := range msg.images {
+					parts = append(parts, llm.ContentPart{
+						Type: "image_url",
+						ImageURL: &llm.ContentImage{URL: img},
+					})
+				}
+				content = parts
+			}
+			commonMessages = append(commonMessages, llm.Message{Role: msg.role, Content: content})
 		}
 	}
 
@@ -992,13 +1014,20 @@ func (m *ShellModel) callLLM(prompt string) {
 	}
 
 	for _, msg := range resultMessages {
+		contentStr := ""
+		if s, ok := msg.Content.(string); ok {
+			contentStr = s
+		} else {
+			contentStr = fmt.Sprintf("%v", msg.Content)
+		}
+
 		switch msg.Role {
 		case "user":
-			m.messages = append(m.messages, Message{role: "user", content: msg.Content})
+			m.messages = append(m.messages, Message{role: "user", content: contentStr})
 		case "assistant":
-			m.messages = append(m.messages, Message{role: "assistant", content: msg.Content})
+			m.messages = append(m.messages, Message{role: "assistant", content: contentStr})
 		case "tool":
-			m.messages = append(m.messages, Message{role: "tool", content: msg.Content})
+			m.messages = append(m.messages, Message{role: "tool", content: contentStr})
 		}
 	}
 
@@ -1014,6 +1043,31 @@ func getCommandName(cmd string) string {
 		return parts[0]
 	}
 	return cmd
+}
+
+func isImage(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	return ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" || ext == ".webp"
+}
+
+func encodeImage(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	mimeType := "image/jpeg"
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".png":
+		mimeType = "image/png"
+	case ".gif":
+		mimeType = "image/gif"
+	case ".webp":
+		mimeType = "image/webp"
+	}
+
+	return fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(data)), nil
 }
 
 func loadHistory(path string) []string {

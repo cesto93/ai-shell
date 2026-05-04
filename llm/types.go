@@ -4,9 +4,19 @@ import "context"
 
 type Message struct {
 	Role       string            `json:"role"`
-	Content    string            `json:"content"`
+	Content    any               `json:"content"`
 	ToolCalls  []OpenAIToolCall  `json:"tool_calls,omitempty"`
 	ToolCallID string            `json:"tool_call_id,omitempty"`
+}
+
+type ContentPart struct {
+	Type     string        `json:"type"`
+	Text     string        `json:"text,omitempty"`
+	ImageURL *ContentImage `json:"image_url,omitempty"`
+}
+
+type ContentImage struct {
+	URL string `json:"url"`
 }
 
 type OpenAIToolCall struct {
