@@ -872,6 +872,7 @@ func (m *ShellModel) openModelMenu() {
 
 	models = append(models, config.GeminiModels...)
 	models = append(models, config.MistralModels...)
+	models = append(models, config.OpenRouterModels...)
 
 	if len(models) == 0 {
 		m.messages = append(m.messages, Message{role: "system", content: "No models found. Please install models using 'ollama pull <model>'"})
@@ -930,6 +931,8 @@ func (m *ShellModel) selectModel() {
 		provider = "gemini"
 	} else if config.IsMistralModel(selectedModel) {
 		provider = "mistral"
+	} else if config.IsOpenRouterModel(selectedModel) {
+		provider = "openrouter"
 	}
 	if err := config.SaveModelWithProvider(selectedModel, provider); err != nil {
 		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error saving model: %v", err)})
@@ -964,6 +967,8 @@ func (m *ShellModel) callLLM(prompt string) {
 		caller = llm.NewGeminiCaller(agent.Model, executor)
 	case "mistral":
 		caller = llm.NewMistralCaller(agent.Model, executor)
+	case "openrouter":
+		caller = llm.NewOpenRouterCaller(agent.Model, executor)
 	default:
 		caller = llm.NewOllamaCaller(agent.Model, executor)
 	}

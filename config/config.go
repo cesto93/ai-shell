@@ -152,6 +152,15 @@ func IsMistralModel(modelName string) bool {
 	return false
 }
 
+func IsOpenRouterModel(modelName string) bool {
+	for _, m := range OpenRouterModels {
+		if m.Name == modelName {
+			return true
+		}
+	}
+	return false
+}
+
 func SaveConfig(cfg *Config) error {
 	configFile := cfg.ConfigFile
 	if configFile == "" {
@@ -197,6 +206,8 @@ func SaveModelWithProvider(modelName, provider string) error {
 		cfg.LLM.Provider = "gemini"
 	} else if IsMistralModel(modelName) {
 		cfg.LLM.Provider = "mistral"
+	} else if IsOpenRouterModel(modelName) {
+		cfg.LLM.Provider = "openrouter"
 	} else {
 		cfg.LLM.Provider = "ollama"
 	}
@@ -234,6 +245,12 @@ var GeminiModels = []ModelInfo{
 var MistralModels = []ModelInfo{
 	{Name: "mistral-small"},
 	{Name: "mistral-large"},
+}
+
+var OpenRouterModels = []ModelInfo{
+	{Name: "nvidia/nemotron-3-super-120b-a12b:free"},
+	{Name: "z-ai/glm-4.5-air:free"},
+	{Name: "minimax/minimax-m2.5:free"},
 }
 
 var getAvailableModelsFunc = GetAvailableModels
