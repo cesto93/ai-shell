@@ -441,9 +441,9 @@ func (m *ShellModel) View() string {
 				marker = "*"
 			}
 			if i == m.modelMenu.selectedIdx {
-				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(fmt.Sprintf(" %s %s ", marker, model.Name)))
+				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(fmt.Sprintf(" %s %s (%s) ", marker, model.Name, model.Provider)))
 			} else {
-				sb.WriteString(userStyle.Render(fmt.Sprintf(" %s %s ", marker, model.Name)))
+				sb.WriteString(userStyle.Render(fmt.Sprintf(" %s %s (%s) ", marker, model.Name, model.Provider)))
 			}
 			sb.WriteString("\n")
 		}
@@ -934,15 +934,10 @@ func (m *ShellModel) selectModel() {
 		return
 	}
 
-	selectedModel := m.modelMenu.models[m.modelMenu.selectedIdx].Name
-	provider := "ollama"
-	if config.IsGeminiModel(selectedModel) {
-		provider = "gemini"
-	} else if config.IsMistralModel(selectedModel) {
-		provider = "mistral"
-	} else if config.IsOpenRouterModel(selectedModel) {
-		provider = "openrouter"
-	}
+	modelInfo := m.modelMenu.models[m.modelMenu.selectedIdx]
+	selectedModel := modelInfo.Name
+	provider := modelInfo.Provider
+
 	if err := config.SaveModelWithProvider(selectedModel, provider); err != nil {
 		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error saving model: %v", err)})
 	} else {

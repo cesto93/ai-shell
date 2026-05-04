@@ -231,26 +231,27 @@ func SaveCommand(name, prompt string) error {
 
 type ModelInfo struct {
 	Name       string
+	Provider   string
 	Size       string
 	ModifiedAt string
 }
 
 var GeminiModels = []ModelInfo{
-	{Name: "gemini-3-flash-preview"},
-	{Name: "gemini-3.1-flash-lite-preview"},
-	{Name: "gemma-4-31b-it"},
-	{Name: "gemma-4-26b-a4b-it"},
+	{Name: "gemini-3-flash-preview", Provider: "gemini"},
+	{Name: "gemini-3.1-flash-lite-preview", Provider: "gemini"},
+	{Name: "gemma-4-31b-it", Provider: "gemini"},
+	{Name: "gemma-4-26b-a4b-it", Provider: "gemini"},
 }
 
 var MistralModels = []ModelInfo{
-	{Name: "mistral-small"},
-	{Name: "mistral-large"},
+	{Name: "mistral-small", Provider: "mistral"},
+	{Name: "mistral-large", Provider: "mistral"},
 }
 
 var OpenRouterModels = []ModelInfo{
-	{Name: "nvidia/nemotron-3-super-120b-a12b:free"},
-	{Name: "z-ai/glm-4.5-air:free"},
-	{Name: "minimax/minimax-m2.5:free"},
+	{Name: "nvidia/nemotron-3-super-120b-a12b:free", Provider: "openrouter"},
+	{Name: "z-ai/glm-4.5-air:free", Provider: "openrouter"},
+	{Name: "minimax/minimax-m2.5:free", Provider: "openrouter"},
 }
 
 var getAvailableModelsFunc = GetAvailableModels
@@ -269,7 +270,8 @@ func GetAvailableModels() ([]ModelInfo, error) {
 	var modelList []ModelInfo
 	for _, model := range models.Models {
 		modelList = append(modelList, ModelInfo{
-			Name: model.Name,
+			Name:     model.Name,
+			Provider: "ollama",
 		})
 	}
 
@@ -287,6 +289,10 @@ func SelectModel() error {
 		return err
 	}
 
+	models = append(models, GeminiModels...)
+	models = append(models, MistralModels...)
+	models = append(models, OpenRouterModels...)
+
 	if len(models) == 0 {
 		fmt.Printf("No models found. Please install models using 'ollama pull <model>'\n")
 		return nil
@@ -299,7 +305,7 @@ func SelectModel() error {
 		if model.Name == cfg.LLM.Model {
 			marker = "* "
 		}
-		fmt.Printf("[%d] %s%s\n", i+1, marker, model.Name)
+		fmt.Printf("[%d] %s%s (%s)\n", i+1, marker, model.Name, model.Provider)
 	}
 
 	fmt.Printf("\nEnter number to select model (or press Enter to cancel): ")
@@ -320,7 +326,8 @@ func SelectModel() error {
 	}
 
 	selectedModel := models[choice-1].Name
-	return SaveModelWithProvider(selectedModel, "ollama")
+	selectedProvider := models[choice-1].Provider
+	return SaveModelWithProvider(selectedModel, selectedProvider)
 }
 
 func IsAllowedCommand(cmd string, allowedList string) bool {
