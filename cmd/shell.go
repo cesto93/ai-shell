@@ -670,38 +670,40 @@ func (m *ShellModel) handleAutocomplete() (tea.Model, tea.Cmd) {
 		for _, cmd := range availableCommands {
 			if strings.HasPrefix(cmd, partial) {
 				m.input.SetValue("/" + cmd)
-				return m, nil
+				break
 			}
 		}
-		// Check custom commands (sorted for consistency)
-		var customCmds []string
-		for cmd := range m.cfg.Commands {
-			customCmds = append(customCmds, cmd)
-		}
-		sort.Strings(customCmds)
+		if m.input.Value() == value { // If no built-in command matched
+			// Check custom commands (sorted for consistency)
+			var customCmds []string
+			for cmd := range m.cfg.Commands {
+				customCmds = append(customCmds, cmd)
+			}
+			sort.Strings(customCmds)
 
-		for _, cmd := range customCmds {
-			if strings.HasPrefix(cmd, partial) {
-				m.input.SetValue("/" + cmd)
-				return m, nil
+			for _, cmd := range customCmds {
+				if strings.HasPrefix(cmd, partial) {
+					m.input.SetValue("/" + cmd)
+					break
+				}
 			}
 		}
-		return m, nil
-	}
+	} else {
+		lastAt := strings.LastIndex(value, "@")
+		if lastAt != -1 {
+			partial := value[lastAt+1:]
+			dir, base := filepath.Split(partial)
 
-	lastAt := strings.LastIndex(value, "@")
-	if lastAt != -1 {
-		partial := value[lastAt+1:]
-		dir, base := filepath.Split(partial)
-
-		matches := m.completeFiles(dir, base)
-		if len(matches) > 0 {
-			completed := matches[0]
-			newValue := value[:lastAt+1] + completed
-			m.input.SetValue(newValue)
+			matches := m.completeFiles(dir, base)
+			if len(matches) > 0 {
+				completed := matches[0]
+				newValue := value[:lastAt+1] + completed
+				m.input.SetValue(newValue)
+			}
 		}
 	}
 
+	m.updateSuggestions()
 	return m, nil
 }
 
@@ -780,6 +782,11 @@ func (m *ShellModel) updateSuggestions() {
 	}
 
 	if len(matches) > 0 {
+		// If there is only one match and it's already what we have, don't show it
+		if len(matches) == 1 && matches[0] == value {
+			m.showSuggestions = false
+			return
+		}
 		m.suggestions = matches
 		m.showSuggestions = true
 		if m.selectedIndex >= len(m.suggestions) {
@@ -836,6 +843,7 @@ func (m *ShellModel) navigateHistory(dir int) (tea.Model, tea.Cmd) {
 		m.input.SetValue(m.history[len(m.history)-1-m.historyIndex])
 	}
 
+	m.updateSuggestions()
 	return m, nil
 }
 
