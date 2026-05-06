@@ -129,6 +129,35 @@ func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
 
 		return tools.ReadFile(path)
 
+	case "KVSet":
+		key, ok1 := call.Arguments["key"].(string)
+		value, ok2 := call.Arguments["value"].(string)
+		if !ok1 || !ok2 {
+			return "Error: Invalid tool arguments", nil
+		}
+
+		confirmMsg := fmt.Sprintf("[KV Store: Saving %s]", key)
+		e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
+
+		return tools.KVSet(key, value)
+
+	case "KVGet":
+		key, ok := call.Arguments["key"].(string)
+		if !ok {
+			return "Error: Invalid tool arguments", nil
+		}
+
+		confirmMsg := fmt.Sprintf("[KV Store: Retrieving %s]", key)
+		e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
+
+		return tools.KVGet(key)
+
+	case "KVList":
+		confirmMsg := "[KV Store: Listing keys]"
+		e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
+
+		return tools.KVList()
+
 	default:
 		return fmt.Sprintf("Error: Unknown tool %s", call.Name), nil
 	}

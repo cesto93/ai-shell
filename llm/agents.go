@@ -72,6 +72,55 @@ func GetDefaultTools() []any {
 				},
 			},
 		},
+		map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "KVSet",
+				"description": "Save a value to the KV store with a given key",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"key": map[string]any{
+							"type":        "string",
+							"description": "The key to save",
+						},
+						"value": map[string]any{
+							"type":        "string",
+							"description": "The value to save",
+						},
+					},
+					"required": []string{"key", "value"},
+				},
+			},
+		},
+		map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "KVGet",
+				"description": "Retrieve a value from the KV store by key",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"key": map[string]any{
+							"type":        "string",
+							"description": "The key to retrieve",
+						},
+					},
+					"required": []string{"key"},
+				},
+			},
+		},
+		map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "KVList",
+				"description": "List all keys currently in the KV store",
+				"parameters": map[string]any{
+					"type":       "object",
+					"properties": map[string]any{},
+				},
+			},
+		},
 	}
 }
 
