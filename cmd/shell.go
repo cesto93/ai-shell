@@ -232,6 +232,11 @@ type ShellModel struct {
 		selectedIdx int
 		options     []string
 	}
+	toolsMenu struct {
+		active      bool
+		selectedIdx int
+		options     []string
+	}
 	allowedCmdMode struct {
 		active bool
 	}
@@ -332,24 +337,28 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selectConfigOption()
 				return m, nil
 			}
+			if m.toolsMenu.active {
+				m.selectToolOption()
+				return m, nil
+			}
 			if m.showSuggestions && len(m.suggestions) > 0 {
 				return m.selectSuggestion()
 			}
 			return m.handleSubmit()
 
 		case tea.KeyUp:
-			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active && !m.configMenu.active && !m.addCmdMode.active {
+			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active && !m.configMenu.active && !m.toolsMenu.active && !m.addCmdMode.active {
 				return m.navigateSuggestions(-1)
 			}
-			if !m.modelMenu.active && !m.configMenu.active && !m.addCmdMode.active {
+			if !m.modelMenu.active && !m.configMenu.active && !m.toolsMenu.active && !m.addCmdMode.active {
 				return m.navigateHistory(-1)
 			}
 
 		case tea.KeyDown:
-			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active && !m.configMenu.active && !m.addCmdMode.active {
+			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active && !m.configMenu.active && !m.toolsMenu.active && !m.addCmdMode.active {
 				return m.navigateSuggestions(1)
 			}
-			if !m.modelMenu.active && !m.configMenu.active && !m.addCmdMode.active {
+			if !m.modelMenu.active && !m.configMenu.active && !m.toolsMenu.active && !m.addCmdMode.active {
 				return m.navigateHistory(1)
 			}
 
@@ -369,6 +378,10 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.configMenu.active {
 				m.configMenu.active = false
+				return m, nil
+			}
+			if m.toolsMenu.active {
+				m.toolsMenu.active = false
 				return m, nil
 			}
 			if m.allowedCmdMode.active {
@@ -419,12 +432,28 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+
+		if m.toolsMenu.active {
+			switch msg.String() {
+			case "j", "down":
+				if m.toolsMenu.selectedIdx < len(m.toolsMenu.options)-1 {
+					m.toolsMenu.selectedIdx++
+				}
+			case "k", "up":
+				if m.toolsMenu.selectedIdx > 0 {
+					m.toolsMenu.selectedIdx--
+				}
+			case "enter":
+				m.selectToolOption()
+			}
+			return m, nil
+		}
 	}
 
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 
-	if !m.addCmdMode.active && !m.allowedCmdMode.active {
+	if !m.addCmdMode.active && !m.allowedCmdMode.active && !m.toolsMenu.active {
 		m.updateSuggestions()
 	} else {
 		m.showSuggestions = false
@@ -473,6 +502,17 @@ func (m *ShellModel) View() string {
 				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(fmt.Sprintf(" %s %s (%s) ", marker, model.Name, model.Provider)))
 			} else {
 				sb.WriteString(userStyle.Render(fmt.Sprintf(" %s %s (%s) ", marker, model.Name, model.Provider)))
+			}
+			sb.WriteString("\n")
+		}
+	} else if m.toolsMenu.active {
+		sb.WriteString(systemStyle.Render("Manage Tools (↑/↓ to navigate, Enter to toggle, Esc to back):"))
+		sb.WriteString("\n")
+		for i, opt := range m.toolsMenu.options {
+			if i == m.toolsMenu.selectedIdx {
+				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(fmt.Sprintf(" > %s ", opt)))
+			} else {
+				sb.WriteString(userStyle.Render(fmt.Sprintf("   %s ", opt)))
 			}
 			sb.WriteString("\n")
 		}
@@ -906,6 +946,20 @@ func (m *ShellModel) showConfig() {
 	sb.WriteString(fmt.Sprintf("Model: %s\n", m.cfg.LLM.Model))
 	sb.WriteString(fmt.Sprintf("Confirm Commands: %v\n", m.cfg.Shell.Confirm))
 	sb.WriteString(fmt.Sprintf("Allowed Commands: %s\n", m.cfg.Shell.AllowedCommands))
+
+	var enabledTools []string
+	var toolNames []string
+	for name := range m.cfg.Tools {
+		toolNames = append(toolNames, name)
+	}
+	sort.Strings(toolNames)
+	for _, name := range toolNames {
+		if m.cfg.Tools[name] {
+			enabledTools = append(enabledTools, name)
+		}
+	}
+	sb.WriteString(fmt.Sprintf("Enabled Tools: %s\n", strings.Join(enabledTools, ", ")))
+
 	m.messages = append(m.messages, Message{role: "system", content: sb.String()})
 }
 
@@ -935,6 +989,7 @@ func (m *ShellModel) openConfigMenu() {
 	m.configMenu.options = []string{
 		fmt.Sprintf("Confirm Commands: %v", m.cfg.Shell.Confirm),
 		fmt.Sprintf("Allowed Commands: %s", m.cfg.Shell.AllowedCommands),
+		"Manage Tools",
 		"Change Model",
 		"Back",
 	}
@@ -958,12 +1013,67 @@ func (m *ShellModel) selectConfigOption() {
 		m.input.SetValue(m.cfg.Shell.AllowedCommands)
 		m.input.Prompt = "Allowed commands (comma separated): "
 		m.configMenu.active = false
-	case 2: // Change Model
+	case 2: // Manage Tools
+		m.configMenu.active = false
+		m.openToolsMenu()
+	case 3: // Change Model
 		m.configMenu.active = false
 		m.openModelMenu()
-	case 3: // Back
+	case 4: // Back
 		m.configMenu.active = false
 	}
+}
+
+func (m *ShellModel) openToolsMenu() {
+	var toolNames []string
+	for name := range m.cfg.Tools {
+		toolNames = append(toolNames, name)
+	}
+	sort.Strings(toolNames)
+
+	m.toolsMenu.options = []string{}
+	for _, name := range toolNames {
+		status := "Disabled"
+		if m.cfg.Tools[name] {
+			status = "Enabled"
+		}
+		m.toolsMenu.options = append(m.toolsMenu.options, fmt.Sprintf("%s: %s", name, status))
+	}
+	m.toolsMenu.options = append(m.toolsMenu.options, "Back")
+
+	m.toolsMenu.active = true
+	m.toolsMenu.selectedIdx = 0
+	m.input.SetValue("")
+}
+
+func (m *ShellModel) selectToolOption() {
+	if m.toolsMenu.selectedIdx == len(m.toolsMenu.options)-1 {
+		m.toolsMenu.active = false
+		m.openConfigMenu()
+		return
+	}
+
+	var toolNames []string
+	for name := range m.cfg.Tools {
+		toolNames = append(toolNames, name)
+	}
+	sort.Strings(toolNames)
+
+	selectedTool := toolNames[m.toolsMenu.selectedIdx]
+	m.cfg.Tools[selectedTool] = !m.cfg.Tools[selectedTool]
+
+	if err := config.SaveConfig(m.cfg); err != nil {
+		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error saving config: %v", err)})
+	} else {
+		status := "disabled"
+		if m.cfg.Tools[selectedTool] {
+			status = "enabled"
+		}
+		m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Tool %s %s", selectedTool, status)})
+	}
+
+	// Refresh menu options
+	m.openToolsMenu()
 }
 
 func (m *ShellModel) selectModel() {
@@ -998,7 +1108,7 @@ func (m *ShellModel) callLLM(prompt string, images []string) {
 		}
 	}()
 
-	agent := llm.NewAgent(m.cfg.LLM.Model, m.cfg.LLM.Provider)
+	agent := llm.NewAgent(m.cfg.LLM.Model, m.cfg.LLM.Provider, m.cfg.Tools)
 
 	executor := &ShellExecutorForLLM{m: m}
 
@@ -1034,7 +1144,7 @@ func (m *ShellModel) callLLM(prompt string, images []string) {
 		}
 	}
 
-	resultMessages, err := caller.Call(ctx, agent.Prompt, commonMessages)
+	resultMessages, err := caller.Call(ctx, agent.Prompt, commonMessages, agent.Tools)
 
 	if err != nil {
 		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})

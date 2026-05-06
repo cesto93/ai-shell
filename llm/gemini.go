@@ -16,6 +16,6 @@ func NewGeminiCaller(model string, executor ToolExecutor) *GeminiCaller {
 	}
 }
 
-func (g *GeminiCaller) Call(ctx context.Context, systemPrompt string, messages []Message) ([]Message, error) {
-	return g.inner.Call(ctx, systemPrompt, messages)
+func (g *GeminiCaller) Call(ctx context.Context, systemPrompt string, messages []Message, tools []any) ([]Message, error) {
+	return g.inner.Call(ctx, systemPrompt, messages, tools)
 }

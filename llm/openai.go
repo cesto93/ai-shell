@@ -40,13 +40,11 @@ func NewOpenAICaller(baseURL, apiKey, model string, executor ToolExecutor) *Open
 	}
 }
 
-func (o *OpenAICaller) Call(ctx context.Context, systemPrompt string, messages []Message) ([]Message, error) {
+func (o *OpenAICaller) Call(ctx context.Context, systemPrompt string, messages []Message, tools []any) ([]Message, error) {
 	allMessages := []Message{
 		{Role: "system", Content: systemPrompt},
 	}
 	allMessages = append(allMessages, messages...)
-
-	tools := GetDefaultTools()
 
 	originalCount := len(allMessages)
 

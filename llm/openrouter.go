@@ -16,6 +16,6 @@ func NewOpenRouterCaller(model string, executor ToolExecutor) *OpenRouterCaller 
 	}
 }
 
-func (o *OpenRouterCaller) Call(ctx context.Context, systemPrompt string, messages []Message) ([]Message, error) {
-	return o.inner.Call(ctx, systemPrompt, messages)
+func (o *OpenRouterCaller) Call(ctx context.Context, systemPrompt string, messages []Message, tools []any) ([]Message, error) {
+	return o.inner.Call(ctx, systemPrompt, messages, tools)
 }

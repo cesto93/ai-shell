@@ -40,5 +40,5 @@ type ToolExecutor interface {
 }
 
 type Caller interface {
-	Call(ctx context.Context, systemPrompt string, messages []Message) ([]Message, error)
+	Call(ctx context.Context, systemPrompt string, messages []Message, tools []any) ([]Message, error)
 }

@@ -19,6 +19,6 @@ func NewOllamaCaller(model string, executor ToolExecutor) *OllamaCaller {
 	}
 }
 
-func (o *OllamaCaller) Call(ctx context.Context, systemPrompt string, messages []Message) ([]Message, error) {
-	return o.inner.Call(ctx, systemPrompt, messages)
+func (o *OllamaCaller) Call(ctx context.Context, systemPrompt string, messages []Message, tools []any) ([]Message, error) {
+	return o.inner.Call(ctx, systemPrompt, messages, tools)
 }

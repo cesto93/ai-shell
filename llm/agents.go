@@ -14,8 +14,8 @@ type Agent struct {
 	Tools    []any
 }
 
-// GetDefaultTools returns the default list of tools for the agent.
-func GetDefaultTools() []any {
+// GetAllTools returns the full list of tools for the agent.
+func GetAllTools() []any {
 	return []any{
 		map[string]any{
 			"type": "function",
@@ -124,6 +124,28 @@ func GetDefaultTools() []any {
 	}
 }
 
+// GetEnabledTools filters the full list of tools based on the enabledMap.
+func GetEnabledTools(enabledMap map[string]bool) []any {
+	allTools := GetAllTools()
+	if enabledMap == nil {
+		return allTools
+	}
+
+	var enabledTools []any
+	for _, t := range allTools {
+		if toolMap, ok := t.(map[string]any); ok {
+			if function, ok := toolMap["function"].(map[string]any); ok {
+				if name, ok := function["name"].(string); ok {
+					if enabled, exists := enabledMap[name]; !exists || enabled {
+						enabledTools = append(enabledTools, t)
+					}
+				}
+			}
+		}
+	}
+	return enabledTools
+}
+
 // GetDefaultSystemPrompt returns the default system prompt based on distro, shell, and current directory.
 func GetDefaultSystemPrompt() string {
 	distro := tools.GetDistro()
@@ -133,11 +155,11 @@ func GetDefaultSystemPrompt() string {
 }
 
 // NewAgent creates a new Agent with the given parameters.
-func NewAgent(model, provider string) *Agent {
+func NewAgent(model, provider string, toolsEnabled map[string]bool) *Agent {
 	return &Agent{
 		Prompt:   GetDefaultSystemPrompt(),
 		Model:    model,
 		Provider: provider,
-		Tools:    GetDefaultTools(),
+		Tools:    GetEnabledTools(toolsEnabled),
 	}
 }

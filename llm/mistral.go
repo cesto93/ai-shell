@@ -16,6 +16,6 @@ func NewMistralCaller(model string, executor ToolExecutor) *MistralCaller {
 	}
 }
 
-func (m *MistralCaller) Call(ctx context.Context, systemPrompt string, messages []Message) ([]Message, error) {
-	return m.inner.Call(ctx, systemPrompt, messages)
+func (m *MistralCaller) Call(ctx context.Context, systemPrompt string, messages []Message, tools []any) ([]Message, error) {
+	return m.inner.Call(ctx, systemPrompt, messages, tools)
 }

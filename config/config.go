@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -23,6 +24,7 @@ type Config struct {
 		Confirm         bool   `mapstructure:"confirm"`
 		AllowedCommands string `mapstructure:"allowed_commands"`
 	} `mapstructure:"shell"`
+	Tools    map[string]bool   `mapstructure:"tools"`
 	Commands map[string]string `mapstructure:"commands"`
 }
 
@@ -52,6 +54,14 @@ func LoadConfig() (*Config, error) {
 	v.SetDefault("llm.model", "granite4:3b-h")
 	v.SetDefault("shell.confirm", true)
 	v.SetDefault("shell.allowed_commands", "ls,pwd")
+	v.SetDefault("tools", map[string]bool{
+		"RunCommand": true,
+		"WriteFile":  true,
+		"ReadFile":   true,
+		"KVSet":      true,
+		"KVGet":      true,
+		"KVList":     true,
+	})
 	v.SetDefault("commands", map[string]string{
 		"explain": "Explain the following code or concept in detail:",
 		"fix":     "Find and fix any bugs or issues in the following code:",
@@ -87,6 +97,14 @@ func LoadConfig() (*Config, error) {
 					Confirm:         true,
 					AllowedCommands: "ls,pwd",
 				},
+				Tools: map[string]bool{
+					"RunCommand": true,
+					"WriteFile":  true,
+					"ReadFile":   true,
+					"KVSet":      true,
+					"KVGet":      true,
+					"KVList":     true,
+				},
 				Commands: map[string]string{
 					"explain": "Explain the following code or concept in detail:",
 					"fix":     "Find and fix any bugs or issues in the following code:",
@@ -99,7 +117,7 @@ func LoadConfig() (*Config, error) {
 				if err == nil {
 					defaultConfigFile := filepath.Join(configPath, "config.yaml")
 					if _, err := os.Stat(defaultConfigFile); os.IsNotExist(err) {
-						content := "llm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\nshell:\n  confirm: true\n  allowed_commands: \"ls,pwd\"\ncommands:\n  explain: \"Explain the following code or concept in detail:\"\n  fix: \"Find and fix any bugs or issues in the following code:\"\n  tests: \"Generate unit tests for the following code:\"\n"
+						content := "llm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\nshell:\n  confirm: true\n  allowed_commands: \"ls,pwd\"\ntools:\n  RunCommand: true\n  WriteFile: true\n  ReadFile: true\n  KVSet: true\n  KVGet: true\n  KVList: true\ncommands:\n  explain: \"Explain the following code or concept in detail:\"\n  fix: \"Find and fix any bugs or issues in the following code:\"\n  tests: \"Generate unit tests for the following code:\"\n"
 						_ = os.WriteFile(defaultConfigFile, []byte(content), 0644)
 						defaultConfig.ConfigFile = defaultConfigFile
 					}
@@ -116,6 +134,17 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("error unmarshaling config: %w", err)
 	}
 	config.ConfigFile = v.ConfigFileUsed()
+
+	if config.Tools == nil {
+		config.Tools = map[string]bool{
+			"RunCommand": true,
+			"WriteFile":  true,
+			"ReadFile":   true,
+			"KVSet":      true,
+			"KVGet":      true,
+			"KVList":     true,
+		}
+	}
 
 	return &config, nil
 }
@@ -171,6 +200,19 @@ func SaveConfig(cfg *Config) error {
 		configFile = filepath.Join(configPath, "config.yaml")
 	}
 
+	var toolsYaml strings.Builder
+	if len(cfg.Tools) > 0 {
+		toolsYaml.WriteString("tools:\n")
+		var keys []string
+		for k := range cfg.Tools {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			toolsYaml.WriteString(fmt.Sprintf("  %s: %v\n", k, cfg.Tools[k]))
+		}
+	}
+
 	var commandsYaml strings.Builder
 	if len(cfg.Commands) > 0 {
 		commandsYaml.WriteString("commands:\n")
@@ -179,13 +221,14 @@ func SaveConfig(cfg *Config) error {
 		for k := range cfg.Commands {
 			keys = append(keys, k)
 		}
+		sort.Strings(keys)
 		for _, k := range keys {
 			commandsYaml.WriteString(fmt.Sprintf("  %s: %q\n", k, cfg.Commands[k]))
 		}
 	}
 
-	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\nshell:\n  confirm: %v\n  allowed_commands: %q\n%s",
-		cfg.LLM.Provider, cfg.LLM.Model, cfg.Shell.Confirm, cfg.Shell.AllowedCommands, commandsYaml.String())
+	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\nshell:\n  confirm: %v\n  allowed_commands: %q\n%s%s",
+		cfg.LLM.Provider, cfg.LLM.Model, cfg.Shell.Confirm, cfg.Shell.AllowedCommands, toolsYaml.String(), commandsYaml.String())
 	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
