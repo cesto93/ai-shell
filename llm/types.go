@@ -3,10 +3,10 @@ package llm
 import "context"
 
 type Message struct {
-	Role       string            `json:"role"`
-	Content    any               `json:"content"`
-	ToolCalls  []OpenAIToolCall  `json:"tool_calls,omitempty"`
-	ToolCallID string            `json:"tool_call_id,omitempty"`
+	Role       string           `json:"role"`
+	Content    any              `json:"content"`
+	ToolCalls  []OpenAIToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string           `json:"tool_call_id,omitempty"`
 }
 
 type ContentPart struct {

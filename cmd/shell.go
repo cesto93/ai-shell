@@ -222,7 +222,7 @@ type ShellModel struct {
 	confirmationChan   chan bool
 	pendingCommand     string
 	waitingConfirm     bool
-	modelMenu struct {
+	modelMenu          struct {
 		active      bool
 		models      []config.ModelInfo
 		selectedIdx int
@@ -937,6 +937,12 @@ func (m *ShellModel) showHelp() {
 		}
 	}
 
+	sb.WriteString("\nEnv Files:\n")
+	envPaths := config.GetEnvPaths()
+	for _, path := range envPaths {
+		sb.WriteString(fmt.Sprintf("  %s\n", path))
+	}
+
 	m.messages = append(m.messages, Message{role: "system", content: sb.String()})
 }
 
@@ -1134,7 +1140,7 @@ func (m *ShellModel) callLLM(prompt string, images []string) {
 				}
 				for _, img := range msg.images {
 					parts = append(parts, llm.ContentPart{
-						Type: "image_url",
+						Type:     "image_url",
 						ImageURL: &llm.ContentImage{URL: img},
 					})
 				}

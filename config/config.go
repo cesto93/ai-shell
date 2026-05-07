@@ -401,3 +401,17 @@ func IsAllowedCommand(cmd string, allowedList string) bool {
 	}
 	return false
 }
+
+func GetEnvPaths() []string {
+	var paths []string
+
+	userConfigDir, err := userConfigDirFunc()
+	if err == nil {
+		globalEnvPath := filepath.Join(userConfigDir, "ai-shell", ".env")
+		paths = append(paths, globalEnvPath)
+	}
+
+	paths = append(paths, ".env")
+
+	return paths
+}
