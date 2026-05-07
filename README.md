@@ -73,7 +73,17 @@ echo "how do I list files by size?" | ai-shell
 
 ## Configuration
 
-The application looks for a `config.yaml` file in:
+The application looks for a `.env` file in:
+1. The current directory.
+2. `~/.config/ai-shell/.env`
+
+Required environment variables depending on your provider:
+- **Ollama**: No API key needed (local)
+- **Gemini**: `GEMINI_API_KEY`
+- **Mistral**: `MISTRAL_KEY`
+- **OpenRouter**: `OPEN_ROUTE_KEY`
+
+The application also looks for a `config.yaml` file in:
 1. The current directory.
 2. `~/.config/ai-shell/config.yaml`
 

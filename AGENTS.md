@@ -172,15 +172,6 @@ Use color constants defined in `cmd/interactive.go`:
 | `github.com/spf13/viper` | Config management |
 | `github.com/ollama/ollama` | LLM API client |
 | `github.com/chzyer/readline` | Interactive input |
-
-## Git Workflow
-
-- Commit messages: Imperative mood, 50 chars max subject
-  - `Add file completion support`
-  - `Fix config loading fallback`
-- Branch naming: `feature/...`, `fix/...`, `refactor/...`
-- PR title matches commit message style
-
 ## Quick Reference
 
 ```bash
