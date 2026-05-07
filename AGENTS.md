@@ -63,17 +63,6 @@ When adding tests:
 - Use Go 1.25+ features (project requires Go 1.25.5+)
 - Maximum line length: 100 characters (soft limit)
 
-### Naming Conventions
-
-| Type | Convention | Example |
-|------|------------|---------|
-| Packages | lowercase, short | `llm`, `tools` |
-| Functions | PascalCase exported, camelCase private | `CallOllama`, `getDistro` |
-| Variables | camelCase | `configPath`, `shellPrompt` |
-| Constants | PascalCase for exported, camelCase for private | `ColorGreen`, `defaultModel` |
-| Interfaces | PascalCase, often with "er" suffix | (none currently) |
-| Error variables | `err` prefix or descriptive | `err`, `configNotFound` |
-
 ### File Organization
 
 ```
