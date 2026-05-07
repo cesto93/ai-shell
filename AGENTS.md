@@ -11,11 +11,9 @@ AI-Shell is an interactive CLI tool powered by Ollama (local LLM) that helps use
 ```bash
 # Build the binary
 make build
-# or: go build -o ai-shell .
 
 # Install to $GOPATH/bin
 make install
-# or: go install .
 
 # Run the application
 ./ai-shell
@@ -82,70 +80,19 @@ tools/
 
 Standard library imports first, then third-party (alphabetically):
 
-```go
-import (
-    "bufio"
-    "context"
-    "fmt"
-    "os"
-    "path/filepath"
-    "strings"
-
-    "github.com/chzyer/readline"
-    "github.com/ollama/ollama/api"
-    "github.com/spf13/cobra"
-    "github.com/spf13/viper"
-)
-```
-
 ### Error Handling
 
 Always wrap errors with context using `fmt.Errorf`:
-
-```go
-// Good
-return nil, fmt.Errorf("error reading config: %w", err)
-
-// Bad - no context
-return nil, err
-```
-
 Use early returns for error conditions:
-
-```go
-func LoadConfig() (*Config, error) {
-    cfg, err := doSomething()
-    if err != nil {
-        return nil, fmt.Errorf("LoadConfig: %w", err)
-    }
-    // continue
-}
-```
-
 Handle errors gracefully in CLI (don't just log and continue silently unless appropriate).
 
 ### Context Usage
 
 Pass `context.Context` as first parameter for operations that may be cancelled:
 
-```go
-func CallOllama(ctx context.Context, prompt string) error {
-    // ...
-}
-```
-
 ### Configuration
 
 Use Viper for config with mapstructure tags:
-
-```go
-type Config struct {
-    LLM struct {
-        Model string `mapstructure:"model"`
-    } `mapstructure:"llm"`
-}
-```
-
 Set sensible defaults with `viper.SetDefault()`.
 
 ### CLI Output
