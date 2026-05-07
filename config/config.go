@@ -35,10 +35,25 @@ var userConfigDirFunc = os.UserConfigDir
 var loadEnvFunc = loadEnv
 
 func loadEnv() error {
+	// Load from user config directory first (global defaults)
+	userConfigDir, err := userConfigDirFunc()
+	if err == nil {
+		globalEnvPath := filepath.Join(userConfigDir, "ai-shell", ".env")
+		if _, err := os.Stat(globalEnvPath); err == nil {
+			if err := gotenv.Load(globalEnvPath); err != nil {
+				return fmt.Errorf("error loading global .env file at %s: %w", globalEnvPath, err)
+			}
+		}
+	}
+
+	// Load from current directory (local overrides)
 	envPath := ".env"
 	if _, err := os.Stat(envPath); err == nil {
-		return gotenv.Load(envPath)
+		if err := gotenv.Load(envPath); err != nil {
+			return fmt.Errorf("error loading .env file: %w", err)
+		}
 	}
+
 	return nil
 }
 
