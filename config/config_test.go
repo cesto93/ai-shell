@@ -345,6 +345,34 @@ shell:
 	}
 }
 
+func TestIsLitertLMModel(t *testing.T) {
+	tests := []struct {
+		name  string
+		model string
+		want  bool
+	}{
+		{
+			name:  "litertlm model",
+			model: "gemma-4-E2B-it.litertlm",
+			want:  true,
+		},
+		{
+			name:  "not litertlm model",
+			model: "granite4:3b-h",
+			want:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsLitertLMModel(tt.model)
+			if got != tt.want {
+				t.Errorf("IsLitertLMModel(%q) = %v, want %v", tt.model, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsAllowedCommand(t *testing.T) {
 	tests := []struct {
 		name        string

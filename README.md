@@ -1,6 +1,6 @@
 # AI-Shell 🤖🐚
 
-An interactive shell powered by AI (**Ollama, Gemini, Mistral, OpenRouter**) that helps you with commands, explanations, and automation directly from your terminal.
+An interactive shell powered by AI (**Ollama, Gemini, Mistral, OpenRouter, LitertLM**) that helps you with commands, explanations, and automation directly from your terminal.
 
 ## Features
 
@@ -8,7 +8,7 @@ An interactive shell powered by AI (**Ollama, Gemini, Mistral, OpenRouter**) tha
 - **Rich TUI**: Built with Bubbletea, featuring a modern interface with command history, autocomplete, and real-time feedback.
 - **System Awareness**: Automatically detects your Linux distribution and shell to provide tailored advice.
 - **Autonomous Tool Use**: The AI can execute shell commands (`RunCommand`), read files (`ReadFile`), and write files (`WriteFile`) autonomously (with your confirmation).
-- **Multi-Provider Support**: Supports Ollama (local), Google Gemini, Mistral, and OpenRouter through a unified API.
+- **Multi-Provider Support**: Supports Ollama (local), Google Gemini, Mistral, OpenRouter, and LitertLM through a unified API.
 - **Configurable**: Easily switch models and providers via a YAML configuration file.
 
 ## Prerequisites
@@ -19,6 +19,7 @@ An interactive shell powered by AI (**Ollama, Gemini, Mistral, OpenRouter**) tha
   - **Gemini**: Requires `GEMINI_API_KEY` environment variable.
   - **Mistral**: Requires `MISTRAL_KEY` environment variable.
   - **OpenRouter**: Requires `OPEN_ROUTE_KEY` environment variable.
+  - **LitertLM**: Local provider on port 9379.
 - **LLM Model**: By default, it expects the `granite4:3b-h` model, but this can be changed in the config.
 
 ## Installation
@@ -100,7 +101,7 @@ shell:
 
 ### Configuration Options
 
-- **`llm.provider`**: The AI provider to use (`ollama`, `gemini`, `mistral`, or `openrouter`).
+- **`llm.provider`**: The AI provider to use (`ollama`, `gemini`, `mistral`, `openrouter`, or `litertlm`).
 - **`llm.model`**: The specific model name.
 - **`shell.confirm`**: If `true`, the application will always ask for confirmation before executing an AI-suggested command.
 - **`shell.allowed_commands`**: A comma-separated list of safe commands that the AI can execute without requiring user confirmation (e.g., "ls,pwd,date").

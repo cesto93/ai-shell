@@ -30,6 +30,8 @@ get_endpoints=(
 post_endpoints=(
     "/v1/chat/completions"
     "/chat/completions"
+	"/v1/responses"
+    "/chat/completions"
     "/v1/completions"
     "/completions"
     "/v1/models/${MODEL_NAME}/chat/completions"

@@ -978,6 +978,7 @@ func (m *ShellModel) openModelMenu() {
 
 	models = append(models, config.GeminiModels...)
 	models = append(models, config.MistralModels...)
+	models = append(models, config.LitertLMModels...)
 	models = append(models, config.OpenRouterModels...)
 
 	if len(models) == 0 {
@@ -1124,6 +1125,8 @@ func (m *ShellModel) callLLM(prompt string, images []string) {
 		caller = llm.NewGeminiCaller(agent.Model, executor)
 	case "mistral":
 		caller = llm.NewMistralCaller(agent.Model, executor)
+	case "litertlm":
+		caller = llm.NewLitertLMCaller(agent.Model, executor)
 	case "openrouter":
 		caller = llm.NewOpenRouterCaller(agent.Model, executor)
 	default:
