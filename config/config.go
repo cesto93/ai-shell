@@ -17,8 +17,9 @@ import (
 type Config struct {
 	ConfigFile string
 	LLM        struct {
-		Provider string `mapstructure:"provider"`
-		Model    string `mapstructure:"model"`
+		Provider   string   `mapstructure:"provider"`
+		Model      string   `mapstructure:"model"`
+		InputTypes []string `mapstructure:"input_types"`
 	} `mapstructure:"llm"`
 	Shell struct {
 		Confirm         bool   `mapstructure:"confirm"`
@@ -99,12 +100,14 @@ func LoadConfig() (*Config, error) {
 			defaultConfig := &Config{
 				ConfigFile: "",
 				LLM: struct {
-					Provider string `mapstructure:"provider"`
-					Model    string `mapstructure:"model"`
-				}{
-					Provider: "ollama",
-					Model:    "granite4:3b-h",
-				},
+				Provider   string   `mapstructure:"provider"`
+				Model      string   `mapstructure:"model"`
+				InputTypes []string `mapstructure:"input_types"`
+			}{
+				Provider:   "ollama",
+				Model:      "granite4:3b-h",
+				InputTypes: []string{"text"},
+			},
 				Shell: struct {
 					Confirm         bool   `mapstructure:"confirm"`
 					AllowedCommands string `mapstructure:"allowed_commands"`
@@ -132,7 +135,7 @@ func LoadConfig() (*Config, error) {
 				if err == nil {
 					defaultConfigFile := filepath.Join(configPath, "config.yaml")
 					if _, err := os.Stat(defaultConfigFile); os.IsNotExist(err) {
-						content := "llm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\nshell:\n  confirm: true\n  allowed_commands: \"ls,pwd\"\ntools:\n  RunCommand: true\n  WriteFile: true\n  ReadFile: true\n  KVSet: true\n  KVGet: true\n  KVList: true\ncommands:\n  explain: \"Explain the following code or concept in detail:\"\n  fix: \"Find and fix any bugs or issues in the following code:\"\n  tests: \"Generate unit tests for the following code:\"\n"
+						content := "llm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\n  input_types:\n    - \"text\"\nshell:\n  confirm: true\n  allowed_commands: \"ls,pwd\"\ntools:\n  RunCommand: true\n  WriteFile: true\n  ReadFile: true\n  KVSet: true\n  KVGet: true\n  KVList: true\ncommands:\n  explain: \"Explain the following code or concept in detail:\"\n  fix: \"Find and fix any bugs or issues in the following code:\"\n  tests: \"Generate unit tests for the following code:\"\n"
 						_ = os.WriteFile(defaultConfigFile, []byte(content), 0644)
 						defaultConfig.ConfigFile = defaultConfigFile
 					}
@@ -162,6 +165,14 @@ func LoadConfig() (*Config, error) {
 	}
 
 	return &config, nil
+}
+
+func formatStringSlice(prefix string, items []string) string {
+	var b strings.Builder
+	for _, item := range items {
+		b.WriteString(fmt.Sprintf("%s- %q\n", prefix, item))
+	}
+	return b.String()
 }
 
 var getConfigPathFunc = getConfigPath
@@ -251,8 +262,13 @@ func SaveConfig(cfg *Config) error {
 		}
 	}
 
-	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\nshell:\n  confirm: %v\n  allowed_commands: %q\n%s%s",
-		cfg.LLM.Provider, cfg.LLM.Model, cfg.Shell.Confirm, cfg.Shell.AllowedCommands, toolsYaml.String(), commandsYaml.String())
+	var inputTypesYaml string
+	if len(cfg.LLM.InputTypes) > 0 {
+		inputTypesYaml = fmt.Sprintf("  input_types:\n%s", formatStringSlice("    ", cfg.LLM.InputTypes))
+	}
+
+	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\n%s\nshell:\n  confirm: %v\n  allowed_commands: %q\n%s%s",
+		cfg.LLM.Provider, cfg.LLM.Model, inputTypesYaml, cfg.Shell.Confirm, cfg.Shell.AllowedCommands, toolsYaml.String(), commandsYaml.String())
 	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
@@ -303,6 +319,7 @@ type ModelInfo struct {
 	Provider   string
 	Size       string
 	ModifiedAt string
+	InputTypes []string
 }
 
 var GeminiModels = []ModelInfo{
@@ -323,7 +340,7 @@ var OpenRouterModels = []ModelInfo{
 }
 
 var LlamacppModels = []ModelInfo{
-	{Name: "qwen3-asr", Provider: "llamacpp"},
+	{Name: "qwen3-asr", Provider: "llamacpp", InputTypes: []string{"audio"}},
 }
 
 var getAvailableModelsFunc = GetAvailableModels
