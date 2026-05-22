@@ -26,6 +26,7 @@ The model must support audio input (e.g., qwen3-asr via llamacpp).`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		audioPath := args[0]
+		language, _ := cmd.Flags().GetString("language")
 
 		cfg, err := config.LoadConfig()
 		if err != nil {
@@ -59,11 +60,16 @@ The model must support audio input (e.g., qwen3-asr via llamacpp).`,
 		audioFormat := audioFileFormat(audioPath)
 		b64Audio := base64.StdEncoding.EncodeToString(audioData)
 
+		promptText := "Transcribe the following audio."
+		if language != "" {
+			promptText = fmt.Sprintf("Transcribe the following audio to %s.", language)
+		}
+
 		messages := []llm.Message{
 			{
 				Role: "user",
 				Content: []llm.ContentPart{
-					{Type: "text", Text: "Transcribe the following audio."},
+					{Type: "text", Text: promptText},
 					{Type: "input_audio", InputAudio: &llm.InputAudio{Data: b64Audio, Format: audioFormat}},
 				},
 			},
@@ -193,4 +199,5 @@ func audioFileFormat(path string) string {
 
 func init() {
 	rootCmd.AddCommand(transcribeCmd)
+	transcribeCmd.Flags().StringP("language", "l", "", "Language to transcribe to (e.g., \"English\", \"French\")")
 }
