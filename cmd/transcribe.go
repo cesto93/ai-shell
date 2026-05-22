@@ -56,16 +56,15 @@ The model must support audio input (e.g., qwen3-asr via llamacpp).`,
 			os.Exit(1)
 		}
 
-		audioMIME := audioMimeType(audioPath)
+		audioFormat := audioFileFormat(audioPath)
 		b64Audio := base64.StdEncoding.EncodeToString(audioData)
-		dataURL := fmt.Sprintf("data:%s;base64,%s", audioMIME, b64Audio)
 
 		messages := []llm.Message{
 			{
 				Role: "user",
 				Content: []llm.ContentPart{
 					{Type: "text", Text: "Transcribe the following audio."},
-					{Type: "audio", AudioURL: &llm.ContentAudio{URL: dataURL}},
+					{Type: "input_audio", InputAudio: &llm.InputAudio{Data: b64Audio, Format: audioFormat}},
 				},
 			},
 		}
@@ -168,27 +167,27 @@ func getTranscribeBaseURL(provider string) (string, string) {
 	}
 }
 
-func audioMimeType(path string) string {
+func audioFileFormat(path string) string {
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
 	case ".wav":
-		return "audio/wav"
+		return "wav"
 	case ".mp3":
-		return "audio/mpeg"
+		return "mp3"
 	case ".ogg":
-		return "audio/ogg"
+		return "ogg"
 	case ".flac":
-		return "audio/flac"
+		return "flac"
 	case ".webm":
-		return "audio/webm"
+		return "webm"
 	case ".m4a":
-		return "audio/mp4"
+		return "mp4"
 	case ".aac":
-		return "audio/aac"
+		return "aac"
 	case ".opus":
-		return "audio/opus"
+		return "opus"
 	default:
-		return "audio/wav"
+		return "wav"
 	}
 }
 

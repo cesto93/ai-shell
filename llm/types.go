@@ -10,18 +10,19 @@ type Message struct {
 }
 
 type ContentPart struct {
-	Type     string        `json:"type"`
-	Text     string        `json:"text,omitempty"`
-	ImageURL *ContentImage `json:"image_url,omitempty"`
-	AudioURL *ContentAudio `json:"audio_url,omitempty"`
+	Type       string       `json:"type"`
+	Text       string       `json:"text,omitempty"`
+	ImageURL   *ContentImage `json:"image_url,omitempty"`
+	InputAudio *InputAudio  `json:"input_audio,omitempty"`
 }
 
 type ContentImage struct {
 	URL string `json:"url"`
 }
 
-type ContentAudio struct {
-	URL string `json:"url"`
+type InputAudio struct {
+	Data   string `json:"data"`
+	Format string `json:"format"`
 }
 
 type OpenAIToolCall struct {
