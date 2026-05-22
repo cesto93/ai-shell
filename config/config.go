@@ -100,14 +100,14 @@ func LoadConfig() (*Config, error) {
 			defaultConfig := &Config{
 				ConfigFile: "",
 				LLM: struct {
-				Provider   string   `mapstructure:"provider"`
-				Model      string   `mapstructure:"model"`
-				InputTypes []string `mapstructure:"input_types"`
-			}{
-				Provider:   "ollama",
-				Model:      "granite4:3b-h",
-				InputTypes: []string{"text"},
-			},
+					Provider   string   `mapstructure:"provider"`
+					Model      string   `mapstructure:"model"`
+					InputTypes []string `mapstructure:"input_types"`
+				}{
+					Provider:   "ollama",
+					Model:      "granite4:3b-h",
+					InputTypes: []string{"text"},
+				},
 				Shell: struct {
 					Confirm         bool   `mapstructure:"confirm"`
 					AllowedCommands string `mapstructure:"allowed_commands"`
