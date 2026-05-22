@@ -187,15 +187,6 @@ func IsGeminiModel(modelName string) bool {
 	return false
 }
 
-func IsMistralModel(modelName string) bool {
-	for _, m := range MistralModels {
-		if m.Name == modelName {
-			return true
-		}
-	}
-	return false
-}
-
 func IsLitertLMModel(modelName string) bool {
 	for _, m := range LitertLMModels {
 		if m.Name == modelName {
@@ -271,8 +262,6 @@ func SaveModelWithProvider(modelName, provider string) error {
 		cfg.LLM.Provider = provider
 	} else if IsGeminiModel(modelName) {
 		cfg.LLM.Provider = "gemini"
-	} else if IsMistralModel(modelName) {
-		cfg.LLM.Provider = "mistral"
 	} else if IsLitertLMModel(modelName) {
 		cfg.LLM.Provider = "litertlm"
 	} else if IsOpenRouterModel(modelName) {
@@ -310,11 +299,6 @@ var GeminiModels = []ModelInfo{
 	{Name: "gemini-3.1-flash-lite-preview", Provider: "gemini"},
 	{Name: "gemma-4-31b-it", Provider: "gemini"},
 	{Name: "gemma-4-26b-a4b-it", Provider: "gemini"},
-}
-
-var MistralModels = []ModelInfo{
-	{Name: "mistral-small", Provider: "mistral"},
-	{Name: "mistral-large", Provider: "mistral"},
 }
 
 var LitertLMModels = []ModelInfo{
@@ -363,7 +347,6 @@ func SelectModel() error {
 	}
 
 	models = append(models, GeminiModels...)
-	models = append(models, MistralModels...)
 	models = append(models, LitertLMModels...)
 	models = append(models, OpenRouterModels...)
 

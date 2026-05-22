@@ -15,7 +15,6 @@ func TestIsOpenRouterModel(t *testing.T) {
 		{"z-ai/glm-4.5-air:free", true},
 		{"minimax/minimax-m2.5:free", true},
 		{"gemini-3-flash-preview", false},
-		{"mistral-small", false},
 		{"other-model", false},
 	}
 
