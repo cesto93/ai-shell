@@ -13,9 +13,14 @@ type ContentPart struct {
 	Type     string        `json:"type"`
 	Text     string        `json:"text,omitempty"`
 	ImageURL *ContentImage `json:"image_url,omitempty"`
+	AudioURL *ContentAudio `json:"audio_url,omitempty"`
 }
 
 type ContentImage struct {
+	URL string `json:"url"`
+}
+
+type ContentAudio struct {
 	URL string `json:"url"`
 }
 

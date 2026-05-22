@@ -164,6 +164,10 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 
+	if info := lookupModelInfo(config.LLM.Model); info != nil && len(info.InputTypes) > 0 {
+		config.LLM.InputTypes = info.InputTypes
+	}
+
 	return &config, nil
 }
 
@@ -276,6 +280,16 @@ func SaveConfig(cfg *Config) error {
 	return nil
 }
 
+func lookupModelInfo(modelName string) *ModelInfo {
+	allModels := append(append(append(append([]ModelInfo{}, GeminiModels...), LitertLMModels...), OpenRouterModels...), LlamacppModels...)
+	for _, m := range allModels {
+		if m.Name == modelName {
+			return &m
+		}
+	}
+	return nil
+}
+
 func SaveModelWithProvider(modelName, provider string) error {
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -295,6 +309,12 @@ func SaveModelWithProvider(modelName, provider string) error {
 		cfg.LLM.Provider = "llamacpp"
 	} else {
 		cfg.LLM.Provider = "ollama"
+	}
+
+	if info := lookupModelInfo(modelName); info != nil && len(info.InputTypes) > 0 {
+		cfg.LLM.InputTypes = info.InputTypes
+	} else {
+		cfg.LLM.InputTypes = []string{"text"}
 	}
 
 	return SaveConfig(cfg)
