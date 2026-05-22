@@ -979,6 +979,7 @@ func (m *ShellModel) openModelMenu() {
 	models = append(models, config.GeminiModels...)
 	models = append(models, config.LitertLMModels...)
 	models = append(models, config.OpenRouterModels...)
+	models = append(models, config.LlamacppModels...)
 
 	if len(models) == 0 {
 		m.messages = append(m.messages, Message{role: "system", content: "No models found. Please install models using 'ollama pull <model>'"})
@@ -1126,6 +1127,8 @@ func (m *ShellModel) callLLM(prompt string, images []string) {
 		caller = llm.NewLitertLMCaller(agent.Model, executor)
 	case "openrouter":
 		caller = llm.NewOpenRouterCaller(agent.Model, executor)
+	case "llamacpp":
+		caller = llm.NewLlamacppCaller(agent.Model, executor)
 	default:
 		caller = llm.NewOllamaCaller(agent.Model, executor)
 	}

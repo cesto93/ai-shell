@@ -205,6 +205,15 @@ func IsOpenRouterModel(modelName string) bool {
 	return false
 }
 
+func IsLlamacppModel(modelName string) bool {
+	for _, m := range LlamacppModels {
+		if m.Name == modelName {
+			return true
+		}
+	}
+	return false
+}
+
 func SaveConfig(cfg *Config) error {
 	configFile := cfg.ConfigFile
 	if configFile == "" {
@@ -266,6 +275,8 @@ func SaveModelWithProvider(modelName, provider string) error {
 		cfg.LLM.Provider = "litertlm"
 	} else if IsOpenRouterModel(modelName) {
 		cfg.LLM.Provider = "openrouter"
+	} else if IsLlamacppModel(modelName) {
+		cfg.LLM.Provider = "llamacpp"
 	} else {
 		cfg.LLM.Provider = "ollama"
 	}
@@ -311,6 +322,10 @@ var OpenRouterModels = []ModelInfo{
 	{Name: "minimax/minimax-m2.5:free", Provider: "openrouter"},
 }
 
+var LlamacppModels = []ModelInfo{
+	{Name: "qwen3-asr", Provider: "llamacpp"},
+}
+
 var getAvailableModelsFunc = GetAvailableModels
 
 func GetAvailableModels() ([]ModelInfo, error) {
@@ -349,6 +364,7 @@ func SelectModel() error {
 	models = append(models, GeminiModels...)
 	models = append(models, LitertLMModels...)
 	models = append(models, OpenRouterModels...)
+	models = append(models, LlamacppModels...)
 
 	if len(models) == 0 {
 		fmt.Printf("No models found. Please install models using 'ollama pull <model>'\n")
