@@ -3,6 +3,6 @@ coverage.out
 coverage.html
 config.yaml
 .env
-config.yaml
 data/
 scripts/models
+.antigravitycli/
