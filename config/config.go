@@ -355,6 +355,29 @@ func lookupModelInfo(modelName string) *ModelInfo {
 	return nil
 }
 
+func LookupModelInfo(modelName string) *ModelInfo {
+	if info := lookupModelInfo(modelName); info != nil {
+		return info
+	}
+	llamacppModels, err := GetLlamacppModels()
+	if err == nil {
+		for _, m := range llamacppModels {
+			if m.Name == modelName {
+				return &m
+			}
+		}
+	}
+	ollamaModels, err := GetAvailableModels()
+	if err == nil {
+		for _, m := range ollamaModels {
+			if m.Name == modelName {
+				return &m
+			}
+		}
+	}
+	return nil
+}
+
 func SaveModelWithProvider(modelName, provider string) error {
 	cfg, err := LoadConfig()
 	if err != nil {

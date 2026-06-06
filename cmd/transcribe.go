@@ -20,18 +20,34 @@ import (
 
 var transcribeCmd = &cobra.Command{
 	Use:   "transcribe <audio-file>",
-	Short: "Transcribe an audio file using the current model",
-	Long: `Send an audio file to the current LLM for transcription.
-The model must support audio input (e.g., qwen3-asr via llamacpp).`,
+	Short: "Transcribe an audio file using a model with audio support",
+	Long: `Send an audio file to an LLM for transcription.
+The model must support audio input (e.g., Qwen3-ASR via llamacpp).`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		audioPath := args[0]
 		language, _ := cmd.Flags().GetString("language")
+		modelFlag, _ := cmd.Flags().GetString("model")
 
 		cfg, err := config.LoadConfig()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 			os.Exit(1)
+		}
+
+		if modelFlag != "" {
+			if info := config.LookupModelInfo(modelFlag); info != nil {
+				cfg.LLM.Model = modelFlag
+				cfg.LLM.Provider = info.Provider
+				if len(info.InputTypes) > 0 {
+					cfg.LLM.InputTypes = info.InputTypes
+				} else {
+					cfg.LLM.InputTypes = []string{"text"}
+				}
+			} else {
+				fmt.Fprintf(os.Stderr, "Error: model %q not found\n", modelFlag)
+				os.Exit(1)
+			}
 		}
 
 		supportsAudio := false
@@ -43,7 +59,7 @@ The model must support audio input (e.g., qwen3-asr via llamacpp).`,
 		}
 		if !supportsAudio {
 			fmt.Fprintf(os.Stderr, "Error: The current model %q does not support audio input.\n", cfg.LLM.Model)
-			fmt.Fprintf(os.Stderr, "Use a model with audio input capability (e.g., qwen3-asr via llamacpp).\n")
+			fmt.Fprintf(os.Stderr, "Use a model with audio input capability (e.g., Qwen3-ASR via llamacpp).\n")
 			os.Exit(1)
 		}
 
@@ -200,4 +216,5 @@ func audioFileFormat(path string) string {
 func init() {
 	rootCmd.AddCommand(transcribeCmd)
 	transcribeCmd.Flags().StringP("language", "l", "", "Language to transcribe to (e.g., \"English\", \"French\")")
+	transcribeCmd.Flags().StringP("model", "m", "", "Model to use for transcription (overrides config)")
 }
