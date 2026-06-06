@@ -979,7 +979,10 @@ func (m *ShellModel) openModelMenu() {
 	models = append(models, config.GeminiModels...)
 	models = append(models, config.LitertLMModels...)
 	models = append(models, config.OpenRouterModels...)
-	models = append(models, config.LlamacppModels...)
+	llamacppModels, llamaErr := config.GetLlamacppModels()
+	if llamaErr == nil {
+		models = append(models, llamacppModels...)
+	}
 
 	if len(models) == 0 {
 		m.messages = append(m.messages, Message{role: "system", content: "No models found. Please install models using 'ollama pull <model>'"})
