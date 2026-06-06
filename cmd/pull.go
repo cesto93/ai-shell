@@ -12,6 +12,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type huggingFaceResult struct {
+	Siblings []struct {
+		Rfilename string `json:"rfilename"`
+	} `json:"siblings"`
+}
+
 var pullCmd = &cobra.Command{
 	Use:   "pull org/repo[:filename]",
 	Short: "Pull a GGUF model from HuggingFace",
@@ -38,9 +44,25 @@ Examples:
 			return
 		}
 
+		modelName := modelNameFromFile(filename)
+		if modelExistsLocally(modelsDir, modelName) {
+			fmt.Printf("Model %q already exists locally. Skipping download.\n", modelName)
+			return
+		}
+
 		if err := downloadHuggingFaceModel(org, repo, filename, modelsDir); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
+		}
+
+		companion := "mmproj-" + filename
+		if modelName != companion {
+			companionName := modelNameFromFile(companion)
+			if !modelExistsLocally(modelsDir, companionName) {
+				if err := downloadHuggingFaceModel(org, repo, companion, modelsDir); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: companion file %s not found in repo: %v\n", companion, err)
+				}
+			}
 		}
 	},
 }
@@ -108,11 +130,7 @@ func listHuggingFaceFiles(org, repo string) {
 		os.Exit(1)
 	}
 
-	var result struct {
-		Siblings []struct {
-			Rfilename string `json:"rfilename"`
-		} `json:"siblings"`
-	}
+	var result huggingFaceResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error parsing response: %v\n", err)
 		os.Exit(1)
@@ -170,6 +188,28 @@ func downloadHuggingFaceModel(org, repo, filename, destDir string) error {
 
 	fmt.Printf("Downloaded %s (%s)\n", filename, formatSize(written))
 	return nil
+}
+
+func modelExistsLocally(modelsDir, modelName string) bool {
+	entries, err := os.ReadDir(modelsDir)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if modelNameFromFile(entry.Name()) == modelName {
+			return true
+		}
+	}
+	return false
+}
+
+func modelNameFromFile(filename string) string {
+	name := strings.TrimSuffix(filename, ".gguf")
+	name = strings.TrimPrefix(name, "mmproj-")
+	return name
 }
 
 func formatSize(bytes int64) string {
