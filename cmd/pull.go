@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -57,12 +59,16 @@ Examples:
 
 		companion := "mmproj-" + filename
 		if modelName != companion {
-			companionName := modelNameFromFile(companion)
-			if !modelExistsLocally(modelsDir, companionName) {
+			companionPath := filepath.Join(modelsDir, companion)
+			if _, err := os.Stat(companionPath); os.IsNotExist(err) {
 				if err := downloadHuggingFaceModel(org, repo, companion, modelsDir); err != nil {
 					fmt.Fprintf(os.Stderr, "Warning: companion file %s not found in repo: %v\n", companion, err)
 				}
 			}
+		}
+
+		if err := updateModelsIni(modelsDir); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to update models.ini: %v\n", err)
 		}
 	},
 }
@@ -223,6 +229,73 @@ func formatSize(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+func updateModelsIni(modelsDir string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	entries, err := os.ReadDir(modelsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to read models directory: %w", err)
+	}
+
+	type modelFiles struct {
+		modelPath  string
+		mmprojPath string
+	}
+	groups := map[string]*modelFiles{}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".gguf") {
+			continue
+		}
+		name := modelNameFromFile(entry.Name())
+		fullPath := filepath.Join(modelsDir, entry.Name())
+		if groups[name] == nil {
+			groups[name] = &modelFiles{}
+		}
+		if strings.HasPrefix(entry.Name(), "mmproj-") {
+			groups[name].mmprojPath = fullPath
+		} else {
+			groups[name].modelPath = fullPath
+		}
+	}
+
+	keys := make([]string, 0, len(groups))
+	for k := range groups {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var buf bytes.Buffer
+	for _, k := range keys {
+		g := groups[k]
+		if g.modelPath == "" {
+			continue
+		}
+		buf.WriteString(fmt.Sprintf("[%s]\n", k))
+		buf.WriteString(fmt.Sprintf("model = %s\n", g.modelPath))
+		if g.mmprojPath != "" {
+			buf.WriteString(fmt.Sprintf("mmproj = %s\n", g.mmprojPath))
+		}
+		buf.WriteString("\n")
+	}
+
+	iniPath := filepath.Join(home, ".ai-shell", "models.ini")
+	if err := os.MkdirAll(filepath.Dir(iniPath), 0755); err != nil {
+		return fmt.Errorf("failed to create .ai-shell directory: %w", err)
+	}
+	if err := os.WriteFile(iniPath, buf.Bytes(), 0644); err != nil {
+		return fmt.Errorf("failed to write models.ini: %w", err)
+	}
+
+	return nil
 }
 
 func init() {

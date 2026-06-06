@@ -1251,6 +1251,13 @@ func saveHistory(path string, history []string) {
 }
 
 func RunShell() error {
+	modelsDir, err := getModelsDir()
+	if err == nil {
+		if err := updateModelsIni(modelsDir); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to update models.ini: %v\n", err)
+		}
+	}
+
 	m, err := NewShellModel()
 	if err != nil {
 		return fmt.Errorf("failed to create shell model: %w", err)
