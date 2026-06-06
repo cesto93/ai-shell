@@ -220,8 +220,73 @@ func IsOpenRouterModel(modelName string) bool {
 	return false
 }
 
-func IsLlamacppModel(modelName string) bool {
+func GetLlamacppModels() ([]ModelInfo, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	modelsDir := filepath.Join(home, ".ai-shell", "models")
+	entries, err := os.ReadDir(modelsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	seen := map[string]bool{}
+	var result []ModelInfo
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := llamacppModelNameFromFile(entry.Name())
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+
+		info := ModelInfo{
+			Name:       name,
+			Provider:   "llamacpp",
+			InputTypes: []string{"text"},
+		}
+		if hc := lookupHardcodedLlamacppModel(name); hc != nil {
+			info.InputTypes = hc.InputTypes
+		}
+		result = append(result, info)
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Name < result[j].Name
+	})
+	return result, nil
+}
+
+func llamacppModelNameFromFile(filename string) string {
+	name := strings.TrimSuffix(filename, ".gguf")
+	name = strings.TrimPrefix(name, "mmproj-")
+	return name
+}
+
+func lookupHardcodedLlamacppModel(modelName string) *ModelInfo {
 	for _, m := range LlamacppModels {
+		if m.Name == modelName {
+			return &m
+		}
+	}
+	return nil
+}
+
+func IsLlamacppModel(modelName string) bool {
+	if lookupHardcodedLlamacppModel(modelName) != nil {
+		return true
+	}
+	models, err := GetLlamacppModels()
+	if err != nil {
+		return false
+	}
+	for _, m := range models {
 		if m.Name == modelName {
 			return true
 		}
@@ -360,7 +425,9 @@ var OpenRouterModels = []ModelInfo{
 }
 
 var LlamacppModels = []ModelInfo{
-	{Name: "qwen3-asr", Provider: "llamacpp", InputTypes: []string{"audio"}},
+
+	{Name: "Qwen3-ASR-1.7B-Q8_0", Provider: "llamacpp", InputTypes: []string{"audio"}},
+	{Name: "Qwen3-ASR-0.6B-Q8_0", Provider: "llamacpp", InputTypes: []string{"audio"}},
 }
 
 var getAvailableModelsFunc = GetAvailableModels
@@ -401,7 +468,10 @@ func SelectModel() error {
 	models = append(models, GeminiModels...)
 	models = append(models, LitertLMModels...)
 	models = append(models, OpenRouterModels...)
-	models = append(models, LlamacppModels...)
+	llamacppModels, llamaErr := GetLlamacppModels()
+	if llamaErr == nil {
+		models = append(models, llamacppModels...)
+	}
 
 	if len(models) == 0 {
 		fmt.Printf("No models found. Please install models using 'ollama pull <model>'\n")
