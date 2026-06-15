@@ -16,7 +16,7 @@ func NewLitertLMCaller(model string, executor ToolExecutor) *LitertLMCaller {
 	}
 
 	return &LitertLMCaller{
-		inner: NewOpenAICaller(baseURL, "", model, executor),
+		inner: NewOpenAICaller(baseURL+"/v1", "", model, executor),
 	}
 }
 

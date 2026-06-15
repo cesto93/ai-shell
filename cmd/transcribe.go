@@ -181,7 +181,7 @@ func getTranscribeBaseURL(provider string) (string, string) {
 		if baseURL == "" {
 			baseURL = "http://localhost:9379"
 		}
-		return baseURL, ""
+		return baseURL + "/v1", ""
 	case "openrouter":
 		return "https://openrouter.ai/api/v1", os.Getenv("OPEN_ROUTE_KEY")
 	default:
