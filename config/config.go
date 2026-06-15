@@ -2,7 +2,9 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -203,7 +205,14 @@ func IsGeminiModel(modelName string) bool {
 }
 
 func IsLitertLMModel(modelName string) bool {
-	for _, m := range LitertLMModels {
+	if lookupHardcodedLitertLMModel(modelName) != nil {
+		return true
+	}
+	models, err := GetLitertLMModels()
+	if err != nil {
+		return false
+	}
+	for _, m := range models {
 		if m.Name == modelName {
 			return true
 		}
@@ -367,6 +376,14 @@ func LookupModelInfo(modelName string) *ModelInfo {
 			}
 		}
 	}
+	litertlmModels, err := GetLitertLMModels()
+	if err == nil {
+		for _, m := range litertlmModels {
+			if m.Name == modelName {
+				return &m
+			}
+		}
+	}
 	ollamaModels, err := GetAvailableModels()
 	if err == nil {
 		for _, m := range ollamaModels {
@@ -441,6 +458,56 @@ var LitertLMModels = []ModelInfo{
 	{Name: "gemma-4-E2B-it.litertlm", Provider: "litertlm"},
 }
 
+type openAIModelsResponse struct {
+	Object string             `json:"object"`
+	Data   []openAIModelEntry `json:"data"`
+}
+
+type openAIModelEntry struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	OwnedBy string `json:"owned_by"`
+}
+
+func GetLitertLMModels() ([]ModelInfo, error) {
+	baseURL := os.Getenv("LITERTLM_BASE_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:9379"
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+
+	resp, err := http.Get(baseURL + "/v1/models")
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch litertlm models: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var modelsResp openAIModelsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&modelsResp); err != nil {
+		return nil, fmt.Errorf("failed to decode litertlm models response: %w", err)
+	}
+
+	var result []ModelInfo
+	for _, m := range modelsResp.Data {
+		result = append(result, ModelInfo{
+			Name:       m.ID,
+			Provider:   "litertlm",
+			InputTypes: []string{"text"},
+		})
+	}
+	return result, nil
+}
+
+func lookupHardcodedLitertLMModel(modelName string) *ModelInfo {
+	for _, m := range LitertLMModels {
+		if m.Name == modelName {
+			return &m
+		}
+	}
+	return nil
+}
+
 var OpenRouterModels = []ModelInfo{
 	{Name: "nvidia/nemotron-3-super-120b-a12b:free", Provider: "openrouter"},
 	{Name: "z-ai/glm-4.5-air:free", Provider: "openrouter"},
@@ -489,11 +556,17 @@ func SelectModel() error {
 	}
 
 	models = append(models, GeminiModels...)
-	models = append(models, LitertLMModels...)
 	models = append(models, OpenRouterModels...)
 	llamacppModels, llamaErr := GetLlamacppModels()
 	if llamaErr == nil {
 		models = append(models, llamacppModels...)
+	}
+
+	litertlmModels, litertlmErr := GetLitertLMModels()
+	if litertlmErr == nil {
+		models = append(models, litertlmModels...)
+	} else {
+		models = append(models, LitertLMModels...)
 	}
 
 	if len(models) == 0 {

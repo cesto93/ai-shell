@@ -977,11 +977,16 @@ func (m *ShellModel) openModelMenu() {
 	}
 
 	models = append(models, config.GeminiModels...)
-	models = append(models, config.LitertLMModels...)
 	models = append(models, config.OpenRouterModels...)
 	llamacppModels, llamaErr := config.GetLlamacppModels()
 	if llamaErr == nil {
 		models = append(models, llamacppModels...)
+	}
+	litertlmModels, litertlmErr := config.GetLitertLMModels()
+	if litertlmErr == nil {
+		models = append(models, litertlmModels...)
+	} else {
+		models = append(models, config.LitertLMModels...)
 	}
 
 	if len(models) == 0 {
