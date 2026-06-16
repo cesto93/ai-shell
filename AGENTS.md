@@ -1,127 +1,59 @@
 # AGENTS.md
 
-This document provides guidelines for agents working on the ai-shell codebase.
+## Project
 
-## Project Overview
+Interactive AI shell TUI (Bubbletea) with 5 LLM providers: Ollama, Gemini, OpenRouter, LitertLM, llama.cpp. All providers wrap `OpenAICaller` (`llm/openai.go`) with different base URLs and API keys — the common entry point for adding a new provider.
 
-AI-Shell is an interactive CLI tool powered by Ollama (local LLM) that helps users with shell commands. Built with Go, it uses Cobra for CLI structure, Viper for config management, and the Ollama API for LLM interactions.
+Entry point: `main.go` → `cmd.Execute()`. Default command launches Bubbletea TUI in `cmd/shell.go` (1279 lines, MVU pattern).
 
-## Build Commands
+## Commands
 
-```bash
-# Build the binary
-make build
-
-# Install to $GOPATH/bin
-make install
-
-# Run the application
-./ai-shell
-
-# Format code
-go fmt ./...
-
-# Vet code
-go vet ./...
-
-# Build and verify
-go build -o ai-shell . && ./ai-shell --help
 ```
+make build         # go build -o ai-shell .
+make install       # go install .
+make coverage      # test + HTML report
+go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
+```
+
+## Packages
+
+| Directory | Contents |
+|-----------|----------|
+| `cmd/` | Cobra commands: default (TUI shell), `get-config`, `list` (GGUF models), `pull` (HuggingFace), `rm`, `server` (llama-server), `transcribe` |
+| `config/` | Viper YAML config, model lists, `.env` loading via `gotenv` |
+| `llm/` | `Agent` struct, `Caller` interface, `ToolExecutor` interface, 6 OpenAI tool definitions |
+| `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
+
+## Config layering
+
+1. `~/.config/ai-shell/.env` (global)
+2. `./.env` (local overrides)
+3. `config.yaml` from `./` or `~/.config/ai-shell/`
+
+Defaults: provider=ollama, model=granite4:3b-h, confirm=true, allowed_commands=ls,pwd. All 6 tools enabled by default. Custom commands stored in config.
 
 ## Testing
 
 ```bash
-# Run all tests
-go test ./...
-
-# Run tests with verbose output
-go test -v ./...
-
-# Run specific test
-go test -v -run TestFunctionName ./...
-
-# Run tests with coverage
+go test ./...           # all pass (config, llm, tools)
+go test -v -run TestName ./package
 go test -cover ./...
-
-# Run tests with race detector
-go test -race ./...
 ```
 
-When adding tests:
-- Create `*_test.go` files in the same package
-- Use table-driven tests for multiple test cases
-- Use `t.Run()` for subtests
+Test conventions: table-driven tests, `t.Run()` subtests, function variable mocking (e.g. `userConfigDirFunc`, `loadEnvFunc` in `config/`, `dbPathFunc` in `tools/`).
 
-## Code Style
+TUI code in `cmd/` has no tests yet.
 
-### General Guidelines
+## TUI conventions (cmd/shell.go)
 
-- Run `go fmt ./...` before committing
-- Run `go vet ./...` to catch common issues
-- Use Go 1.25+ features (project requires Go 1.25.5+)
-- Maximum line length: 100 characters (soft limit)
+- `/` commands: help, get-config, config, models, reset, add-cmd, exit, quit
+- `@filepath` for image attachments (base64 encoded)
+- Tool execution requires user confirmation unless command is in `allowed_commands`
+- Lipgloss styles: `promptStyle`, `systemStyle`, `userStyle`, `aiStyle`, `errorStyle`, `cmdStyle`, `helpStyle`, `dimStyle`
 
-### File Organization
+## Key gotchas
 
-```
-main.go       - Entry point, delegates to cmd package
-cmd/
-    cmd.go           - Cobra command definitions
-    interactive.go   - Interactive shell loop, LLM interaction
-    completion.go    - Readline autocomplete
-config/
-    config.go        - Config loading, model management
-tools/
-    tools.go         - Shell command execution
-    system.go        - System info (distro, shell detection)
-```
-
-### Imports
-
-Standard library imports first, then third-party (alphabetically):
-
-### Error Handling
-
-Always wrap errors with context using `fmt.Errorf`:
-Use early returns for error conditions:
-Handle errors gracefully in CLI (don't just log and continue silently unless appropriate).
-
-### Context Usage
-
-Pass `context.Context` as first parameter for operations that may be cancelled:
-
-### Configuration
-
-Use Viper for config with mapstructure tags:
-Set sensible defaults with `viper.SetDefault()`.
-
-### CLI Output
-
-Use color constants defined in `cmd/interactive.go`:
-- `ColorBlue` - LLM responses
-- `ColorCyan` - System info, prompts
-- `ColorGreen` - Commands, success
-- `ColorYellow` - Warnings, errors
-- `ColorBold` - Headings
-- `ColorReset` - Reset formatting
-
-### Performance Considerations
-
-- Reuse `bytes.Buffer` for command output when appropriate
-- Close resources (files, readline) with `defer`
-- Avoid unnecessary allocations in hot paths
-
-## Dependencies
-
-| Package | Purpose |
-|---------|---------|
-| `github.com/spf13/cobra` | CLI framework |
-| `github.com/spf13/viper` | Config management |
-| `github.com/ollama/ollama` | LLM API client |
-| `github.com/chzyer/readline` | Interactive input |
-## Quick Reference
-
-```bash
-# Full workflow
-go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
-```
+- `config.LoadConfig()` may return partial defaults on error — check both return values
+- `.env` files are loaded at startup via `gotenv.Load()` — place API keys there, not in config.yaml
+- KV store uses bbolt at `~/.config/ai-shell/kv_store.db`
+- 100 char soft line limit, Go 1.25.5+
