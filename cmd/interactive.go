@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 
 	"ai-shell/config"
+	"ai-shell/llm"
 
 	"github.com/spf13/cobra"
 )
@@ -39,9 +41,44 @@ func PrintConfig() {
 	fmt.Printf("Confirm Commands: %s%v%s\n", ColorGreen, cfg.Shell.Confirm, ColorReset)
 	fmt.Printf("Allowed Commands: %s%s%s\n", ColorGreen, cfg.Shell.AllowedCommands, ColorReset)
 
+	if len(cfg.Tools) > 0 {
+		fmt.Printf("\n%sTools:%s\n", ColorBold+ColorCyan, ColorReset)
+		toolDescs := llm.GetToolDescriptions()
+		var toolNames []string
+		for name := range cfg.Tools {
+			toolNames = append(toolNames, name)
+		}
+		sort.Strings(toolNames)
+		for _, name := range toolNames {
+			status := "disabled"
+			if cfg.Tools[name] {
+				status = "enabled"
+			}
+			desc := toolDescs[name]
+			fmt.Printf("  %s%-12s%s %s(%s)%s", ColorGreen, name, ColorReset, ColorBlue, status, ColorReset)
+			if desc != "" {
+				fmt.Printf(" %s- %s%s", ColorYellow, desc, ColorReset)
+			}
+			fmt.Println()
+		}
+	}
+
+	if len(cfg.Commands) > 0 {
+		fmt.Printf("\n%sCommands:%s\n", ColorBold+ColorCyan, ColorReset)
+		var cmdNames []string
+		for name := range cfg.Commands {
+			cmdNames = append(cmdNames, name)
+		}
+		sort.Strings(cmdNames)
+		for _, name := range cmdNames {
+			prompt := cfg.Commands[name]
+			fmt.Printf("  %s/%-11s%s %s- %s%s\n", ColorGreen, name, ColorReset, ColorYellow, prompt, ColorReset)
+		}
+	}
+
 	if cfg.ConfigFile != "" {
-		fmt.Printf("Config file: %s%s%s\n", ColorBlue, cfg.ConfigFile, ColorReset)
+		fmt.Printf("\nConfig file: %s%s%s\n", ColorBlue, cfg.ConfigFile, ColorReset)
 	} else {
-		fmt.Printf("Config file: %sNone (using defaults)%s\n", ColorYellow, ColorReset)
+		fmt.Printf("\nConfig file: %sNone (using defaults)%s\n", ColorYellow, ColorReset)
 	}
 }

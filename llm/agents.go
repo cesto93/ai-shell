@@ -146,6 +146,23 @@ func GetEnabledTools(enabledMap map[string]bool) []any {
 	return enabledTools
 }
 
+// GetToolDescriptions returns a map of tool name to description extracted from GetAllTools.
+func GetToolDescriptions() map[string]string {
+	descs := make(map[string]string)
+	for _, t := range GetAllTools() {
+		if toolMap, ok := t.(map[string]any); ok {
+			if function, ok := toolMap["function"].(map[string]any); ok {
+				name, _ := function["name"].(string)
+				desc, _ := function["description"].(string)
+				if name != "" {
+					descs[name] = desc
+				}
+			}
+		}
+	}
+	return descs
+}
+
 // GetDefaultSystemPrompt returns the default system prompt based on distro, shell, and current directory.
 func GetDefaultSystemPrompt() string {
 	distro := tools.GetDistro()
