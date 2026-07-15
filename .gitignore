@@ -4,5 +4,4 @@ coverage.html
 config.yaml
 .env
 data/
-scripts/models
 .antigravitycli/

@@ -1037,10 +1037,6 @@ func (m *ShellModel) openModelMenu() {
 
 	models = append(models, config.GeminiModels...)
 	models = append(models, config.OpenRouterModels...)
-	llamacppModels, llamaErr := config.GetLlamacppModels()
-	if llamaErr == nil {
-		models = append(models, llamacppModels...)
-	}
 	litertlmModels, litertlmErr := config.GetLitertLMModels()
 	if litertlmErr == nil {
 		models = append(models, litertlmModels...)
@@ -1248,8 +1244,6 @@ func (m *ShellModel) callLLM(prompt string, images []string) {
 		caller = llm.NewLitertLMCaller(agent.Model, executor)
 	case "openrouter":
 		caller = llm.NewOpenRouterCaller(agent.Model, executor)
-	case "llamacpp":
-		caller = llm.NewLlamacppCaller(agent.Model, executor)
 	default:
 		caller = llm.NewOllamaCaller(agent.Model, executor)
 	}
@@ -1372,13 +1366,6 @@ func saveHistory(path string, history []string) {
 }
 
 func RunShell() error {
-	modelsDir, err := getModelsDir()
-	if err == nil {
-		if err := updateModelsIni(modelsDir); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to update models.ini: %v\n", err)
-		}
-	}
-
 	m, err := NewShellModel()
 	if err != nil {
 		return fmt.Errorf("failed to create shell model: %w", err)
