@@ -11,10 +11,18 @@ import (
 	"strconv"
 	"strings"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/ollama/ollama/api"
 	"github.com/spf13/viper"
 	"github.com/subosito/gotenv"
 )
+
+type CommandInfo struct {
+	Name        string
+	Description string
+	Prompt      string
+}
 
 type Config struct {
 	ConfigFile string
@@ -80,11 +88,6 @@ func LoadConfig() (*Config, error) {
 		"KVGet":      true,
 		"KVList":     true,
 	})
-	v.SetDefault("commands", map[string]string{
-		"explain": "Explain the following code or concept in detail:",
-		"fix":     "Find and fix any bugs or issues in the following code:",
-		"tests":   "Generate unit tests for the following code:",
-	})
 
 	for _, path := range configPaths {
 		v.AddConfigPath(path)
@@ -125,11 +128,6 @@ func LoadConfig() (*Config, error) {
 					"KVGet":      true,
 					"KVList":     true,
 				},
-				Commands: map[string]string{
-					"explain": "Explain the following code or concept in detail:",
-					"fix":     "Find and fix any bugs or issues in the following code:",
-					"tests":   "Generate unit tests for the following code:",
-				},
 			}
 
 			if configPath != "" {
@@ -137,7 +135,7 @@ func LoadConfig() (*Config, error) {
 				if err == nil {
 					defaultConfigFile := filepath.Join(configPath, "config.yaml")
 					if _, err := os.Stat(defaultConfigFile); os.IsNotExist(err) {
-						content := "llm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\n  input_types:\n    - \"text\"\nshell:\n  confirm: true\n  allowed_commands: \"ls,pwd\"\ntools:\n  RunCommand: true\n  WriteFile: true\n  ReadFile: true\n  KVSet: true\n  KVGet: true\n  KVList: true\ncommands:\n  explain: \"Explain the following code or concept in detail:\"\n  fix: \"Find and fix any bugs or issues in the following code:\"\n  tests: \"Generate unit tests for the following code:\"\n"
+						content := "llm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\n  input_types:\n    - \"text\"\nshell:\n  confirm: true\n  allowed_commands: \"ls,pwd\"\ntools:\n  RunCommand: true\n  WriteFile: true\n  ReadFile: true\n  KVSet: true\n  KVGet: true\n  KVList: true\n"
 						_ = os.WriteFile(defaultConfigFile, []byte(content), 0644)
 						defaultConfig.ConfigFile = defaultConfigFile
 					}
@@ -252,27 +250,13 @@ func SaveConfig(cfg *Config) error {
 		}
 	}
 
-	var commandsYaml strings.Builder
-	if len(cfg.Commands) > 0 {
-		commandsYaml.WriteString("commands:\n")
-		// Sort commands for consistent output
-		var keys []string
-		for k := range cfg.Commands {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			commandsYaml.WriteString(fmt.Sprintf("  %s: %q\n", k, cfg.Commands[k]))
-		}
-	}
-
 	var inputTypesYaml string
 	if len(cfg.LLM.InputTypes) > 0 {
 		inputTypesYaml = fmt.Sprintf("  input_types:\n%s", formatStringSlice("    ", cfg.LLM.InputTypes))
 	}
 
-	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\n%s\nshell:\n  confirm: %v\n  allowed_commands: %q\n%s%s",
-		cfg.LLM.Provider, cfg.LLM.Model, inputTypesYaml, cfg.Shell.Confirm, cfg.Shell.AllowedCommands, toolsYaml.String(), commandsYaml.String())
+	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\n%s\nshell:\n  confirm: %v\n  allowed_commands: %q\n%s",
+		cfg.LLM.Provider, cfg.LLM.Model, inputTypesYaml, cfg.Shell.Confirm, cfg.Shell.AllowedCommands, toolsYaml.String())
 	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
@@ -338,20 +322,6 @@ func SaveModelWithProvider(modelName, provider string) error {
 	} else {
 		cfg.LLM.InputTypes = []string{"text"}
 	}
-
-	return SaveConfig(cfg)
-}
-
-func SaveCommand(name, prompt string) error {
-	cfg, err := LoadConfig()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	if cfg.Commands == nil {
-		cfg.Commands = make(map[string]string)
-	}
-	cfg.Commands[name] = prompt
 
 	return SaveConfig(cfg)
 }
@@ -539,4 +509,116 @@ func GetEnvPaths() []string {
 	paths = append(paths, ".env")
 
 	return paths
+}
+
+var getUserConfigDirFunc = os.UserConfigDir
+
+func LoadCommands(cfg *Config) []CommandInfo {
+	var fileCmds []CommandInfo
+	dirs := loadCommandDirs()
+	for _, dir := range dirs {
+		cmds, _ := LoadCommandsFromDir(dir)
+		fileCmds = append(fileCmds, cmds...)
+	}
+
+	configCmds := make(map[string]CommandInfo)
+	for name, prompt := range cfg.Commands {
+		configCmds[name] = CommandInfo{
+			Name:        name,
+			Description: prompt,
+			Prompt:      prompt,
+		}
+	}
+
+	for _, cmd := range fileCmds {
+		configCmds[cmd.Name] = cmd
+	}
+
+	var result []CommandInfo
+	for _, cmd := range configCmds {
+		result = append(result, cmd)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Name < result[j].Name
+	})
+	return result
+}
+
+func LoadCommandsFromDir(dir string) ([]CommandInfo, error) {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create commands directory: %w", err)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read commands directory: %w", err)
+	}
+
+	var commands []CommandInfo
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
+		cmd, err := parseCommandFile(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		cmd.Name = strings.TrimSuffix(entry.Name(), ".md")
+		commands = append(commands, cmd)
+	}
+
+	return commands, nil
+}
+
+func loadCommandDirs() []string {
+	var dirs []string
+
+	cwd, err := os.Getwd()
+	if err == nil {
+		dirs = append(dirs, filepath.Join(cwd, ".ai-shell", "commands"))
+	}
+
+	userConfigDir, err := getUserConfigDirFunc()
+	if err == nil {
+		dirs = append(dirs, filepath.Join(userConfigDir, "ai-shell", "commands"))
+	}
+
+	return dirs
+}
+
+func parseCommandFile(path string) (CommandInfo, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return CommandInfo{}, err
+	}
+
+	content := string(data)
+	var cmd CommandInfo
+
+	if strings.HasPrefix(content, "---") {
+		parts := strings.SplitN(content, "---", 3)
+		if len(parts) >= 3 {
+			frontmatter := strings.TrimSpace(parts[1])
+			var meta struct {
+				Description string `yaml:"description"`
+			}
+			if err := yaml.Unmarshal([]byte(frontmatter), &meta); err == nil {
+				cmd.Description = meta.Description
+			}
+			cmd.Prompt = strings.TrimSpace(parts[2])
+			return cmd, nil
+		}
+	}
+
+	cmd.Prompt = strings.TrimSpace(content)
+	return cmd, nil
+}
+
+func EnsureCommandsDir() error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	localDir := filepath.Join(cwd, ".ai-shell", "commands")
+	return os.MkdirAll(localDir, 0755)
 }

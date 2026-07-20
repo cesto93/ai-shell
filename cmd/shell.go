@@ -52,7 +52,6 @@ var availableCommands = []string{
 	"config",
 	"models",
 	"reset",
-	"add-cmd",
 	"exit",
 	"quit",
 }
@@ -242,15 +241,9 @@ type ShellModel struct {
 		selectedIdx int
 		options     []string
 	}
+	commands       []config.CommandInfo
 	allowedCmdMode struct {
 		active bool
-	}
-	addCmdMode struct {
-		active bool
-
-		step   int // 0: name, 1: prompt
-		name   string
-		prompt string
 	}
 }
 
@@ -274,6 +267,7 @@ func NewShellModel() (*ShellModel, error) {
 		historyIndex:       -1,
 		commandHistoryPath: historyPath,
 		cfg:                cfg,
+		commands:           config.LoadCommands(cfg),
 		confirmationChan:   make(chan bool, 1),
 	}
 
@@ -356,18 +350,18 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSubmit()
 
 		case tea.KeyUp:
-			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active && !m.configMenu.active && !m.toolsMenu.active && !m.commandsMenu.active && !m.addCmdMode.active {
+			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active && !m.configMenu.active && !m.toolsMenu.active && !m.commandsMenu.active {
 				return m.navigateSuggestions(-1)
 			}
-			if !m.modelMenu.active && !m.configMenu.active && !m.toolsMenu.active && !m.commandsMenu.active && !m.addCmdMode.active {
+			if !m.modelMenu.active && !m.configMenu.active && !m.toolsMenu.active && !m.commandsMenu.active {
 				return m.navigateHistory(-1)
 			}
 
 		case tea.KeyDown:
-			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active && !m.configMenu.active && !m.toolsMenu.active && !m.commandsMenu.active && !m.addCmdMode.active {
+			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active && !m.configMenu.active && !m.toolsMenu.active && !m.commandsMenu.active {
 				return m.navigateSuggestions(1)
 			}
-			if !m.modelMenu.active && !m.configMenu.active && !m.toolsMenu.active && !m.commandsMenu.active && !m.addCmdMode.active {
+			if !m.modelMenu.active && !m.configMenu.active && !m.toolsMenu.active && !m.commandsMenu.active {
 				return m.navigateHistory(1)
 			}
 
@@ -399,12 +393,6 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.allowedCmdMode.active {
 				m.allowedCmdMode.active = false
-				m.input.Prompt = "ai-shell > "
-				m.input.SetValue("")
-				return m, nil
-			}
-			if m.addCmdMode.active {
-				m.addCmdMode.active = false
 				m.input.Prompt = "ai-shell > "
 				m.input.SetValue("")
 				return m, nil
@@ -482,7 +470,7 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 
-	if !m.addCmdMode.active && !m.allowedCmdMode.active && !m.toolsMenu.active && !m.commandsMenu.active {
+	if !m.allowedCmdMode.active && !m.toolsMenu.active && !m.commandsMenu.active {
 		m.updateSuggestions()
 	} else {
 		m.showSuggestions = false
@@ -584,11 +572,6 @@ func (m *ShellModel) View() string {
 		sb.WriteString("\n")
 	}
 
-	if m.addCmdMode.active {
-		sb.WriteString(dimStyle.Render("(Esc to cancel adding command)"))
-		sb.WriteString("\n")
-	}
-
 	if m.waitingConfirm {
 		sb.WriteString(systemStyle.Render(fmt.Sprintf("[LLM wants to execute: %s]", m.pendingCommand)))
 		sb.WriteString("\n")
@@ -644,30 +627,6 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 		m.input.Prompt = "ai-shell > "
 		m.input.SetValue("")
 		return m, nil
-	}
-
-	if m.addCmdMode.active {
-		if m.addCmdMode.step == 0 {
-			m.addCmdMode.name = strings.TrimPrefix(value, "/")
-			m.addCmdMode.step = 1
-			m.input.SetValue("")
-			m.input.Prompt = fmt.Sprintf("Enter prompt for /%s: ", m.addCmdMode.name)
-			return m, nil
-		} else {
-			m.addCmdMode.prompt = value
-			if err := config.SaveCommand(m.addCmdMode.name, m.addCmdMode.prompt); err != nil {
-				m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error saving command: %v", err)})
-			} else {
-				m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Command /%s added successfully!", m.addCmdMode.name)})
-				if newCfg, err := config.LoadConfig(); err == nil {
-					m.cfg = newCfg
-				}
-			}
-			m.addCmdMode.active = false
-			m.input.Prompt = "ai-shell > "
-			m.input.SetValue("")
-			return m, nil
-		}
 	}
 
 	if m.history == nil || len(m.history) == 0 || m.history[len(m.history)-1] != value {
@@ -743,26 +702,22 @@ func (m *ShellModel) handleCommand(input string) (tea.Model, tea.Cmd) {
 	case "models":
 		m.openModelMenu()
 
-	case "add-cmd":
-		m.addCmdMode.active = true
-		m.addCmdMode.step = 0
-		m.input.SetValue("")
-		m.input.Prompt = "Enter command name: /"
-
 	case "reset":
 		m.messages = nil
 
 	default:
-		if prompt, ok := m.cfg.Commands[cmd]; ok {
-			fullPrompt := prompt
-			if args != "" {
-				fullPrompt = prompt + " " + args
+		for _, c := range m.commands {
+			if c.Name == cmd {
+				fullPrompt := c.Prompt
+				if args != "" {
+					fullPrompt = c.Prompt + " " + args
+				}
+				m.messages = append(m.messages, Message{role: "user", content: fullPrompt})
+				m.loading = true
+				m.cancelChan = make(chan struct{})
+				go m.callLLM(fullPrompt, nil)
+				return m, nil
 			}
-			m.messages = append(m.messages, Message{role: "user", content: fullPrompt})
-			m.loading = true
-			m.cancelChan = make(chan struct{})
-			go m.callLLM(fullPrompt, nil)
-			return m, nil
 		}
 		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Unknown command: /%s", cmd)})
 	}
@@ -783,16 +738,10 @@ func (m *ShellModel) handleAutocomplete() (tea.Model, tea.Cmd) {
 			}
 		}
 		if m.input.Value() == value { // If no built-in command matched
-			// Check custom commands (sorted for consistency)
-			var customCmds []string
-			for cmd := range m.cfg.Commands {
-				customCmds = append(customCmds, cmd)
-			}
-			sort.Strings(customCmds)
-
-			for _, cmd := range customCmds {
-				if strings.HasPrefix(cmd, partial) {
-					m.input.SetValue("/" + cmd)
+			// Check custom commands
+			for _, c := range m.commands {
+				if strings.HasPrefix(c.Name, partial) {
+					m.input.SetValue("/" + c.Name)
 					break
 				}
 			}
@@ -858,22 +807,17 @@ func (m *ShellModel) updateSuggestions() {
 				matches = append(matches, "/"+cmd)
 			}
 		}
-		var customCmds []string
-		for cmd := range m.cfg.Commands {
-			customCmds = append(customCmds, cmd)
-		}
-		sort.Strings(customCmds)
-		for _, cmd := range customCmds {
-			if strings.HasPrefix(cmd, filter) {
+		for _, c := range m.commands {
+			if strings.HasPrefix(c.Name, filter) {
 				exists := false
 				for _, m := range matches {
-					if m == "/"+cmd {
+					if m == "/"+c.Name {
 						exists = true
 						break
 					}
 				}
 				if !exists {
-					matches = append(matches, "/"+cmd)
+					matches = append(matches, "/"+c.Name)
 				}
 			}
 		}
@@ -963,17 +907,20 @@ func (m *ShellModel) showHelp() {
 	sb.WriteString("  /config       - Show configuration menu\n")
 	sb.WriteString("  /get-config   - Show current LLM settings\n")
 	sb.WriteString("  /models       - Switch to a different model\n")
-	sb.WriteString("  /add-cmd      - Configure a new command\n")
 	sb.WriteString("  /reset        - Clear the screen and messages\n")
 	sb.WriteString("  /exit, /quit  - Exit the shell\n")
 	sb.WriteString("  /<command>    - Execute a shell command\n")
 	sb.WriteString("  @<file>       - Autocomplete file paths\n")
 	sb.WriteString("  <text>        - Send text to the AI for a response\n")
 
-	if len(m.cfg.Commands) > 0 {
+	if len(m.commands) > 0 {
 		sb.WriteString("\nUser Commands:\n")
-		for cmd := range m.cfg.Commands {
-			sb.WriteString(fmt.Sprintf("  /%-12s - %s\n", cmd, m.cfg.Commands[cmd]))
+		for _, c := range m.commands {
+			if c.Description != "" {
+				sb.WriteString(fmt.Sprintf("  /%-12s - %s\n", c.Name, c.Description))
+			} else {
+				sb.WriteString(fmt.Sprintf("  /%-12s - %s\n", c.Name, c.Prompt))
+			}
 		}
 	}
 
@@ -1013,15 +960,14 @@ func (m *ShellModel) showConfig() {
 		sb.WriteString("\n")
 	}
 
-	if len(m.cfg.Commands) > 0 {
+	if len(m.commands) > 0 {
 		sb.WriteString("\nCommands:\n")
-		var cmdNames []string
-		for name := range m.cfg.Commands {
-			cmdNames = append(cmdNames, name)
-		}
-		sort.Strings(cmdNames)
-		for _, name := range cmdNames {
-			sb.WriteString(fmt.Sprintf("  /%s - %s\n", name, m.cfg.Commands[name]))
+		for _, c := range m.commands {
+			if c.Description != "" {
+				sb.WriteString(fmt.Sprintf("  /%s - %s\n", c.Name, c.Description))
+			} else {
+				sb.WriteString(fmt.Sprintf("  /%s - %s\n", c.Name, c.Prompt))
+			}
 		}
 	}
 
@@ -1099,15 +1045,13 @@ func (m *ShellModel) selectConfigOption() {
 }
 
 func (m *ShellModel) openCommandsMenu() {
-	var cmdNames []string
-	for name := range m.cfg.Commands {
-		cmdNames = append(cmdNames, name)
-	}
-	sort.Strings(cmdNames)
-
 	m.commandsMenu.options = []string{}
-	for _, name := range cmdNames {
-		m.commandsMenu.options = append(m.commandsMenu.options, fmt.Sprintf("/%s - %s", name, m.cfg.Commands[name]))
+	for _, c := range m.commands {
+		if c.Description != "" {
+			m.commandsMenu.options = append(m.commandsMenu.options, fmt.Sprintf("/%s - %s", c.Name, c.Description))
+		} else {
+			m.commandsMenu.options = append(m.commandsMenu.options, fmt.Sprintf("/%s - %s", c.Name, c.Prompt))
+		}
 	}
 	m.commandsMenu.options = append(m.commandsMenu.options, "Back")
 
@@ -1122,23 +1066,8 @@ func (m *ShellModel) selectCommandOption() {
 		m.openConfigMenu()
 		return
 	}
-
-	var cmdNames []string
-	for name := range m.cfg.Commands {
-		cmdNames = append(cmdNames, name)
-	}
-	sort.Strings(cmdNames)
-
-	selectedCmd := cmdNames[m.commandsMenu.selectedIdx]
-	delete(m.cfg.Commands, selectedCmd)
-
-	if err := config.SaveConfig(m.cfg); err != nil {
-		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error saving config: %v", err)})
-	} else {
-		m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Command /%s removed", selectedCmd)})
-	}
-
-	m.openCommandsMenu()
+	m.commandsMenu.active = false
+	m.openConfigMenu()
 }
 
 func (m *ShellModel) openToolsMenu() {
