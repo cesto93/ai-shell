@@ -2,6 +2,8 @@ package config
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -346,6 +348,22 @@ shell:
 }
 
 func TestIsLitertLMModel(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"object":"list","data":[{"id":"gemma-4-E2B-it.litertlm","object":"model","created":0,"owned_by":"litertlm"}]}`))
+	}))
+	defer server.Close()
+
+	origBaseURL := os.Getenv("LITERTLM_BASE_URL")
+	os.Setenv("LITERTLM_BASE_URL", server.URL)
+	defer func() {
+		if origBaseURL == "" {
+			os.Unsetenv("LITERTLM_BASE_URL")
+		} else {
+			os.Setenv("LITERTLM_BASE_URL", origBaseURL)
+		}
+	}()
+
 	tests := []struct {
 		name  string
 		model string

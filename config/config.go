@@ -203,9 +203,6 @@ func IsGeminiModel(modelName string) bool {
 }
 
 func IsLitertLMModel(modelName string) bool {
-	if lookupHardcodedLitertLMModel(modelName) != nil {
-		return true
-	}
 	models, err := GetLitertLMModels()
 	if err != nil {
 		return false
@@ -265,7 +262,7 @@ func SaveConfig(cfg *Config) error {
 }
 
 func lookupModelInfo(modelName string) *ModelInfo {
-	allModels := append(append([]ModelInfo{}, GeminiModels...), LitertLMModels...)
+	allModels := append([]ModelInfo{}, GeminiModels...)
 	allModels = append(allModels, OpenRouterModels...)
 	for _, m := range allModels {
 		if m.Name == modelName {
@@ -341,10 +338,6 @@ var GeminiModels = []ModelInfo{
 	{Name: "gemma-4-26b-a4b-it", Provider: "gemini"},
 }
 
-var LitertLMModels = []ModelInfo{
-	{Name: "gemma-4-E2B-it.litertlm", Provider: "litertlm"},
-}
-
 type openAIModelsResponse struct {
 	Object string             `json:"object"`
 	Data   []openAIModelEntry `json:"data"`
@@ -384,15 +377,6 @@ func GetLitertLMModels() ([]ModelInfo, error) {
 		})
 	}
 	return result, nil
-}
-
-func lookupHardcodedLitertLMModel(modelName string) *ModelInfo {
-	for _, m := range LitertLMModels {
-		if m.Name == modelName {
-			return &m
-		}
-	}
-	return nil
 }
 
 var OpenRouterModels = []ModelInfo{
@@ -442,8 +426,6 @@ func SelectModel() error {
 	litertlmModels, litertlmErr := GetLitertLMModels()
 	if litertlmErr == nil {
 		models = append(models, litertlmModels...)
-	} else {
-		models = append(models, LitertLMModels...)
 	}
 
 	if len(models) == 0 {

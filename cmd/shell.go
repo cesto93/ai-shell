@@ -241,9 +241,9 @@ type ShellModel struct {
 		selectedIdx int
 		options     []string
 	}
-	commands         []config.CommandInfo
-	litertlmService  *LitertLMService
-	allowedCmdMode   struct {
+	commands        []config.CommandInfo
+	litertlmService *LitertLMService
+	allowedCmdMode  struct {
 		active bool
 	}
 }
@@ -1006,8 +1006,6 @@ func (m *ShellModel) openModelMenu() {
 	litertlmModels, litertlmErr := config.GetLitertLMModels()
 	if litertlmErr == nil {
 		models = append(models, litertlmModels...)
-	} else {
-		models = append(models, config.LitertLMModels...)
 	}
 
 	if len(models) == 0 {
