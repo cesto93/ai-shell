@@ -4,6 +4,7 @@ import (
 	"ai-shell/tools"
 	"bytes"
 	"context"
+	"log"
 	"os"
 	"text/template"
 )
@@ -206,7 +207,7 @@ func GetDefaultSystemPrompt(enabledTools map[string]bool) string {
 
 	raw, err := os.ReadFile("PROMPT.md")
 	if err != nil {
-		return "You are a helpful shell assistant."
+		log.Fatalf("Failed to read PROMPT.md: %v", err)
 	}
 
 	tmpl, err := template.New("prompt").Parse(string(raw))
