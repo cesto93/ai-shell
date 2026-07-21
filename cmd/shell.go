@@ -76,7 +76,7 @@ func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
 		}
 
 		confirmMsg := fmt.Sprintf("[Executing: %s]", cmd)
-		e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
+		e.m.messages = append(e.m.messages, Message{role: "assistant", content: systemStyle.Render(confirmMsg)})
 
 		output, err := tools.RunCommand(cmd)
 		if err != nil {
@@ -101,7 +101,7 @@ func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
 		}
 
 		confirmMsg := fmt.Sprintf("[Writing to file: %s]", path)
-		e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
+		e.m.messages = append(e.m.messages, Message{role: "assistant", content: systemStyle.Render(confirmMsg)})
 
 		return tools.WriteFile(path, content)
 
@@ -114,7 +114,7 @@ func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
 		path = strings.TrimPrefix(path, "@")
 
 		confirmMsg := fmt.Sprintf("[Reading file: %s]", path)
-		e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
+		e.m.messages = append(e.m.messages, Message{role: "assistant", content: systemStyle.Render(confirmMsg)})
 
 		return tools.ReadFile(path)
 
@@ -126,7 +126,7 @@ func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
 		}
 
 		confirmMsg := fmt.Sprintf("[KV Store: Saving %s]", key)
-		e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
+		e.m.messages = append(e.m.messages, Message{role: "assistant", content: systemStyle.Render(confirmMsg)})
 
 		return tools.KVSet(key, value)
 
@@ -137,13 +137,13 @@ func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
 		}
 
 		confirmMsg := fmt.Sprintf("[KV Store: Retrieving %s]", key)
-		e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
+		e.m.messages = append(e.m.messages, Message{role: "assistant", content: systemStyle.Render(confirmMsg)})
 
 		return tools.KVGet(key)
 
 	case "KVList":
 		confirmMsg := "[KV Store: Listing keys]"
-		e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
+		e.m.messages = append(e.m.messages, Message{role: "assistant", content: systemStyle.Render(confirmMsg)})
 
 		return tools.KVList()
 
@@ -182,9 +182,11 @@ func getHistoryFile() string {
 }
 
 type Message struct {
-	role    string
-	content string
-	images  []string // Base64 encoded images or paths
+	role       string
+	content    string
+	images     []string // Base64 encoded images or paths
+	toolCallID string
+	toolCalls  []llm.OpenAIToolCall
 }
 
 type responseReadyMsg struct{}
@@ -1197,7 +1199,7 @@ func (m *ShellModel) callLLM() {
 				}
 				content = parts
 			}
-			commonMessages = append(commonMessages, llm.Message{Role: msg.role, Content: content})
+			commonMessages = append(commonMessages, llm.Message{Role: msg.role, Content: content, ToolCallID: msg.toolCallID, ToolCalls: msg.toolCalls})
 		}
 	}
 
@@ -1224,9 +1226,9 @@ func (m *ShellModel) callLLM() {
 		case "user":
 			m.messages = append(m.messages, Message{role: "user", content: contentStr})
 		case "assistant":
-			m.messages = append(m.messages, Message{role: "assistant", content: contentStr})
+			m.messages = append(m.messages, Message{role: "assistant", content: contentStr, toolCalls: msg.ToolCalls})
 		case "tool":
-			m.messages = append(m.messages, Message{role: "tool", content: contentStr})
+			m.messages = append(m.messages, Message{role: "tool", content: contentStr, toolCallID: msg.ToolCallID})
 		}
 	}
 
