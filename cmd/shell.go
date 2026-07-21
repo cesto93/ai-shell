@@ -622,11 +622,11 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 	}
 
 	if m.allowedCmdMode.active {
-		m.cfg.Shell.AllowedCommands = value
+		m.cfg.Shell.AllowedCommands = strings.Split(value, ",")
 		if err := config.SaveConfig(m.cfg); err != nil {
 			m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error saving config: %v", err)})
 		} else {
-			m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Allowed commands updated to: %s", value)})
+			m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Allowed commands updated to: %s", strings.Join(m.cfg.Shell.AllowedCommands, ","))})
 		}
 		m.allowedCmdMode.active = false
 		m.input.Prompt = "ai-shell > "
@@ -949,7 +949,7 @@ func (m *ShellModel) showConfig() {
 	sb.WriteString(fmt.Sprintf("Provider: %s\n", m.cfg.LLM.Provider))
 	sb.WriteString(fmt.Sprintf("Model: %s\n", m.cfg.LLM.Model))
 	sb.WriteString(fmt.Sprintf("Confirm Commands: %v\n", m.cfg.Shell.Confirm))
-	sb.WriteString(fmt.Sprintf("Allowed Commands: %s\n", m.cfg.Shell.AllowedCommands))
+	sb.WriteString(fmt.Sprintf("Allowed Commands: %s\n", strings.Join(m.cfg.Shell.AllowedCommands, ",")))
 
 	toolDescs := llm.GetToolDescriptions()
 	var toolNames []string
@@ -1014,7 +1014,7 @@ func (m *ShellModel) openModelMenu() {
 func (m *ShellModel) openConfigMenu() {
 	m.configMenu.options = []string{
 		fmt.Sprintf("Confirm Commands: %v", m.cfg.Shell.Confirm),
-		fmt.Sprintf("Allowed Commands: %s", m.cfg.Shell.AllowedCommands),
+		fmt.Sprintf("Allowed Commands: %s", strings.Join(m.cfg.Shell.AllowedCommands, ",")),
 		"Manage Tools",
 		"Manage Commands",
 		"Change Model",
@@ -1037,7 +1037,7 @@ func (m *ShellModel) selectConfigOption() {
 		m.configMenu.active = false
 	case 1: // Edit Allowed Commands
 		m.allowedCmdMode.active = true
-		m.input.SetValue(m.cfg.Shell.AllowedCommands)
+		m.input.SetValue(strings.Join(m.cfg.Shell.AllowedCommands, ","))
 		m.input.Prompt = "Allowed commands (comma separated): "
 		m.configMenu.active = false
 	case 2: // Manage Tools

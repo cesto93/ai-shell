@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"ai-shell/config"
 	"ai-shell/llm"
@@ -29,7 +30,7 @@ func PrintConfig() {
 	fmt.Printf("Provider: %s%s%s\n", ColorGreen, cfg.LLM.Provider, ColorReset)
 	fmt.Printf("Model: %s%s%s\n", ColorGreen, cfg.LLM.Model, ColorReset)
 	fmt.Printf("Confirm Commands: %s%v%s\n", ColorGreen, cfg.Shell.Confirm, ColorReset)
-	fmt.Printf("Allowed Commands: %s%s%s\n", ColorGreen, cfg.Shell.AllowedCommands, ColorReset)
+	fmt.Printf("Allowed Commands: %s%s%s\n", ColorGreen, strings.Join(cfg.Shell.AllowedCommands, ","), ColorReset)
 
 	if len(cfg.Tools) > 0 {
 		fmt.Printf("\n%sTools:%s\n", ColorBold+ColorCyan, ColorReset)

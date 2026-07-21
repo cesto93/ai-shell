@@ -395,31 +395,31 @@ func TestIsAllowedCommand(t *testing.T) {
 	tests := []struct {
 		name        string
 		cmd         string
-		allowedList string
+		allowedList []string
 		want        bool
 	}{
 		{
 			name:        "command is allowed",
 			cmd:         "ls",
-			allowedList: "ls,pwd,cat",
+			allowedList: []string{"ls", "pwd", "cat"},
 			want:        true,
 		},
 		{
 			name:        "command is not allowed",
 			cmd:         "rm",
-			allowedList: "ls,pwd,cat",
+			allowedList: []string{"ls", "pwd", "cat"},
 			want:        false,
 		},
 		{
 			name:        "empty allowed list",
 			cmd:         "ls",
-			allowedList: "",
+			allowedList: []string{},
 			want:        false,
 		},
 		{
 			name:        "command with spaces in allowed list",
 			cmd:         "ls",
-			allowedList: "ls , pwd",
+			allowedList: []string{"ls ", "pwd"},
 			want:        true,
 		},
 	}
@@ -428,7 +428,7 @@ func TestIsAllowedCommand(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := IsAllowedCommand(tt.cmd, tt.allowedList)
 			if got != tt.want {
-				t.Errorf("IsAllowedCommand(%q, %q) = %v, want %v", tt.cmd, tt.allowedList, got, tt.want)
+				t.Errorf("IsAllowedCommand(%q, %v) = %v, want %v", tt.cmd, tt.allowedList, got, tt.want)
 			}
 		})
 	}

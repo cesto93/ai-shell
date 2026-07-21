@@ -32,8 +32,8 @@ type Config struct {
 		InputTypes []string `mapstructure:"input_types"`
 	} `mapstructure:"llm"`
 	Shell struct {
-		Confirm         bool   `mapstructure:"confirm"`
-		AllowedCommands string `mapstructure:"allowed_commands"`
+		Confirm         bool     `mapstructure:"confirm"`
+		AllowedCommands []string `mapstructure:"allowed_commands"`
 	} `mapstructure:"shell"`
 	Tools    map[string]bool   `mapstructure:"tools"`
 	Commands map[string]string `mapstructure:"commands"`
@@ -79,7 +79,7 @@ func LoadConfig() (*Config, error) {
 	v.SetDefault("llm.provider", "ollama")
 	v.SetDefault("llm.model", "granite4:3b-h")
 	v.SetDefault("shell.confirm", true)
-	v.SetDefault("shell.allowed_commands", "ls,pwd")
+	v.SetDefault("shell.allowed_commands", []string{"ls", "pwd", "git"})
 	v.SetDefault("tools", map[string]bool{
 		"RunCommand": true,
 		"WriteFile":  true,
@@ -114,11 +114,11 @@ func LoadConfig() (*Config, error) {
 					InputTypes: []string{"text"},
 				},
 				Shell: struct {
-					Confirm         bool   `mapstructure:"confirm"`
-					AllowedCommands string `mapstructure:"allowed_commands"`
+					Confirm         bool     `mapstructure:"confirm"`
+					AllowedCommands []string `mapstructure:"allowed_commands"`
 				}{
 					Confirm:         true,
-					AllowedCommands: "ls,pwd",
+					AllowedCommands: []string{"ls", "pwd", "git"},
 				},
 				Tools: map[string]bool{
 					"RunCommand": true,
@@ -135,7 +135,7 @@ func LoadConfig() (*Config, error) {
 				if err == nil {
 					defaultConfigFile := filepath.Join(configPath, "config.yaml")
 					if _, err := os.Stat(defaultConfigFile); os.IsNotExist(err) {
-						content := "llm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\n  input_types:\n    - \"text\"\nshell:\n  confirm: true\n  allowed_commands: \"ls,pwd\"\ntools:\n  RunCommand: true\n  WriteFile: true\n  ReadFile: true\n  KVSet: true\n  KVGet: true\n  KVList: true\n"
+						content := "llm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\n  input_types:\n    - \"text\"\nshell:\n  confirm: true\n  allowed_commands:\n    - \"ls\"\n    - \"pwd\"\n    - \"git\"\ntools:\n  RunCommand: true\n  WriteFile: true\n  ReadFile: true\n  KVSet: true\n  KVGet: true\n  KVList: true\n"
 						_ = os.WriteFile(defaultConfigFile, []byte(content), 0644)
 						defaultConfig.ConfigFile = defaultConfigFile
 					}
@@ -252,8 +252,13 @@ func SaveConfig(cfg *Config) error {
 		inputTypesYaml = fmt.Sprintf("  input_types:\n%s", formatStringSlice("    ", cfg.LLM.InputTypes))
 	}
 
-	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\n%s\nshell:\n  confirm: %v\n  allowed_commands: %q\n%s",
-		cfg.LLM.Provider, cfg.LLM.Model, inputTypesYaml, cfg.Shell.Confirm, cfg.Shell.AllowedCommands, toolsYaml.String())
+	var allowedCommandsYaml string
+	if len(cfg.Shell.AllowedCommands) > 0 {
+		allowedCommandsYaml = fmt.Sprintf("  allowed_commands:\n%s", formatStringSlice("    ", cfg.Shell.AllowedCommands))
+	}
+
+	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\n%s\nshell:\n  confirm: %v\n%s%s",
+		cfg.LLM.Provider, cfg.LLM.Model, inputTypesYaml, cfg.Shell.Confirm, allowedCommandsYaml, toolsYaml.String())
 	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
@@ -465,12 +470,11 @@ func SelectModel() error {
 	return SaveModelWithProvider(selectedModel, selectedProvider)
 }
 
-func IsAllowedCommand(cmd string, allowedList string) bool {
-	if allowedList == "" {
+func IsAllowedCommand(cmd string, allowedList []string) bool {
+	if len(allowedList) == 0 {
 		return false
 	}
-	allowed := strings.Split(allowedList, ",")
-	for _, a := range allowed {
+	for _, a := range allowedList {
 		a = strings.TrimSpace(a)
 		if a == cmd {
 			return true
