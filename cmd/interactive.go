@@ -6,8 +6,6 @@ import (
 
 	"ai-shell/config"
 	"ai-shell/llm"
-
-	"github.com/spf13/cobra"
 )
 
 const (
@@ -19,14 +17,6 @@ const (
 	ColorBold   = "\033[1m"
 	Prompt      = ColorBold + ColorGreen + "ai-shell > " + ColorReset
 )
-
-var getConfigCmd = &cobra.Command{
-	Use:   "get-config",
-	Short: "Show current configuration",
-	Run: func(cmd *cobra.Command, args []string) {
-		PrintConfig()
-	},
-}
 
 func PrintConfig() {
 	cfg, err := config.LoadConfig()

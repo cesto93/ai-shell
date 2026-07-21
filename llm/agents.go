@@ -3,6 +3,7 @@ package llm
 import (
 	"ai-shell/tools"
 	"bytes"
+	"context"
 	"os"
 	"text/template"
 )
@@ -219,6 +220,22 @@ func GetDefaultSystemPrompt(enabledTools map[string]bool) string {
 	}
 
 	return buf.String()
+}
+
+// CallLLM calls the LLM using the agent's provider, model, prompt, and tools.
+func (a *Agent) CallLLM(ctx context.Context, executor ToolExecutor, messages []Message) ([]Message, error) {
+	var caller Caller
+	switch a.Provider {
+	case "gemini":
+		caller = NewGeminiCaller(a.Model, executor)
+	case "litertlm":
+		caller = NewLitertLMCaller(a.Model, executor)
+	case "openrouter":
+		caller = NewOpenRouterCaller(a.Model, executor)
+	default:
+		caller = NewOllamaCaller(a.Model, executor)
+	}
+	return caller.Call(ctx, a.Prompt, messages, a.Tools)
 }
 
 // NewAgent creates a new Agent with the given parameters.

@@ -15,15 +15,11 @@ import (
 	"ai-shell/tools"
 
 	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbletea"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 var (
-	promptStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#00FF00")).
-			Bold(true)
-
 	systemStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#00BFFF"))
 
@@ -95,10 +91,7 @@ func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
 			return "Error: Invalid tool arguments", nil
 		}
 
-		// Handle @ prefix from autocomplete
-		if strings.HasPrefix(path, "@") {
-			path = strings.TrimPrefix(path, "@")
-		}
+		path = strings.TrimPrefix(path, "@")
 
 		if e.m.cfg.Shell.Confirm {
 			confirm := e.AskConfirmation(fmt.Sprintf("Write to file %s?", path))
@@ -118,10 +111,7 @@ func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
 			return "Error: Invalid tool arguments", nil
 		}
 
-		// Handle @ prefix from autocomplete
-		if strings.HasPrefix(path, "@") {
-			path = strings.TrimPrefix(path, "@")
-		}
+		path = strings.TrimPrefix(path, "@")
 
 		confirmMsg := fmt.Sprintf("[Reading file: %s]", path)
 		e.m.messages = append(e.m.messages, Message{role: "tool", content: systemStyle.Render(confirmMsg)})
@@ -642,7 +632,7 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.history == nil || len(m.history) == 0 || m.history[len(m.history)-1] != value {
+	if len(m.history) == 0 || m.history[len(m.history)-1] != value {
 		m.history = append(m.history, value)
 		saveHistory(m.commandHistoryPath, m.history)
 	}
@@ -688,7 +678,7 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 	m.loading = true
 	m.cancelChan = make(chan struct{})
 
-	go m.callLLM(value, images)
+	go m.callLLM()
 
 	return m, nil
 }
@@ -734,7 +724,7 @@ func (m *ShellModel) handleCommand(input string) (tea.Model, tea.Cmd) {
 				m.messages = append(m.messages, Message{role: "user", content: fullPrompt})
 				m.loading = true
 				m.cancelChan = make(chan struct{})
-				go m.callLLM(fullPrompt, nil)
+				go m.callLLM()
 				return m, nil
 			}
 		}
@@ -1178,32 +1168,18 @@ func (m *ShellModel) selectModel() {
 	m.modelMenu.active = false
 }
 
-func (m *ShellModel) callLLM(prompt string, images []string) {
+func (m *ShellModel) callLLM() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	go func() {
-		select {
-		case <-m.cancelChan:
-			cancel()
-		}
+		<-m.cancelChan
+		cancel()
 	}()
 
 	agent := llm.NewAgent(m.cfg.LLM.Model, m.cfg.LLM.Provider, m.cfg.Tools)
 
 	executor := &ShellExecutorForLLM{m: m}
-
-	var caller llm.Caller
-	switch agent.Provider {
-	case "gemini":
-		caller = llm.NewGeminiCaller(agent.Model, executor)
-	case "litertlm":
-		caller = llm.NewLitertLMCaller(agent.Model, executor)
-	case "openrouter":
-		caller = llm.NewOpenRouterCaller(agent.Model, executor)
-	default:
-		caller = llm.NewOllamaCaller(agent.Model, executor)
-	}
 
 	var commonMessages []llm.Message
 	for _, msg := range m.messages {
@@ -1225,7 +1201,7 @@ func (m *ShellModel) callLLM(prompt string, images []string) {
 		}
 	}
 
-	resultMessages, err := caller.Call(ctx, agent.Prompt, commonMessages, agent.Tools)
+	resultMessages, err := agent.CallLLM(ctx, executor, commonMessages)
 
 	if err != nil {
 		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})
