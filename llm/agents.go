@@ -6,6 +6,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"path/filepath"
 	"text/template"
 )
 
@@ -205,10 +206,7 @@ func GetDefaultSystemPrompt(enabledTools map[string]bool) string {
 		Tools:  buildToolDescriptions(GetEnabledTools(enabledTools)),
 	}
 
-	raw, err := os.ReadFile("PROMPT.md")
-	if err != nil {
-		log.Fatalf("Failed to read PROMPT.md: %v", err)
-	}
+	raw := readPromptFile()
 
 	tmpl, err := template.New("prompt").Parse(string(raw))
 	if err != nil {
@@ -221,6 +219,24 @@ func GetDefaultSystemPrompt(enabledTools map[string]bool) string {
 	}
 
 	return buf.String()
+}
+
+// readPromptFile reads PROMPT.md from ~/.ai-shell/PROMPT.md.
+// Falls back to the embedded default if the file cannot be read.
+func readPromptFile() []byte {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Printf("Cannot determine home directory: %v, using embedded prompt", err)
+		return GetDefaultPromptBytes()
+	}
+
+	raw, err := os.ReadFile(filepath.Join(home, ".ai-shell", "PROMPT.md"))
+	if err != nil {
+		log.Printf("Cannot read ~/.ai-shell/PROMPT.md: %v, using embedded prompt", err)
+		return GetDefaultPromptBytes()
+	}
+
+	return raw
 }
 
 // CallLLM calls the LLM using the agent's provider, model, prompt, and tools.

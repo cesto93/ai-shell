@@ -21,7 +21,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 |-----------|----------|
 | `cmd/` | Cobra commands: default (TUI shell), `get-config` |
 | `config/` | Viper YAML config, model lists, `.env` loading via `gotenv` |
-| `llm/` | `Agent` struct, `Caller` interface, `ToolExecutor` interface, 6 OpenAI tool definitions |
+| `llm/` | `Agent` struct, `Caller` interface, `ToolExecutor` interface, 6 OpenAI tool definitions, default system prompt |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
 
 ## Config layering
@@ -56,4 +56,5 @@ TUI code in `cmd/` has no tests yet.
 - `config.LoadConfig()` may return partial defaults on error — check both return values
 - `.env` files are loaded at startup via `gotenv.Load()` — place API keys there, not in config.yaml
 - KV store uses bbolt at `~/.config/ai-shell/kv_store.db`
+- System prompt is a Go constant in `llm/prompt.go`, copied to `~/.ai-shell/PROMPT.md` on first run — always read from there, never from local file
 - 100 char soft line limit, Go 1.25.5+
