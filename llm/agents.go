@@ -168,15 +168,39 @@ type PromptData struct {
 	Distro string
 	Shell  string
 	Cwd    string
+	Tools  string
+}
+
+func buildToolDescriptions(tools []any) string {
+	var sb bytes.Buffer
+	for _, t := range tools {
+		toolMap, ok := t.(map[string]any)
+		if !ok {
+			continue
+		}
+		function, ok := toolMap["function"].(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := function["name"].(string)
+		desc, _ := function["description"].(string)
+		sb.WriteString("- ")
+		sb.WriteString(name)
+		sb.WriteString(": ")
+		sb.WriteString(desc)
+		sb.WriteString("\n")
+	}
+	return sb.String()
 }
 
 // GetDefaultSystemPrompt returns the default system prompt based on distro, shell, and current directory.
-func GetDefaultSystemPrompt() string {
+func GetDefaultSystemPrompt(enabledTools map[string]bool) string {
 	cwd, _ := os.Getwd()
 	data := PromptData{
 		Distro: tools.GetDistro(),
 		Shell:  tools.GetShell(),
 		Cwd:    cwd,
+		Tools:  buildToolDescriptions(GetEnabledTools(enabledTools)),
 	}
 
 	raw, err := os.ReadFile("PROMPT.md")
@@ -200,7 +224,7 @@ func GetDefaultSystemPrompt() string {
 // NewAgent creates a new Agent with the given parameters.
 func NewAgent(model, provider string, toolsEnabled map[string]bool) *Agent {
 	return &Agent{
-		Prompt:   GetDefaultSystemPrompt(),
+		Prompt:   GetDefaultSystemPrompt(toolsEnabled),
 		Model:    model,
 		Provider: provider,
 		Tools:    GetEnabledTools(toolsEnabled),
