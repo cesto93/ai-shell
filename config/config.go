@@ -35,6 +35,9 @@ type Config struct {
 		Confirm         bool     `mapstructure:"confirm"`
 		AllowedCommands []string `mapstructure:"allowed_commands"`
 	} `mapstructure:"shell"`
+	LitertLM struct {
+		AutoStart bool `mapstructure:"auto_start"`
+	} `mapstructure:"litertlm"`
 	Tools    map[string]bool   `mapstructure:"tools"`
 	Commands map[string]string `mapstructure:"commands"`
 }
@@ -80,6 +83,7 @@ func LoadConfig() (*Config, error) {
 	v.SetDefault("llm.model", "granite4:3b-h")
 	v.SetDefault("shell.confirm", true)
 	v.SetDefault("shell.allowed_commands", []string{"ls", "pwd", "git"})
+	v.SetDefault("litertlm.auto_start", true)
 	v.SetDefault("tools", map[string]bool{
 		"RunCommand": true,
 		"WriteFile":  true,
@@ -120,6 +124,11 @@ func LoadConfig() (*Config, error) {
 					Confirm:         true,
 					AllowedCommands: []string{"ls", "pwd", "git"},
 				},
+				LitertLM: struct {
+					AutoStart bool `mapstructure:"auto_start"`
+				}{
+					AutoStart: true,
+				},
 				Tools: map[string]bool{
 					"RunCommand": true,
 					"WriteFile":  true,
@@ -135,7 +144,7 @@ func LoadConfig() (*Config, error) {
 				if err == nil {
 					defaultConfigFile := filepath.Join(configPath, "config.yaml")
 					if _, err := os.Stat(defaultConfigFile); os.IsNotExist(err) {
-						content := "llm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\n  input_types:\n    - \"text\"\nshell:\n  confirm: true\n  allowed_commands:\n    - \"ls\"\n    - \"pwd\"\n    - \"git\"\ntools:\n  RunCommand: true\n  WriteFile: true\n  ReadFile: true\n  KVSet: true\n  KVGet: true\n  KVList: true\n"
+						content := "llm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\n  input_types:\n    - \"text\"\nshell:\n  confirm: true\n  allowed_commands:\n    - \"ls\"\n    - \"pwd\"\n    - \"git\"\nlitertlm:\n  auto_start: true\ntools:\n  RunCommand: true\n  WriteFile: true\n  ReadFile: true\n  KVSet: true\n  KVGet: true\n  KVList: true\n"
 						_ = os.WriteFile(defaultConfigFile, []byte(content), 0644)
 						defaultConfig.ConfigFile = defaultConfigFile
 					}
@@ -257,8 +266,8 @@ func SaveConfig(cfg *Config) error {
 		allowedCommandsYaml = fmt.Sprintf("  allowed_commands:\n%s", formatStringSlice("    ", cfg.Shell.AllowedCommands))
 	}
 
-	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\n%s\nshell:\n  confirm: %v\n%s%s",
-		cfg.LLM.Provider, cfg.LLM.Model, inputTypesYaml, cfg.Shell.Confirm, allowedCommandsYaml, toolsYaml.String())
+	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\n%s\nshell:\n  confirm: %v\n%s\nlitertlm:\n  auto_start: %v\n%s",
+		cfg.LLM.Provider, cfg.LLM.Model, inputTypesYaml, cfg.Shell.Confirm, allowedCommandsYaml, cfg.LitertLM.AutoStart, toolsYaml.String())
 	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}

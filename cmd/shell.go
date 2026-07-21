@@ -264,7 +264,15 @@ func NewShellModel() (*ShellModel, error) {
 		confirmationChan:   make(chan bool, 1),
 	}
 
-	if cfg.LLM.Provider == "litertlm" {
+	if cfg.LitertLM.AutoStart {
+		port := extractPort(os.Getenv("LITERTLM_BASE_URL"))
+		if IsPortAvailable(port) {
+			svc := NewLitertLMService(port)
+			if err := svc.Start(); err == nil {
+				m.litertlmService = svc
+			}
+		}
+	} else if cfg.LLM.Provider == "litertlm" {
 		port := extractPort(os.Getenv("LITERTLM_BASE_URL"))
 		svc := NewLitertLMService(port)
 		if err := svc.Start(); err != nil {

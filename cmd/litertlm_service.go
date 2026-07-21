@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"syscall"
 	"time"
 )
 
@@ -41,8 +42,18 @@ func (s *LitertLMService) Start() error {
 
 func (s *LitertLMService) Stop() {
 	if s.cmd != nil && s.cmd.Process != nil {
-		s.cmd.Process.Kill()
-		s.cmd.Wait()
+		s.cmd.Process.Signal(syscall.SIGTERM)
+		done := make(chan struct{})
+		go func() {
+			s.cmd.Wait()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			s.cmd.Process.Kill()
+			s.cmd.Wait()
+		}
 		s.cmd = nil
 	}
 }
@@ -69,6 +80,16 @@ func (s *LitertLMService) waitForReady() error {
 		}
 	}
 	return fmt.Errorf("litert-lm service failed to start on port %s within 30s", s.port)
+}
+
+func IsPortAvailable(port string) bool {
+	addr := fmt.Sprintf("localhost:%s", port)
+	conn, err := net.DialTimeout("tcp", addr, 200*time.Millisecond)
+	if err != nil {
+		return true
+	}
+	conn.Close()
+	return false
 }
 
 func extractPort(baseURL string) string {
