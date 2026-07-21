@@ -560,9 +560,9 @@ func loadCommandDirs() []string {
 		dirs = append(dirs, filepath.Join(cwd, ".ai-shell", "commands"))
 	}
 
-	userConfigDir, err := getUserConfigDirFunc()
+	homeDir, err := os.UserHomeDir()
 	if err == nil {
-		dirs = append(dirs, filepath.Join(userConfigDir, "ai-shell", "commands"))
+		dirs = append(dirs, filepath.Join(homeDir, ".ai-shell", "commands"))
 	}
 
 	return dirs
