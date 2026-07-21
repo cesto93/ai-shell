@@ -241,8 +241,9 @@ type ShellModel struct {
 		selectedIdx int
 		options     []string
 	}
-	commands       []config.CommandInfo
-	allowedCmdMode struct {
+	commands         []config.CommandInfo
+	litertlmService  *LitertLMService
+	allowedCmdMode   struct {
 		active bool
 	}
 }
@@ -269,6 +270,15 @@ func NewShellModel() (*ShellModel, error) {
 		cfg:                cfg,
 		commands:           config.LoadCommands(cfg),
 		confirmationChan:   make(chan bool, 1),
+	}
+
+	if cfg.LLM.Provider == "litertlm" {
+		port := extractPort(os.Getenv("LITERTLM_BASE_URL"))
+		svc := NewLitertLMService(port)
+		if err := svc.Start(); err != nil {
+			return nil, fmt.Errorf("failed to start litertlm service: %w", err)
+		}
+		m.litertlmService = svc
 	}
 
 	return m, nil
@@ -324,6 +334,9 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyCtrlD:
+			if m.litertlmService != nil {
+				m.litertlmService.Stop()
+			}
 			m.quitting = true
 			return m, tea.Quit
 
@@ -643,6 +656,9 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 
 	switch value {
 	case "exit", "quit":
+		if m.litertlmService != nil {
+			m.litertlmService.Stop()
+		}
 		m.quitting = true
 		return m, tea.Quit
 
@@ -687,6 +703,9 @@ func (m *ShellModel) handleCommand(input string) (tea.Model, tea.Cmd) {
 
 	switch cmd {
 	case "exit", "quit":
+		if m.litertlmService != nil {
+			m.litertlmService.Stop()
+		}
 		m.quitting = true
 		return m, tea.Quit
 
@@ -975,10 +994,11 @@ func (m *ShellModel) showConfig() {
 }
 
 func (m *ShellModel) openModelMenu() {
-	models, err := config.GetAvailableModels()
-	if err != nil {
-		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error loading models: %v", err)})
-		return
+	var models []config.ModelInfo
+
+	ollamaModels, ollamaErr := config.GetAvailableModels()
+	if ollamaErr == nil {
+		models = append(models, ollamaModels...)
 	}
 
 	models = append(models, config.GeminiModels...)
@@ -1144,6 +1164,16 @@ func (m *ShellModel) selectModel() {
 		m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Switched to model: %s", selectedModel)})
 		if newCfg, err := config.LoadConfig(); err == nil {
 			m.cfg = newCfg
+		}
+	}
+
+	if provider == "litertlm" && (m.litertlmService == nil || !m.litertlmService.IsRunning()) {
+		port := extractPort(os.Getenv("LITERTLM_BASE_URL"))
+		svc := NewLitertLMService(port)
+		if err := svc.Start(); err != nil {
+			m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Failed to start litertlm service: %v", err)})
+		} else {
+			m.litertlmService = svc
 		}
 	}
 

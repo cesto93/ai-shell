@@ -4,7 +4,7 @@
 
 Interactive AI shell TUI (Bubbletea) with 4 LLM providers: Ollama, Gemini, OpenRouter, LitertLM. All providers wrap `OpenAICaller` (`llm/openai.go`) with different base URLs and API keys — the common entry point for adding a new provider.
 
-Entry point: `main.go` → `cmd.Execute()`. Default command launches Bubbletea TUI in `cmd/shell.go` (1279 lines, MVU pattern).
+Entry point: `main.go` → `cmd.Execute()`. Default command launches Bubbletea TUI in `cmd/shell.go` (1279 lines, MVU pattern). When the `litertlm` provider is configured, `cmd/litertlm_service.go` auto-starts `litert-lm serve --port <port> --api openai` as a background process and health-checks it before the TUI begins.
 
 ## Commands
 
