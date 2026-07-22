@@ -2,10 +2,12 @@ package config
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -431,5 +433,309 @@ func TestIsAllowedCommand(t *testing.T) {
 				t.Errorf("IsAllowedCommand(%q, %v) = %v, want %v", tt.cmd, tt.allowedList, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestModelInListGemini(t *testing.T) {
+	tests := []struct {
+		model string
+		want  bool
+	}{
+		{"gemini-3-flash-preview", true},
+		{"gemini-3.1-flash-lite-preview", true},
+		{"gemma-4-31b-it", true},
+		{"gemma-4-26b-a4b-it", true},
+		{"other-model", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			if got := modelInList(tt.model, GeminiModels); got != tt.want {
+				t.Errorf("modelInList(%q, GeminiModels) = %v, want %v", tt.model, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetEnvPaths(t *testing.T) {
+	origUserConfigDirFunc := userConfigDirFunc
+	userConfigDirFunc = func() (string, error) {
+		return "/tmp/test-config", nil
+	}
+	defer func() { userConfigDirFunc = origUserConfigDirFunc }()
+
+	paths := GetEnvPaths()
+
+	if len(paths) < 2 {
+		t.Fatalf("GetEnvPaths() returned %d paths, want at least 2", len(paths))
+	}
+
+	if paths[0] != "/tmp/test-config/ai-shell/.env" {
+		t.Errorf("First path = %q, want %q", paths[0], "/tmp/test-config/ai-shell/.env")
+	}
+	if paths[1] != ".env" {
+		t.Errorf("Second path = %q, want %q", paths[1], ".env")
+	}
+}
+
+func TestGetEnvPathsConfigDirError(t *testing.T) {
+	origUserConfigDirFunc := userConfigDirFunc
+	userConfigDirFunc = func() (string, error) {
+		return "", fmt.Errorf("no config dir")
+	}
+	defer func() { userConfigDirFunc = origUserConfigDirFunc }()
+
+	paths := GetEnvPaths()
+
+	if len(paths) != 1 {
+		t.Fatalf("GetEnvPaths() returned %d paths, want 1", len(paths))
+	}
+	if paths[0] != ".env" {
+		t.Errorf("Path = %q, want %q", paths[0], ".env")
+	}
+}
+
+func TestLoadCommandsFromDir(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	commands, err := LoadCommandsFromDir(tmpDir)
+	if err != nil {
+		t.Fatalf("LoadCommandsFromDir() error = %v", err)
+	}
+	if len(commands) != 0 {
+		t.Errorf("LoadCommandsFromDir() returned %d commands, want 0", len(commands))
+	}
+}
+
+func TestLoadCommandsFromDirWithFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	mdContent := `---
+description: A test command
+---
+This is the test prompt for the command.`
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "test-cmd.md"), []byte(mdContent), 0644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "not-markdown.txt"), []byte("ignored"), 0644); err != nil {
+		t.Fatalf("Failed to write ignored file: %v", err)
+	}
+
+	commands, err := LoadCommandsFromDir(tmpDir)
+	if err != nil {
+		t.Fatalf("LoadCommandsFromDir() error = %v", err)
+	}
+
+	if len(commands) != 1 {
+		t.Fatalf("LoadCommandsFromDir() returned %d commands, want 1", len(commands))
+	}
+
+	cmd := commands[0]
+	if cmd.Name != "test-cmd" {
+		t.Errorf("Command Name = %q, want %q", cmd.Name, "test-cmd")
+	}
+	if cmd.Description != "A test command" {
+		t.Errorf("Command Description = %q, want %q", cmd.Description, "A test command")
+	}
+	if !strings.Contains(cmd.Prompt, "test prompt") {
+		t.Errorf("Command Prompt missing expected content: %q", cmd.Prompt)
+	}
+}
+
+func TestParseCommandFileWithFrontmatter(t *testing.T) {
+	tmpDir := t.TempDir()
+	content := `---
+description: My custom command
+---
+Do something useful`
+
+	path := filepath.Join(tmpDir, "cmd.md")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+
+	cmd, err := parseCommandFile(path)
+	if err != nil {
+		t.Fatalf("parseCommandFile() error = %v", err)
+	}
+	if cmd.Description != "My custom command" {
+		t.Errorf("Description = %q, want %q", cmd.Description, "My custom command")
+	}
+	if cmd.Prompt != "Do something useful" {
+		t.Errorf("Prompt = %q, want %q", cmd.Prompt, "Do something useful")
+	}
+}
+
+func TestParseCommandFileWithoutFrontmatter(t *testing.T) {
+	tmpDir := t.TempDir()
+	content := `Just a simple prompt without frontmatter`
+
+	path := filepath.Join(tmpDir, "simple.md")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+
+	cmd, err := parseCommandFile(path)
+	if err != nil {
+		t.Fatalf("parseCommandFile() error = %v", err)
+	}
+	if cmd.Prompt != "Just a simple prompt without frontmatter" {
+		t.Errorf("Prompt = %q, want %q", cmd.Prompt, "Just a simple prompt without frontmatter")
+	}
+	if cmd.Description != "" {
+		t.Errorf("Description = %q, want empty", cmd.Description)
+	}
+}
+
+func TestParseCommandFileNotFound(t *testing.T) {
+	_, err := parseCommandFile("/nonexistent/file.md")
+	if err == nil {
+		t.Error("parseCommandFile() expected error for nonexistent file, got nil")
+	}
+}
+
+func TestEnsureCommandsDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origDir)
+
+	err := EnsureCommandsDir()
+	if err != nil {
+		t.Fatalf("EnsureCommandsDir() error = %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(tmpDir, ".ai-shell", "commands")); os.IsNotExist(err) {
+		t.Error("EnsureCommandsDir() did not create .ai-shell/commands directory")
+	}
+}
+
+func TestLookupModelInfo(t *testing.T) {
+	tests := []struct {
+		name     string
+		wantNil  bool
+		wantName string
+	}{
+		{
+			name:     "gemini model found",
+			wantNil:  false,
+			wantName: "gemini-3-flash-preview",
+		},
+		{
+			name:    "unknown model not found",
+			wantNil: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info := LookupModelInfo(tt.wantName)
+			if tt.wantNil {
+				if info != nil {
+					t.Errorf("LookupModelInfo() = %v, want nil", info)
+				}
+			} else {
+				if info == nil {
+					t.Fatal("LookupModelInfo() returned nil")
+				}
+				if info.Name != tt.wantName {
+					t.Errorf("LookupModelInfo().Name = %q, want %q", info.Name, tt.wantName)
+				}
+			}
+		})
+	}
+}
+
+func TestSaveConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "ai-shell")
+	if err := os.MkdirAll(configPath, 0755); err != nil {
+		t.Fatalf("Failed to create temp config dir: %v", err)
+	}
+	configFile := filepath.Join(configPath, "config.yaml")
+
+	origGetConfigPath := getConfigPathFunc
+	getConfigPathFunc = func() (string, error) {
+		return configPath, nil
+	}
+	defer func() { getConfigPathFunc = origGetConfigPath }()
+
+	cfg := &Config{
+		ConfigFile: configFile,
+		LLM: struct {
+			Provider   string   `mapstructure:"provider"`
+			Model      string   `mapstructure:"model"`
+			InputTypes []string `mapstructure:"input_types"`
+		}{
+			Provider: "ollama",
+			Model:    "test-model",
+		},
+		Shell: struct {
+			Confirm         bool     `mapstructure:"confirm"`
+			AllowedCommands []string `mapstructure:"allowed_commands"`
+		}{
+			Confirm:         true,
+			AllowedCommands: []string{"ls", "pwd"},
+		},
+	}
+
+	err := SaveConfig(cfg)
+	if err != nil {
+		t.Fatalf("SaveConfig() error = %v", err)
+	}
+
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Fatalf("Failed to read config file: %v", err)
+	}
+
+	if !bytes.Contains(data, []byte("model: test-model")) {
+		t.Errorf("Config file missing model, got: %s", string(data))
+	}
+	if !bytes.Contains(data, []byte("provider: ollama")) {
+		t.Errorf("Config file missing provider, got: %s", string(data))
+	}
+}
+
+func TestSaveConfigEmptyPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "ai-shell")
+	if err := os.MkdirAll(configPath, 0755); err != nil {
+		t.Fatalf("Failed to create temp config dir: %v", err)
+	}
+
+	origGetConfigPath := getConfigPathFunc
+	getConfigPathFunc = func() (string, error) {
+		return configPath, nil
+	}
+	defer func() { getConfigPathFunc = origGetConfigPath }()
+
+	cfg := &Config{
+		LLM: struct {
+			Provider   string   `mapstructure:"provider"`
+			Model      string   `mapstructure:"model"`
+			InputTypes []string `mapstructure:"input_types"`
+		}{
+			Provider: "gemini",
+			Model:    "gemini-3-flash-preview",
+		},
+	}
+
+	err := SaveConfig(cfg)
+	if err != nil {
+		t.Fatalf("SaveConfig() error = %v", err)
+	}
+
+	configFile := filepath.Join(configPath, "config.yaml")
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Fatalf("Failed to read config file: %v", err)
+	}
+
+	if !bytes.Contains(data, []byte("model: gemini-3-flash-preview")) {
+		t.Errorf("Config file missing model, got: %s", string(data))
 	}
 }

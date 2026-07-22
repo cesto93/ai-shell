@@ -44,3 +44,13 @@ func TestGetShell(t *testing.T) {
 		})
 	}
 }
+
+func TestGetDistro(t *testing.T) {
+	distro := GetDistro()
+	if distro == "" {
+		t.Error("GetDistro() returned empty string")
+	}
+	if distro == "Unknown Linux Distro" {
+		t.Log("GetDistro() returned 'Unknown Linux Distro' - /etc/os-release may not exist")
+	}
+}
