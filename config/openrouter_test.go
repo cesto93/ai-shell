@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestIsOpenRouterModel(t *testing.T) {
+func TestModelInListOpenRouter(t *testing.T) {
 	tests := []struct {
 		model string
 		want  bool
@@ -20,8 +20,8 @@ func TestIsOpenRouterModel(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.model, func(t *testing.T) {
-			if got := IsOpenRouterModel(tt.model); got != tt.want {
-				t.Errorf("IsOpenRouterModel(%q) = %v, want %v", tt.model, got, tt.want)
+			if got := modelInList(tt.model, OpenRouterModels); got != tt.want {
+				t.Errorf("modelInList(%q, OpenRouterModels) = %v, want %v", tt.model, got, tt.want)
 			}
 		})
 	}

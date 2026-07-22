@@ -5,21 +5,25 @@ import (
 	"testing"
 )
 
-func TestNewOpenRouterCaller(t *testing.T) {
+func TestNewProviderCallerOpenRouter(t *testing.T) {
 	key := "test-key"
 	os.Setenv("OPEN_ROUTE_KEY", key)
 	defer os.Unsetenv("OPEN_ROUTE_KEY")
 
 	model := "test-model"
-	caller := NewOpenRouterCaller(model, nil)
+	caller := NewProviderCaller("openrouter", model, nil)
 
-	if caller.inner.APIKey != key {
-		t.Errorf("Expected APIKey %q, got %q", key, caller.inner.APIKey)
+	oac, ok := caller.(*OpenAICaller)
+	if !ok {
+		t.Fatalf("Expected *OpenAICaller, got %T", caller)
 	}
-	if caller.inner.BaseURL != "https://openrouter.ai/api/v1" {
-		t.Errorf("Expected BaseURL %q, got %q", "https://openrouter.ai/api/v1", caller.inner.BaseURL)
+	if oac.APIKey != key {
+		t.Errorf("Expected APIKey %q, got %q", key, oac.APIKey)
 	}
-	if caller.inner.Model != model {
-		t.Errorf("Expected Model %q, got %q", model, caller.inner.Model)
+	if oac.BaseURL != "https://openrouter.ai/api/v1" {
+		t.Errorf("Expected BaseURL %q, got %q", "https://openrouter.ai/api/v1", oac.BaseURL)
+	}
+	if oac.Model != model {
+		t.Errorf("Expected Model %q, got %q", model, oac.Model)
 	}
 }

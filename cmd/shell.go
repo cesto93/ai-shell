@@ -866,6 +866,15 @@ func (m *ShellModel) navigateHistory(dir int) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *ShellModel) sortedToolNames() []string {
+	var names []string
+	for name := range m.cfg.Tools {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 func (m *ShellModel) showHelp() {
 	var sb strings.Builder
 	sb.WriteString("\nCommands:\n")
@@ -907,13 +916,8 @@ func (m *ShellModel) showConfig() {
 	sb.WriteString(fmt.Sprintf("Allowed Commands: %s\n", strings.Join(m.cfg.Shell.AllowedCommands, ",")))
 
 	toolDescs := llm.GetToolDescriptions()
-	var toolNames []string
-	for name := range m.cfg.Tools {
-		toolNames = append(toolNames, name)
-	}
-	sort.Strings(toolNames)
 	sb.WriteString("\nTools:\n")
-	for _, name := range toolNames {
+	for _, name := range m.sortedToolNames() {
 		status := "disabled"
 		if m.cfg.Tools[name] {
 			status = "enabled"
@@ -941,19 +945,7 @@ func (m *ShellModel) showConfig() {
 }
 
 func (m *ShellModel) openModelMenu() {
-	var models []config.ModelInfo
-
-	ollamaModels, ollamaErr := config.GetAvailableModels()
-	if ollamaErr == nil {
-		models = append(models, ollamaModels...)
-	}
-
-	models = append(models, config.GeminiModels...)
-	models = append(models, config.OpenRouterModels...)
-	litertlmModels, litertlmErr := config.GetLitertLMModels()
-	if litertlmErr == nil {
-		models = append(models, litertlmModels...)
-	}
+	models := config.GetAllAvailableModels()
 
 	if len(models) == 0 {
 		m.messages = append(m.messages, Message{role: "system", content: "No models found. Please install models using 'ollama pull <model>'"})
@@ -1028,16 +1020,10 @@ func (m *ShellModel) selectCommandOption() {
 }
 
 func (m *ShellModel) openToolsMenu() {
-	var toolNames []string
-	for name := range m.cfg.Tools {
-		toolNames = append(toolNames, name)
-	}
-	sort.Strings(toolNames)
-
 	toolDescs := llm.GetToolDescriptions()
 
 	m.menu.options = []string{}
-	for _, name := range toolNames {
+	for _, name := range m.sortedToolNames() {
 		status := "Disabled"
 		if m.cfg.Tools[name] {
 			status = "Enabled"
@@ -1062,13 +1048,7 @@ func (m *ShellModel) selectToolOption() {
 		return
 	}
 
-	var toolNames []string
-	for name := range m.cfg.Tools {
-		toolNames = append(toolNames, name)
-	}
-	sort.Strings(toolNames)
-
-	selectedTool := toolNames[m.menu.selectedIdx]
+	selectedTool := m.sortedToolNames()[m.menu.selectedIdx]
 	m.cfg.Tools[selectedTool] = !m.cfg.Tools[selectedTool]
 
 	if err := config.SaveConfig(m.cfg); err != nil {

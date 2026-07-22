@@ -180,14 +180,6 @@ func LoadConfig() (*Config, error) {
 	return &config, nil
 }
 
-func formatStringSlice(prefix string, items []string) string {
-	var b strings.Builder
-	for _, item := range items {
-		b.WriteString(fmt.Sprintf("%s- %q\n", prefix, item))
-	}
-	return b.String()
-}
-
 var getConfigPathFunc = getConfigPath
 
 func getConfigPath() (string, error) {
@@ -202,8 +194,8 @@ func getConfigPath() (string, error) {
 	return configPath, nil
 }
 
-func IsGeminiModel(modelName string) bool {
-	for _, m := range GeminiModels {
+func modelInList(modelName string, models []ModelInfo) bool {
+	for _, m := range models {
 		if m.Name == modelName {
 			return true
 		}
@@ -216,21 +208,7 @@ func IsLitertLMModel(modelName string) bool {
 	if err != nil {
 		return false
 	}
-	for _, m := range models {
-		if m.Name == modelName {
-			return true
-		}
-	}
-	return false
-}
-
-func IsOpenRouterModel(modelName string) bool {
-	for _, m := range OpenRouterModels {
-		if m.Name == modelName {
-			return true
-		}
-	}
-	return false
+	return modelInList(modelName, models)
 }
 
 func SaveConfig(cfg *Config) error {
@@ -243,32 +221,36 @@ func SaveConfig(cfg *Config) error {
 		configFile = filepath.Join(configPath, "config.yaml")
 	}
 
-	var toolsYaml strings.Builder
-	if len(cfg.Tools) > 0 {
-		toolsYaml.WriteString("tools:\n")
-		var keys []string
-		for k := range cfg.Tools {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			toolsYaml.WriteString(fmt.Sprintf("  %s: %v\n", k, cfg.Tools[k]))
-		}
+	out := struct {
+		LLM struct {
+			Provider   string   `yaml:"provider"`
+			Model      string   `yaml:"model"`
+			InputTypes []string `yaml:"input_types,omitempty"`
+		} `yaml:"llm"`
+		Shell struct {
+			Confirm         bool     `yaml:"confirm"`
+			AllowedCommands []string `yaml:"allowed_commands,omitempty"`
+		} `yaml:"shell"`
+		LitertLM struct {
+			AutoStart bool `yaml:"auto_start"`
+		} `yaml:"litertlm"`
+		Tools map[string]bool `yaml:"tools,omitempty"`
+	}{
+		Tools: cfg.Tools,
+	}
+	out.LLM.Provider = cfg.LLM.Provider
+	out.LLM.Model = cfg.LLM.Model
+	out.LLM.InputTypes = cfg.LLM.InputTypes
+	out.Shell.Confirm = cfg.Shell.Confirm
+	out.Shell.AllowedCommands = cfg.Shell.AllowedCommands
+	out.LitertLM.AutoStart = cfg.LitertLM.AutoStart
+
+	data, err := yaml.Marshal(out)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	var inputTypesYaml string
-	if len(cfg.LLM.InputTypes) > 0 {
-		inputTypesYaml = fmt.Sprintf("  input_types:\n%s", formatStringSlice("    ", cfg.LLM.InputTypes))
-	}
-
-	var allowedCommandsYaml string
-	if len(cfg.Shell.AllowedCommands) > 0 {
-		allowedCommandsYaml = fmt.Sprintf("  allowed_commands:\n%s", formatStringSlice("    ", cfg.Shell.AllowedCommands))
-	}
-
-	content := fmt.Sprintf("llm:\n  provider: %q\n  model: %q\n%s\nshell:\n  confirm: %v\n%s\nlitertlm:\n  auto_start: %v\n%s",
-		cfg.LLM.Provider, cfg.LLM.Model, inputTypesYaml, cfg.Shell.Confirm, allowedCommandsYaml, cfg.LitertLM.AutoStart, toolsYaml.String())
-	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(configFile, data, 0644); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
@@ -287,23 +269,9 @@ func lookupModelInfo(modelName string) *ModelInfo {
 }
 
 func LookupModelInfo(modelName string) *ModelInfo {
-	if info := lookupModelInfo(modelName); info != nil {
-		return info
-	}
-	litertlmModels, err := GetLitertLMModels()
-	if err == nil {
-		for _, m := range litertlmModels {
-			if m.Name == modelName {
-				return &m
-			}
-		}
-	}
-	ollamaModels, err := GetAvailableModels()
-	if err == nil {
-		for _, m := range ollamaModels {
-			if m.Name == modelName {
-				return &m
-			}
+	for _, m := range GetAllAvailableModels() {
+		if m.Name == modelName {
+			return &m
 		}
 	}
 	return nil
@@ -318,11 +286,11 @@ func SaveModelWithProvider(modelName, provider string) error {
 	cfg.LLM.Model = modelName
 	if provider != "" {
 		cfg.LLM.Provider = provider
-	} else if IsGeminiModel(modelName) {
+	} else if modelInList(modelName, GeminiModels) {
 		cfg.LLM.Provider = "gemini"
 	} else if IsLitertLMModel(modelName) {
 		cfg.LLM.Provider = "litertlm"
-	} else if IsOpenRouterModel(modelName) {
+	} else if modelInList(modelName, OpenRouterModels) {
 		cfg.LLM.Provider = "openrouter"
 	} else {
 		cfg.LLM.Provider = "ollama"
@@ -401,6 +369,19 @@ var OpenRouterModels = []ModelInfo{
 
 var getAvailableModelsFunc = GetAvailableModels
 
+func GetAllAvailableModels() []ModelInfo {
+	var models []ModelInfo
+	if ollamaModels, err := getAvailableModelsFunc(); err == nil {
+		models = append(models, ollamaModels...)
+	}
+	models = append(models, GeminiModels...)
+	models = append(models, OpenRouterModels...)
+	if litertlmModels, err := GetLitertLMModels(); err == nil {
+		models = append(models, litertlmModels...)
+	}
+	return models
+}
+
 func GetAvailableModels() ([]ModelInfo, error) {
 	client, err := api.ClientFromEnvironment()
 	if err != nil {
@@ -429,18 +410,7 @@ func SelectModel() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	models, err := getAvailableModelsFunc()
-	if err != nil {
-		return err
-	}
-
-	models = append(models, GeminiModels...)
-	models = append(models, OpenRouterModels...)
-
-	litertlmModels, litertlmErr := GetLitertLMModels()
-	if litertlmErr == nil {
-		models = append(models, litertlmModels...)
-	}
+	models := GetAllAvailableModels()
 
 	if len(models) == 0 {
 		fmt.Printf("No models found. Please install models using 'ollama pull <model>'\n")

@@ -2,9 +2,9 @@
 
 ## Project
 
-Interactive AI shell TUI (Bubbletea) with 4 LLM providers: Ollama, Gemini, OpenRouter, LitertLM. All providers wrap `OpenAICaller` (`llm/openai.go`) with different base URLs and API keys — the common entry point for adding a new provider.
+Interactive AI shell TUI (Bubbletea) with 4 LLM providers: Ollama, Gemini, OpenRouter, LitertLM. All providers share `OpenAICaller` (`llm/openai.go`) via a single `NewProviderCaller` factory (`llm/providers.go`) that routes by provider name with different base URLs and API keys.
 
-Entry point: `main.go` → `cmd.Execute()`. Default command launches Bubbletea TUI in `cmd/shell.go` (1279 lines, MVU pattern). When the `litertlm` provider is configured, `cmd/litertlm_service.go` auto-starts `litert-lm serve --port <port> --api openai` as a background process and health-checks it before the TUI begins.
+Entry point: `main.go` → `cmd.Execute()`. Default command launches Bubbletea TUI in `cmd/shell.go` (MVU pattern). When the `litertlm` provider is configured, `cmd/litertlm_service.go` auto-starts `litert-lm serve --port <port> --api openai` as a background process and health-checks it before the TUI begins.
 
 ## Commands
 
@@ -21,7 +21,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 |-----------|----------|
 | `cmd/` | Cobra commands: default (TUI shell), `get-config` |
 | `config/` | Viper YAML config, model lists, `.env` loading via `gotenv` |
-| `llm/` | `Agent` struct, `Caller` interface, `ToolExecutor` interface, 6 OpenAI tool definitions, default system prompt |
+| `llm/` | `Agent` struct, `Caller` interface, `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, default system prompt |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
 
 ## Config layering

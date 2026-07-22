@@ -136,7 +136,7 @@ shell:
 		t.Fatalf("Failed to read config file: %v", err)
 	}
 
-	if !bytes.Contains(data, []byte(`model: "new-model:latest"`)) {
+	if !bytes.Contains(data, []byte(`model: new-model:latest`)) {
 		t.Errorf("config file does not contain new model, got: %s", string(data))
 	}
 }
@@ -183,7 +183,7 @@ func TestSaveModelCreatesNewFile(t *testing.T) {
 		t.Fatalf("Failed to read config file: %v", err)
 	}
 
-	if !bytes.Contains(data, []byte(`model: "brand-new-model:latest"`)) {
+	if !bytes.Contains(data, []byte(`model: brand-new-model:latest`)) {
 		t.Errorf("config file does not contain new model, got: %s", string(data))
 	}
 }
@@ -342,7 +342,7 @@ shell:
 		t.Fatalf("Failed to read config file: %v", err)
 	}
 
-	if !bytes.Contains(data, []byte(`model: "model2"`)) {
+	if !bytes.Contains(data, []byte(`model: model2`)) {
 		t.Errorf("config file does not contain selected model 'model2', got: %s", string(data))
 	}
 }
