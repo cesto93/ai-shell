@@ -40,6 +40,10 @@ var (
 
 	dimStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#666666"))
+
+	highlightStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FFFFFF")).
+			Background(lipgloss.Color("#444444"))
 )
 
 var availableCommands = []string{
@@ -50,6 +54,44 @@ var availableCommands = []string{
 	"reset",
 	"exit",
 	"quit",
+}
+
+type menuKind int
+
+const (
+	menuNone menuKind = iota
+	menuModel
+	menuConfig
+	menuTools
+	menuCommands
+)
+
+type menuState struct {
+	kind        menuKind
+	selectedIdx int
+	options     []string
+	models      []config.ModelInfo
+}
+
+func (ms *menuState) open(kind menuKind) {
+	ms.kind = kind
+	ms.selectedIdx = 0
+}
+
+func (ms *menuState) close() {
+	ms.kind = menuNone
+	ms.options = nil
+	ms.models = nil
+}
+
+func (ms *menuState) itemCount() int {
+	switch ms.kind {
+	case menuModel:
+		return len(ms.models)
+	case menuConfig, menuTools, menuCommands:
+		return len(ms.options)
+	}
+	return 0
 }
 
 type ShellExecutorForLLM struct {
@@ -213,29 +255,10 @@ type ShellModel struct {
 	confirmationChan   chan bool
 	pendingCommand     string
 	waitingConfirm     bool
-	modelMenu          struct {
-		active      bool
-		models      []config.ModelInfo
-		selectedIdx int
-	}
-	configMenu struct {
-		active      bool
-		selectedIdx int
-		options     []string
-	}
-	toolsMenu struct {
-		active      bool
-		selectedIdx int
-		options     []string
-	}
-	commandsMenu struct {
-		active      bool
-		selectedIdx int
-		options     []string
-	}
-	commands        []config.CommandInfo
-	litertlmService *LitertLMService
-	allowedCmdMode  struct {
+	menu               menuState
+	commands           []config.CommandInfo
+	litertlmService    *LitertLMService
+	allowedCmdMode     struct {
 		active bool
 	}
 }
@@ -310,28 +333,9 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if m.waitingConfirm {
-			switch msg.Type {
-			case tea.KeyEnter:
-				// Default to No for safety
-				m.waitingConfirm = false
-				m.confirmationChan <- false
-				return m, nil
-			case tea.KeyEscape:
-				m.waitingConfirm = false
-				m.confirmationChan <- false
-				return m, nil
-			}
-
-			switch msg.String() {
-			case "y", "Y":
-				m.waitingConfirm = false
-				m.confirmationChan <- true
-			case "n", "N":
-				m.waitingConfirm = false
-				m.confirmationChan <- false
-			}
-			return m, nil
+			return m.handleConfirmationKeys(msg)
 		}
+
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyCtrlD:
 			if m.litertlmService != nil {
@@ -341,155 +345,129 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case tea.KeyEnter:
-			if m.modelMenu.active {
-				m.selectModel()
-				return m, nil
-			}
-			if m.configMenu.active {
-				m.selectConfigOption()
-				return m, nil
-			}
-			if m.toolsMenu.active {
-				m.selectToolOption()
-				return m, nil
-			}
-			if m.commandsMenu.active {
-				m.selectCommandOption()
-				return m, nil
-			}
-			if m.showSuggestions && len(m.suggestions) > 0 {
-				return m.selectSuggestion()
-			}
-			return m.handleSubmit()
+			return m.handleEnterKey()
 
 		case tea.KeyUp:
-			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active && !m.configMenu.active && !m.toolsMenu.active && !m.commandsMenu.active {
+			if m.menu.kind != menuNone {
+				return m.handleMenuNav(-1)
+			}
+			if m.showSuggestions && len(m.suggestions) > 0 {
 				return m.navigateSuggestions(-1)
 			}
-			if !m.modelMenu.active && !m.configMenu.active && !m.toolsMenu.active && !m.commandsMenu.active {
-				return m.navigateHistory(-1)
-			}
+			return m.navigateHistory(-1)
 
 		case tea.KeyDown:
-			if m.showSuggestions && len(m.suggestions) > 0 && !m.modelMenu.active && !m.configMenu.active && !m.toolsMenu.active && !m.commandsMenu.active {
+			if m.menu.kind != menuNone {
+				return m.handleMenuNav(1)
+			}
+			if m.showSuggestions && len(m.suggestions) > 0 {
 				return m.navigateSuggestions(1)
 			}
-			if !m.modelMenu.active && !m.configMenu.active && !m.toolsMenu.active && !m.commandsMenu.active {
-				return m.navigateHistory(1)
-			}
+			return m.navigateHistory(1)
 
 		case tea.KeyTab:
 			return m.handleAutocomplete()
 
 		case tea.KeyEscape:
-			if m.loading {
-				close(m.cancelChan)
-				m.loading = false
-				m.messages = append(m.messages, Message{role: "system", content: "Request cancelled."})
-				return m, nil
-			}
-			if m.modelMenu.active {
-				m.modelMenu.active = false
-				return m, nil
-			}
-			if m.configMenu.active {
-				m.configMenu.active = false
-				return m, nil
-			}
-			if m.toolsMenu.active {
-				m.toolsMenu.active = false
-				return m, nil
-			}
-			if m.commandsMenu.active {
-				m.commandsMenu.active = false
-				return m, nil
-			}
-			if m.allowedCmdMode.active {
-				m.allowedCmdMode.active = false
-				m.input.Prompt = "ai-shell > "
-				m.input.SetValue("")
-				return m, nil
-			}
-			m.input.SetValue("")
-			m.showSuggestions = false
-			return m, nil
+			return m.handleEscapeKey()
 		}
 
-		if m.modelMenu.active {
-			switch msg.String() {
-			case "j", "down":
-				if m.modelMenu.selectedIdx < len(m.modelMenu.models)-1 {
-					m.modelMenu.selectedIdx++
-				}
-			case "k", "up":
-				if m.modelMenu.selectedIdx > 0 {
-					m.modelMenu.selectedIdx--
-				}
-			case "enter":
-				m.selectModel()
-			}
-			return m, nil
-		}
-
-		if m.configMenu.active {
-			switch msg.String() {
-			case "j", "down":
-				if m.configMenu.selectedIdx < len(m.configMenu.options)-1 {
-					m.configMenu.selectedIdx++
-				}
-			case "k", "up":
-				if m.configMenu.selectedIdx > 0 {
-					m.configMenu.selectedIdx--
-				}
-			case "enter":
-				m.selectConfigOption()
-			}
-			return m, nil
-		}
-
-		if m.toolsMenu.active {
-			switch msg.String() {
-			case "j", "down":
-				if m.toolsMenu.selectedIdx < len(m.toolsMenu.options)-1 {
-					m.toolsMenu.selectedIdx++
-				}
-			case "k", "up":
-				if m.toolsMenu.selectedIdx > 0 {
-					m.toolsMenu.selectedIdx--
-				}
-			case "enter":
-				m.selectToolOption()
-			}
-			return m, nil
-		}
-
-		if m.commandsMenu.active {
-			switch msg.String() {
-			case "j", "down":
-				if m.commandsMenu.selectedIdx < len(m.commandsMenu.options)-1 {
-					m.commandsMenu.selectedIdx++
-				}
-			case "k", "up":
-				if m.commandsMenu.selectedIdx > 0 {
-					m.commandsMenu.selectedIdx--
-				}
-			case "enter":
-				m.selectCommandOption()
-			}
-			return m, nil
+		if m.menu.kind != menuNone {
+			return m.handleMenuKeys(msg.String())
 		}
 	}
 
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 
-	if !m.allowedCmdMode.active && !m.toolsMenu.active && !m.commandsMenu.active {
+	if !m.allowedCmdMode.active && m.menu.kind == menuNone {
 		m.updateSuggestions()
 	} else {
 		m.showSuggestions = false
 	}
 
 	return m, cmd
+}
+
+func (m *ShellModel) handleConfirmationKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter, tea.KeyEscape:
+		m.waitingConfirm = false
+		m.confirmationChan <- false
+		return m, nil
+	}
+	switch msg.String() {
+	case "y", "Y":
+		m.waitingConfirm = false
+		m.confirmationChan <- true
+	case "n", "N":
+		m.waitingConfirm = false
+		m.confirmationChan <- false
+	}
+	return m, nil
+}
+
+func (m *ShellModel) handleEnterKey() (tea.Model, tea.Cmd) {
+	switch m.menu.kind {
+	case menuModel:
+		m.selectModel()
+		return m, nil
+	case menuConfig:
+		m.selectConfigOption()
+		return m, nil
+	case menuTools:
+		m.selectToolOption()
+		return m, nil
+	case menuCommands:
+		m.selectCommandOption()
+		return m, nil
+	}
+	if m.showSuggestions && len(m.suggestions) > 0 {
+		return m.selectSuggestion()
+	}
+	return m.handleSubmit()
+}
+
+func (m *ShellModel) handleEscapeKey() (tea.Model, tea.Cmd) {
+	if m.loading {
+		close(m.cancelChan)
+		m.loading = false
+		m.messages = append(m.messages, Message{role: "system", content: "Request cancelled."})
+		return m, nil
+	}
+	if m.menu.kind != menuNone {
+		m.menu.close()
+		return m, nil
+	}
+	if m.allowedCmdMode.active {
+		m.allowedCmdMode.active = false
+		m.input.Prompt = "ai-shell > "
+		m.input.SetValue("")
+		return m, nil
+	}
+	m.input.SetValue("")
+	m.showSuggestions = false
+	return m, nil
+}
+
+func (m *ShellModel) handleMenuNav(dir int) (tea.Model, tea.Cmd) {
+	n := m.menu.itemCount()
+	if dir < 0 && m.menu.selectedIdx > 0 {
+		m.menu.selectedIdx--
+	} else if dir > 0 && m.menu.selectedIdx < n-1 {
+		m.menu.selectedIdx++
+	}
+	return m, nil
+}
+
+func (m *ShellModel) handleMenuKeys(key string) (tea.Model, tea.Cmd) {
+	switch key {
+	case "j", "down":
+		return m.handleMenuNav(1)
+	case "k", "up":
+		return m.handleMenuNav(-1)
+	}
+	return m, nil
 }
 
 func (m *ShellModel) View() string {
@@ -520,55 +498,9 @@ func (m *ShellModel) View() string {
 		}
 	}
 
-	if m.modelMenu.active {
-		sb.WriteString(systemStyle.Render("Select Model (↑/↓ to navigate, Enter to select, Esc to cancel):"))
-		sb.WriteString("\n")
-		for i, model := range m.modelMenu.models {
-			marker := " "
-			if model.Name == m.cfg.LLM.Model {
-				marker = "*"
-			}
-			if i == m.modelMenu.selectedIdx {
-				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(fmt.Sprintf(" %s %s (%s) ", marker, model.Name, model.Provider)))
-			} else {
-				sb.WriteString(userStyle.Render(fmt.Sprintf(" %s %s (%s) ", marker, model.Name, model.Provider)))
-			}
-			sb.WriteString("\n")
-		}
-	} else if m.toolsMenu.active {
-		sb.WriteString(systemStyle.Render("Manage Tools (↑/↓ to navigate, Enter to toggle, Esc to back):"))
-		sb.WriteString("\n")
-		for i, opt := range m.toolsMenu.options {
-			if i == m.toolsMenu.selectedIdx {
-				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(fmt.Sprintf(" > %s ", opt)))
-			} else {
-				sb.WriteString(userStyle.Render(fmt.Sprintf("   %s ", opt)))
-			}
-			sb.WriteString("\n")
-		}
-	} else if m.commandsMenu.active {
-		sb.WriteString(systemStyle.Render("Manage Commands (↑/↓ to navigate, Enter to select, Esc to back):"))
-		sb.WriteString("\n")
-		for i, opt := range m.commandsMenu.options {
-			if i == m.commandsMenu.selectedIdx {
-				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(fmt.Sprintf(" > %s ", opt)))
-			} else {
-				sb.WriteString(userStyle.Render(fmt.Sprintf("   %s ", opt)))
-			}
-			sb.WriteString("\n")
-		}
-	} else if m.configMenu.active {
-		sb.WriteString(systemStyle.Render("Configuration Menu (↑/↓ to navigate, Enter to select, Esc to cancel):"))
-		sb.WriteString("\n")
-		for i, opt := range m.configMenu.options {
-			if i == m.configMenu.selectedIdx {
-				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(fmt.Sprintf(" > %s ", opt)))
-			} else {
-				sb.WriteString(userStyle.Render(fmt.Sprintf("   %s ", opt)))
-			}
-			sb.WriteString("\n")
-		}
-	} else if m.showSuggestions && len(m.suggestions) > 0 {
+	m.renderMenu(&sb)
+
+	if m.showSuggestions && len(m.suggestions) > 0 {
 		sb.WriteString(dimStyle.Render("Suggestions: "))
 		for i, suggestion := range m.suggestions {
 			display := suggestion
@@ -577,7 +509,7 @@ func (m *ShellModel) View() string {
 			}
 
 			if i == m.selectedIndex {
-				sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#444444")).Render(" " + display + " "))
+				sb.WriteString(highlightStyle.Render(" " + display + " "))
 			} else {
 				sb.WriteString(helpStyle.Render(" " + display + " "))
 			}
@@ -601,13 +533,56 @@ func (m *ShellModel) View() string {
 	return sb.String()
 }
 
+func (m *ShellModel) renderMenu(sb *strings.Builder) {
+	switch m.menu.kind {
+	case menuModel:
+		sb.WriteString(systemStyle.Render("Select Model (↑/↓ to navigate, Enter to select, Esc to cancel):"))
+		sb.WriteString("\n")
+		for i, model := range m.menu.models {
+			marker := " "
+			if model.Name == m.cfg.LLM.Model {
+				marker = "*"
+			}
+			label := fmt.Sprintf(" %s %s (%s) ", marker, model.Name, model.Provider)
+			if i == m.menu.selectedIdx {
+				sb.WriteString(highlightStyle.Render(label))
+			} else {
+				sb.WriteString(userStyle.Render(label))
+			}
+			sb.WriteString("\n")
+		}
+	case menuTools:
+		sb.WriteString(systemStyle.Render("Manage Tools (↑/↓ to navigate, Enter to toggle, Esc to back):"))
+		sb.WriteString("\n")
+		m.renderMenuOptions(sb)
+	case menuCommands:
+		sb.WriteString(systemStyle.Render("Manage Commands (↑/↓ to navigate, Enter to select, Esc to back):"))
+		sb.WriteString("\n")
+		m.renderMenuOptions(sb)
+	case menuConfig:
+		sb.WriteString(systemStyle.Render("Configuration Menu (↑/↓ to navigate, Enter to select, Esc to cancel):"))
+		sb.WriteString("\n")
+		m.renderMenuOptions(sb)
+	}
+}
+
+func (m *ShellModel) renderMenuOptions(sb *strings.Builder) {
+	for i, opt := range m.menu.options {
+		if i == m.menu.selectedIdx {
+			sb.WriteString(highlightStyle.Render(fmt.Sprintf(" > %s ", opt)))
+		} else {
+			sb.WriteString(userStyle.Render(fmt.Sprintf("   %s ", opt)))
+		}
+		sb.WriteString("\n")
+	}
+}
+
 func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 	value := strings.TrimSpace(m.input.Value())
 	if value == "" {
 		return m, nil
 	}
 
-	// Clean up @ prefix from autocomplete and detect images
 	var images []string
 	if strings.Contains(value, "@") {
 		parts := strings.Split(value, " ")
@@ -654,33 +629,8 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 		return m.handleCommand(strings.TrimPrefix(value, "/"))
 	}
 
-	switch value {
-	case "exit", "quit":
-		if m.litertlmService != nil {
-			m.litertlmService.Stop()
-		}
-		m.quitting = true
-		return m, tea.Quit
-
-	case "get-config":
-		m.showConfig()
-		return m, nil
-
-	case "config":
-		m.openConfigMenu()
-		return m, nil
-
-	case "help":
-		m.showHelp()
-		return m, nil
-
-	case "models":
-		m.openModelMenu()
-		return m, nil
-
-	case "reset":
-		m.messages = nil
-		return m, nil
+	if handled, model, cmd := m.handleBuiltinCommand(value); handled {
+		return model, cmd
 	}
 
 	m.messages = append(m.messages, Message{role: "user", content: value, images: images})
@@ -688,9 +638,33 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 	m.loading = true
 	m.cancelChan = make(chan struct{})
 
-	go m.callLLM()
+	go m.ElaborateMessage()
 
 	return m, nil
+}
+
+func (m *ShellModel) handleBuiltinCommand(cmd string) (handled bool, model tea.Model, cmd2 tea.Cmd) {
+	switch cmd {
+	case "exit", "quit":
+		if m.litertlmService != nil {
+			m.litertlmService.Stop()
+		}
+		m.quitting = true
+		return true, m, tea.Quit
+	case "get-config":
+		m.showConfig()
+	case "config":
+		m.openConfigMenu()
+	case "help":
+		m.showHelp()
+	case "models":
+		m.openModelMenu()
+	case "reset":
+		m.messages = nil
+	default:
+		return false, m, nil
+	}
+	return true, m, nil
 }
 
 func (m *ShellModel) handleCommand(input string) (tea.Model, tea.Cmd) {
@@ -701,46 +675,24 @@ func (m *ShellModel) handleCommand(input string) (tea.Model, tea.Cmd) {
 	cmd := parts[0]
 	args := strings.Join(parts[1:], " ")
 
-	switch cmd {
-	case "exit", "quit":
-		if m.litertlmService != nil {
-			m.litertlmService.Stop()
-		}
-		m.quitting = true
-		return m, tea.Quit
-
-	case "get-config":
-		m.showConfig()
-
-	case "config":
-		m.openConfigMenu()
-
-	case "help":
-		m.showHelp()
-
-	case "models":
-		m.openModelMenu()
-
-	case "reset":
-		m.messages = nil
-
-	default:
-		for _, c := range m.commands {
-			if c.Name == cmd {
-				fullPrompt := c.Prompt
-				if args != "" {
-					fullPrompt = c.Prompt + " " + args
-				}
-				m.messages = append(m.messages, Message{role: "user", content: fullPrompt})
-				m.loading = true
-				m.cancelChan = make(chan struct{})
-				go m.callLLM()
-				return m, nil
-			}
-		}
-		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Unknown command: /%s", cmd)})
+	if handled, model, cmd2 := m.handleBuiltinCommand(cmd); handled {
+		return model, cmd2
 	}
 
+	for _, c := range m.commands {
+		if c.Name == cmd {
+			fullPrompt := c.Prompt
+			if args != "" {
+				fullPrompt = c.Prompt + " " + args
+			}
+			m.messages = append(m.messages, Message{role: "user", content: fullPrompt})
+			m.loading = true
+			m.cancelChan = make(chan struct{})
+			go m.ElaborateMessage()
+			return m, nil
+		}
+	}
+	m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Unknown command: /%s", cmd)})
 	return m, nil
 }
 
@@ -749,15 +701,13 @@ func (m *ShellModel) handleAutocomplete() (tea.Model, tea.Cmd) {
 
 	if strings.HasPrefix(value, "/") && !strings.Contains(value, " ") {
 		partial := strings.TrimPrefix(value, "/")
-		// Check built-in commands
 		for _, cmd := range availableCommands {
 			if strings.HasPrefix(cmd, partial) {
 				m.input.SetValue("/" + cmd)
 				break
 			}
 		}
-		if m.input.Value() == value { // If no built-in command matched
-			// Check custom commands
+		if m.input.Value() == value {
 			for _, c := range m.commands {
 				if strings.HasPrefix(c.Name, partial) {
 					m.input.SetValue("/" + c.Name)
@@ -818,7 +768,6 @@ func (m *ShellModel) updateSuggestions() {
 	value := m.input.Value()
 	var matches []string
 
-	// Command suggestions: only if starts with / and no space yet
 	if strings.HasPrefix(value, "/") && !strings.Contains(value, " ") {
 		filter := strings.TrimPrefix(value, "/")
 		for _, cmd := range availableCommands {
@@ -842,7 +791,6 @@ func (m *ShellModel) updateSuggestions() {
 		}
 	}
 
-	// File suggestions: if @ is present
 	if lastAt := strings.LastIndex(value, "@"); lastAt != -1 {
 		partial := value[lastAt+1:]
 		dir, base := filepath.Split(partial)
@@ -854,7 +802,6 @@ func (m *ShellModel) updateSuggestions() {
 	}
 
 	if len(matches) > 0 {
-		// If there is only one match and it's already what we have, don't show it
 		if len(matches) == 1 && matches[0] == value {
 			m.showSuggestions = false
 			return
@@ -1013,14 +960,13 @@ func (m *ShellModel) openModelMenu() {
 		return
 	}
 
-	m.modelMenu.models = models
-	m.modelMenu.active = true
-	m.modelMenu.selectedIdx = 0
+	m.menu.models = models
+	m.menu.open(menuModel)
 	m.input.SetValue("")
 }
 
 func (m *ShellModel) openConfigMenu() {
-	m.configMenu.options = []string{
+	m.menu.options = []string{
 		fmt.Sprintf("Confirm Commands: %v", m.cfg.Shell.Confirm),
 		fmt.Sprintf("Allowed Commands: %s", strings.Join(m.cfg.Shell.AllowedCommands, ",")),
 		"Manage Tools",
@@ -1028,63 +974,56 @@ func (m *ShellModel) openConfigMenu() {
 		"Change Model",
 		"Back",
 	}
-	m.configMenu.active = true
-	m.configMenu.selectedIdx = 0
+	m.menu.open(menuConfig)
 	m.input.SetValue("")
 }
 
 func (m *ShellModel) selectConfigOption() {
-	switch m.configMenu.selectedIdx {
-	case 0: // Toggle Confirm
+	switch m.menu.selectedIdx {
+	case 0:
 		m.cfg.Shell.Confirm = !m.cfg.Shell.Confirm
 		if err := config.SaveConfig(m.cfg); err != nil {
 			m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error saving config: %v", err)})
 		} else {
 			m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Confirm Commands set to: %v", m.cfg.Shell.Confirm)})
 		}
-		m.configMenu.active = false
-	case 1: // Edit Allowed Commands
+		m.menu.close()
+	case 1:
 		m.allowedCmdMode.active = true
 		m.input.SetValue(strings.Join(m.cfg.Shell.AllowedCommands, ","))
 		m.input.Prompt = "Allowed commands (comma separated): "
-		m.configMenu.active = false
-	case 2: // Manage Tools
-		m.configMenu.active = false
+		m.menu.close()
+	case 2:
+		m.menu.close()
 		m.openToolsMenu()
-	case 3: // Manage Commands
-		m.configMenu.active = false
+	case 3:
+		m.menu.close()
 		m.openCommandsMenu()
-	case 4: // Change Model
-		m.configMenu.active = false
+	case 4:
+		m.menu.close()
 		m.openModelMenu()
-	case 5: // Back
-		m.configMenu.active = false
+	case 5:
+		m.menu.close()
 	}
 }
 
 func (m *ShellModel) openCommandsMenu() {
-	m.commandsMenu.options = []string{}
+	m.menu.options = []string{}
 	for _, c := range m.commands {
 		if c.Description != "" {
-			m.commandsMenu.options = append(m.commandsMenu.options, fmt.Sprintf("/%s - %s", c.Name, c.Description))
+			m.menu.options = append(m.menu.options, fmt.Sprintf("/%s - %s", c.Name, c.Description))
 		} else {
-			m.commandsMenu.options = append(m.commandsMenu.options, fmt.Sprintf("/%s - %s", c.Name, c.Prompt))
+			m.menu.options = append(m.menu.options, fmt.Sprintf("/%s - %s", c.Name, c.Prompt))
 		}
 	}
-	m.commandsMenu.options = append(m.commandsMenu.options, "Back")
+	m.menu.options = append(m.menu.options, "Back")
 
-	m.commandsMenu.active = true
-	m.commandsMenu.selectedIdx = 0
+	m.menu.open(menuCommands)
 	m.input.SetValue("")
 }
 
 func (m *ShellModel) selectCommandOption() {
-	if m.commandsMenu.selectedIdx == len(m.commandsMenu.options)-1 {
-		m.commandsMenu.active = false
-		m.openConfigMenu()
-		return
-	}
-	m.commandsMenu.active = false
+	m.menu.close()
 	m.openConfigMenu()
 }
 
@@ -1097,7 +1036,7 @@ func (m *ShellModel) openToolsMenu() {
 
 	toolDescs := llm.GetToolDescriptions()
 
-	m.toolsMenu.options = []string{}
+	m.menu.options = []string{}
 	for _, name := range toolNames {
 		status := "Disabled"
 		if m.cfg.Tools[name] {
@@ -1108,18 +1047,17 @@ func (m *ShellModel) openToolsMenu() {
 		if desc != "" {
 			option = fmt.Sprintf("%s: %s - %s", name, status, desc)
 		}
-		m.toolsMenu.options = append(m.toolsMenu.options, option)
+		m.menu.options = append(m.menu.options, option)
 	}
-	m.toolsMenu.options = append(m.toolsMenu.options, "Back")
+	m.menu.options = append(m.menu.options, "Back")
 
-	m.toolsMenu.active = true
-	m.toolsMenu.selectedIdx = 0
+	m.menu.open(menuTools)
 	m.input.SetValue("")
 }
 
 func (m *ShellModel) selectToolOption() {
-	if m.toolsMenu.selectedIdx == len(m.toolsMenu.options)-1 {
-		m.toolsMenu.active = false
+	if m.menu.selectedIdx == len(m.menu.options)-1 {
+		m.menu.close()
 		m.openConfigMenu()
 		return
 	}
@@ -1130,7 +1068,7 @@ func (m *ShellModel) selectToolOption() {
 	}
 	sort.Strings(toolNames)
 
-	selectedTool := toolNames[m.toolsMenu.selectedIdx]
+	selectedTool := toolNames[m.menu.selectedIdx]
 	m.cfg.Tools[selectedTool] = !m.cfg.Tools[selectedTool]
 
 	if err := config.SaveConfig(m.cfg); err != nil {
@@ -1143,16 +1081,15 @@ func (m *ShellModel) selectToolOption() {
 		m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Tool %s %s", selectedTool, status)})
 	}
 
-	// Refresh menu options
 	m.openToolsMenu()
 }
 
 func (m *ShellModel) selectModel() {
-	if m.modelMenu.selectedIdx < 0 || m.modelMenu.selectedIdx >= len(m.modelMenu.models) {
+	if m.menu.selectedIdx < 0 || m.menu.selectedIdx >= len(m.menu.models) {
 		return
 	}
 
-	modelInfo := m.modelMenu.models[m.modelMenu.selectedIdx]
+	modelInfo := m.menu.models[m.menu.selectedIdx]
 	selectedModel := modelInfo.Name
 	provider := modelInfo.Provider
 
@@ -1175,10 +1112,10 @@ func (m *ShellModel) selectModel() {
 		}
 	}
 
-	m.modelMenu.active = false
+	m.menu.close()
 }
 
-func (m *ShellModel) callLLM() {
+func (m *ShellModel) ElaborateMessage() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
