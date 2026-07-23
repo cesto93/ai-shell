@@ -19,9 +19,9 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 
 | Directory | Contents |
 |-----------|----------|
-| `cmd/` | Cobra commands: default (TUI shell), `get-config`, `config`, `commit` |
+| `cmd/` | Cobra commands: default (TUI shell), `get-config`, `config`, `commit`, `extract` |
 | `config/` | Viper YAML config, model lists, `.env` loading via `gotenv` |
-| `llm/` | `Agent` struct, `Caller` interface, `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, default system prompt |
+| `llm/` | `Agent` struct, `Caller` interface, `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, `NewProviderCallerRaw` (returns `*OpenAICaller`), `CallStructured` method (with `response_format`), `ProviderConfig` struct, default system prompt |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
 
 ## Config layering
@@ -71,6 +71,15 @@ TUI code in `cmd/` has no tests yet.
 - Uses `llm.NewProviderCaller` directly (not through `Agent`) with a noop executor and no tools
 - Strips markdown code fences from the LLM response
 - Writes the message to a temp file and runs `git commit -F <file>`
+
+## Extract command (cmd/extract.go)
+
+- Usable as `ai-shell extract <input> <schema>`
+- Two positional args: input file (.txt/.md/.pdf) and JSON schema file
+- Flag `-o` / `--output` writes result to a file (default: stdout)
+- Reads text from input (uses `pdftotext` for PDF)
+- Calls LLM with `response_format: json_schema` for structured output
+- Uses `llm.NewProviderCallerRaw` to get `*OpenAICaller` and calls `CallStructured`
 
 ## Key gotchas
 

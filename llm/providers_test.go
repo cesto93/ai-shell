@@ -11,11 +11,11 @@ func TestGetProviderConfigGemini(t *testing.T) {
 
 	cfg := getProviderConfig("gemini")
 
-	if cfg.baseURL != "https://generativelanguage.googleapis.com/v1beta/openai" {
-		t.Errorf("gemini baseURL = %q, want %q", cfg.baseURL, "https://generativelanguage.googleapis.com/v1beta/openai")
+	if cfg.BaseURL != "https://generativelanguage.googleapis.com/v1beta/openai" {
+		t.Errorf("gemini BaseURL = %q, want %q", cfg.BaseURL, "https://generativelanguage.googleapis.com/v1beta/openai")
 	}
-	if cfg.apiKey != "gemini-test-key" {
-		t.Errorf("gemini apiKey = %q, want %q", cfg.apiKey, "gemini-test-key")
+	if cfg.APIKey != "gemini-test-key" {
+		t.Errorf("gemini APIKey = %q, want %q", cfg.APIKey, "gemini-test-key")
 	}
 }
 
@@ -25,19 +25,19 @@ func TestGetProviderConfigOpenRouter(t *testing.T) {
 
 	cfg := getProviderConfig("openrouter")
 
-	if cfg.baseURL != "https://openrouter.ai/api/v1" {
-		t.Errorf("openrouter baseURL = %q, want %q", cfg.baseURL, "https://openrouter.ai/api/v1")
+	if cfg.BaseURL != "https://openrouter.ai/api/v1" {
+		t.Errorf("openrouter BaseURL = %q, want %q", cfg.BaseURL, "https://openrouter.ai/api/v1")
 	}
-	if cfg.apiKey != "or-test-key" {
-		t.Errorf("openrouter apiKey = %q, want %q", cfg.apiKey, "or-test-key")
+	if cfg.APIKey != "or-test-key" {
+		t.Errorf("openrouter APIKey = %q, want %q", cfg.APIKey, "or-test-key")
 	}
 }
 
 func TestGetProviderConfigLiteRTLM(t *testing.T) {
 	cfg := getProviderConfig("litertlm")
 
-	if cfg.baseURL != "http://localhost:9379/v1" {
-		t.Errorf("litertlm baseURL = %q, want %q", cfg.baseURL, "http://localhost:9379/v1")
+	if cfg.BaseURL != "http://localhost:9379/v1" {
+		t.Errorf("litertlm BaseURL = %q, want %q", cfg.BaseURL, "http://localhost:9379/v1")
 	}
 }
 
@@ -47,8 +47,8 @@ func TestGetProviderConfigLiteRTLMCustomURL(t *testing.T) {
 
 	cfg := getProviderConfig("litertlm")
 
-	if cfg.baseURL != "http://custom:8080/v1" {
-		t.Errorf("litertlm baseURL = %q, want %q", cfg.baseURL, "http://custom:8080/v1")
+	if cfg.BaseURL != "http://custom:8080/v1" {
+		t.Errorf("litertlm BaseURL = %q, want %q", cfg.BaseURL, "http://custom:8080/v1")
 	}
 }
 
@@ -57,8 +57,8 @@ func TestGetProviderConfigOllamaDefault(t *testing.T) {
 
 	cfg := getProviderConfig("ollama")
 
-	if cfg.baseURL != "http://localhost:11434/v1" {
-		t.Errorf("ollama baseURL = %q, want %q", cfg.baseURL, "http://localhost:11434/v1")
+	if cfg.BaseURL != "http://localhost:11434/v1" {
+		t.Errorf("ollama BaseURL = %q, want %q", cfg.BaseURL, "http://localhost:11434/v1")
 	}
 }
 
@@ -68,8 +68,8 @@ func TestGetProviderConfigOllamaCustomHost(t *testing.T) {
 
 	cfg := getProviderConfig("ollama")
 
-	if cfg.baseURL != "http://custom-host:5000/v1" {
-		t.Errorf("ollama baseURL = %q, want %q", cfg.baseURL, "http://custom-host:5000/v1")
+	if cfg.BaseURL != "http://custom-host:5000/v1" {
+		t.Errorf("ollama BaseURL = %q, want %q", cfg.BaseURL, "http://custom-host:5000/v1")
 	}
 }
 
@@ -78,8 +78,8 @@ func TestGetProviderConfigUnknownDefaultsToOllama(t *testing.T) {
 
 	cfg := getProviderConfig("unknown-provider")
 
-	if cfg.baseURL != "http://localhost:11434/v1" {
-		t.Errorf("unknown provider baseURL = %q, want %q", cfg.baseURL, "http://localhost:11434/v1")
+	if cfg.BaseURL != "http://localhost:11434/v1" {
+		t.Errorf("unknown provider BaseURL = %q, want %q", cfg.BaseURL, "http://localhost:11434/v1")
 	}
 }
 

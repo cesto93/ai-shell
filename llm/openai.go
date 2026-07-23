@@ -18,10 +18,11 @@ type OpenAICaller struct {
 }
 
 type OpenAIRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Tools       []any     `json:"tools,omitempty"`
-	Temperature float64   `json:"temperature,omitempty"`
+	Model          string    `json:"model"`
+	Messages       []Message `json:"messages"`
+	Tools          []any     `json:"tools,omitempty"`
+	Temperature    float64   `json:"temperature,omitempty"`
+	ResponseFormat any       `json:"response_format,omitempty"`
 }
 
 type OpenAIResponse struct {
@@ -41,6 +42,14 @@ func NewOpenAICaller(baseURL, apiKey, model string, executor ToolExecutor) *Open
 }
 
 func (o *OpenAICaller) Call(ctx context.Context, systemPrompt string, messages []Message, tools []any) ([]Message, error) {
+	return o.call(ctx, systemPrompt, messages, tools, nil)
+}
+
+func (o *OpenAICaller) CallStructured(ctx context.Context, systemPrompt string, messages []Message, tools []any, responseFormat any) ([]Message, error) {
+	return o.call(ctx, systemPrompt, messages, tools, responseFormat)
+}
+
+func (o *OpenAICaller) call(ctx context.Context, systemPrompt string, messages []Message, tools []any, responseFormat any) ([]Message, error) {
 	allMessages := []Message{
 		{Role: "system", Content: systemPrompt},
 	}
@@ -50,9 +59,10 @@ func (o *OpenAICaller) Call(ctx context.Context, systemPrompt string, messages [
 
 	for {
 		reqBody := OpenAIRequest{
-			Model:    o.Model,
-			Messages: allMessages,
-			Tools:    tools,
+			Model:          o.Model,
+			Messages:       allMessages,
+			Tools:          tools,
+			ResponseFormat: responseFormat,
 		}
 
 		jsonBody, err := json.Marshal(reqBody)

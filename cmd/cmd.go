@@ -14,6 +14,7 @@ var rootCmd = &cobra.Command{
 	Example: `  ai-shell
   ai-shell get-config
   ai-shell commit
+  ai-shell extract notes.txt schema.json
   echo "how do I list files?" | ai-shell`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := RunShell(); err != nil {
@@ -34,6 +35,7 @@ var configCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(commitCmd)
+	rootCmd.AddCommand(extractCmd)
 }
 
 func Execute() {
