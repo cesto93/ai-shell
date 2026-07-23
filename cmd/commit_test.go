@@ -83,16 +83,30 @@ func TestRunCommitWithRealLLM(t *testing.T) {
 		defaultURL string
 	}{
 		{
-			name:       "litertlm",
+			name:       "litertlm-gemma-4-E2B-it",
 			provider:   "litertlm",
 			model:      "gemma-4-E2B-it.litertlm",
 			envVar:     "LITERTLM_BASE_URL",
 			defaultURL: "http://localhost:9379",
 		},
 		{
-			name:       "ollama",
+			name:       "ollama-granite4-350m",
 			provider:   "ollama",
 			model:      "granite4:350m",
+			envVar:     "OLLAMA_HOST",
+			defaultURL: "http://localhost:11434",
+		},
+		{
+			name:       "ollama-granite4-350m-h",
+			provider:   "ollama",
+			model:      "granite4:350m-h",
+			envVar:     "OLLAMA_HOST",
+			defaultURL: "http://localhost:11434",
+		},
+		{
+			name:       "ollama-gemma3-270m",
+			provider:   "ollama",
+			model:      "gemma3:270m",
 			envVar:     "OLLAMA_HOST",
 			defaultURL: "http://localhost:11434",
 		},

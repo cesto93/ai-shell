@@ -57,7 +57,7 @@ func runCommit() error {
 		staged = true
 	}
 
-	logOutput, err := execCommand("git", "log", "--oneline", "-5").Output()
+	logOutput, err := execCommand("git", "log", "--oneline", "-3").Output()
 	if err != nil {
 		return fmt.Errorf("not a git repository or no commits yet: %w", err)
 	}
