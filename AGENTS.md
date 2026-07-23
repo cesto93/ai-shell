@@ -32,7 +32,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 
 Defaults: provider=ollama, model=granite4:3b-h, log_level=info, confirm=true, allowed_commands=ls,pwd. All 6 tools enabled by default. Custom commands stored in config.
 
-Log level values: `debug`, `info`, `warn`, `error`. Debug logs in `cmd/commit.go` only print when `log_level=debug`.
+Log level values: `debug`, `info`, `warn`, `error`. Debug logs print when `log_level=debug` — currently in `cmd/commit.go` (provider/model/prompt) and `cmd/shell.go` (LLM timing: total/llm/other duration and message count).
 
 ## Testing
 
