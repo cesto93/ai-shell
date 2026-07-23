@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"ai-shell/config"
 	"ai-shell/llm"
@@ -29,6 +30,7 @@ func (n noopExecutor) AskConfirmation(cmd string) bool {
 }
 
 var commitAll bool
+var dryRun bool
 
 var commitCmd = &cobra.Command{
 	Use:   "commit",
@@ -41,6 +43,7 @@ var commitCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(commitCmd)
 	commitCmd.Flags().BoolVarP(&commitAll, "all", "A", false, "stage all changes before committing")
+	commitCmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "print the commit message without creating a commit")
 }
 
 func runCommit() error {
@@ -98,9 +101,15 @@ Only output the commit message, nothing else.`,
 	}
 
 	caller := llm.NewProviderCaller(cfg.LLM.Provider, cfg.LLM.Model, noopExecutor{})
+	llmStart := time.Now()
 	resultMessages, err := caller.Call(context.Background(), systemPrompt, messages, nil)
+	llmDuration := time.Since(llmStart)
 	if err != nil {
 		return fmt.Errorf("LLM call failed: %w", err)
+	}
+
+	if cfg.LogLevel == "debug" {
+		log.Printf("[debug] timing: llm=%v", llmDuration)
 	}
 
 	if len(resultMessages) == 0 {
@@ -125,6 +134,10 @@ Only output the commit message, nothing else.`,
 	}
 
 	fmt.Printf("\n%s\n\n", msg)
+
+	if dryRun {
+		return nil
+	}
 
 	tmpFile, err := os.CreateTemp("", "commit-msg-*.txt")
 	if err != nil {
