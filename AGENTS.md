@@ -19,7 +19,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 
 | Directory | Contents |
 |-----------|----------|
-| `cmd/` | Cobra commands: default (TUI shell), `get-config` |
+| `cmd/` | Cobra commands: default (TUI shell), `get-config`, `commit` |
 | `config/` | Viper YAML config, model lists, `.env` loading via `gotenv` |
 | `llm/` | `Agent` struct, `Caller` interface, `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, default system prompt |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
@@ -50,6 +50,14 @@ TUI code in `cmd/` has no tests yet.
 - `@filepath` for image attachments (base64 encoded)
 - Tool execution requires user confirmation unless command is in `allowed_commands`
 - Lipgloss styles: `promptStyle`, `systemStyle`, `userStyle`, `aiStyle`, `errorStyle`, `cmdStyle`, `helpStyle`, `dimStyle`
+
+## Commit command (cmd/commit.go)
+
+- Usable as `ai-shell commit` or via `go run . commit`
+- Runs `git log --oneline -5` and `git diff --cached`, sends both as context to the LLM
+- Uses `llm.NewProviderCaller` directly (not through `Agent`) with a noop executor and no tools
+- Strips markdown code fences from the LLM response
+- Writes the message to a temp file and runs `git commit -F <file>`
 
 ## Key gotchas
 

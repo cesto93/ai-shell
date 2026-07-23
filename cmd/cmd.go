@@ -13,6 +13,7 @@ var rootCmd = &cobra.Command{
 	Long:  `An interactive shell powered by AI (Ollama) that can help you with commands and explanations.`,
 	Example: `  ai-shell
   ai-shell get-config
+  ai-shell commit
   echo "how do I list files?" | ai-shell`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := RunShell(); err != nil {
@@ -32,6 +33,7 @@ var configCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(commitCmd)
 }
 
 func Execute() {
