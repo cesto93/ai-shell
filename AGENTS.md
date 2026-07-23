@@ -19,7 +19,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 
 | Directory | Contents |
 |-----------|----------|
-| `cmd/` | Cobra commands: default (TUI shell), `get-config`, `commit` |
+| `cmd/` | Cobra commands: default (TUI shell), `get-config`, `config`, `commit` |
 | `config/` | Viper YAML config, model lists, `.env` loading via `gotenv` |
 | `llm/` | `Agent` struct, `Caller` interface, `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, default system prompt |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
@@ -52,6 +52,15 @@ TUI code in `cmd/` has no tests yet.
 - `@filepath` for image attachments (base64 encoded)
 - Tool execution requires user confirmation unless command is in `allowed_commands`
 - Lipgloss styles: `promptStyle`, `systemStyle`, `userStyle`, `aiStyle`, `errorStyle`, `cmdStyle`, `helpStyle`, `dimStyle`
+
+## Config command (cmd/config.go)
+
+- Usable as `ai-shell config --flag value`
+- Flags: `--provider`, `--model`, `--log-level`, `--confirm`, `--allowed-commands`, `--auto-start`, `--enable-tool`, `--disable-tool`, `--add-cmd`, `--rm-cmd`
+- Loads config via `config.LoadConfig()`, modifies specified fields, calls `config.SaveConfig()`
+- When `--model` is set without `--provider`, auto-detects provider via `config.LookupModelInfo`
+- `--add-cmd` uses `name=prompt` format
+- `SaveConfig` now persists `commands` map to YAML
 
 ## Commit command (cmd/commit.go)
 

@@ -238,10 +238,12 @@ func SaveConfig(cfg *Config) error {
 		LitertLM struct {
 			AutoStart bool `yaml:"auto_start"`
 		} `yaml:"litertlm"`
-		Tools map[string]bool `yaml:"tools,omitempty"`
+		Tools    map[string]bool   `yaml:"tools,omitempty"`
+		Commands map[string]string `yaml:"commands,omitempty"`
 	}{
 		LogLevel: cfg.LogLevel,
 		Tools:    cfg.Tools,
+		Commands: cfg.Commands,
 	}
 	out.LLM.Provider = cfg.LLM.Provider
 	out.LLM.Model = cfg.LLM.Model
