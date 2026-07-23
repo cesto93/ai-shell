@@ -65,6 +65,7 @@ TUI code in `cmd/` has no tests yet.
 ## Commit command (cmd/commit.go)
 
 - Usable as `ai-shell commit` or via `go run . commit`
+- Flag `-A` / `--all` stages all changes (`git add -A`) before committing
 - Runs `git log --oneline -5` and `git diff --cached`, sends both as context to the LLM
 - Uses `llm.NewProviderCaller` directly (not through `Agent`) with a noop executor and no tools
 - Strips markdown code fences from the LLM response

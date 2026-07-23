@@ -28,6 +28,8 @@ func (n noopExecutor) AskConfirmation(cmd string) bool {
 	return true
 }
 
+var commitAll bool
+
 var commitCmd = &cobra.Command{
 	Use:   "commit",
 	Short: "Generate a commit message for staged changes using AI",
@@ -36,7 +38,18 @@ var commitCmd = &cobra.Command{
 	},
 }
 
+func init() {
+	rootCmd.AddCommand(commitCmd)
+	commitCmd.Flags().BoolVarP(&commitAll, "all", "A", false, "stage all changes before committing")
+}
+
 func runCommit() error {
+	if commitAll {
+		if out, err := exec.Command("git", "add", "-A").CombinedOutput(); err != nil {
+			return fmt.Errorf("git add -A failed: %w\n%s", err, out)
+		}
+	}
+
 	logOutput, err := exec.Command("git", "log", "--oneline", "-5").Output()
 	if err != nil {
 		return fmt.Errorf("not a git repository or no commits yet: %w", err)
