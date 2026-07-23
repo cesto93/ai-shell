@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -76,6 +77,10 @@ Only output the commit message, nothing else.`,
 	messages := []llm.Message{
 		{Role: "user", Content: userPrompt},
 	}
+
+	log.Printf("[debug] provider=%s model=%s", cfg.LLM.Provider, cfg.LLM.Model)
+	log.Printf("[debug] system prompt: %s", systemPrompt)
+	log.Printf("[debug] user prompt: %s", userPrompt)
 
 	caller := llm.NewProviderCaller(cfg.LLM.Provider, cfg.LLM.Model, noopExecutor{})
 	resultMessages, err := caller.Call(context.Background(), systemPrompt, messages, nil)
