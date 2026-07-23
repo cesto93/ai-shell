@@ -4,13 +4,11 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"os"
 	"os/user"
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"ai-shell/config"
 	"ai-shell/llm"
@@ -270,6 +268,7 @@ func NewShellModel() (*ShellModel, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
+	config.InitLogger(cfg.LogLevel)
 
 	ti := textinput.New()
 	ti.Placeholder = "Ask the AI..."
@@ -1098,8 +1097,6 @@ func (m *ShellModel) selectModel() {
 }
 
 func (m *ShellModel) ElaborateMessage() {
-	startTime := time.Now()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1132,16 +1129,7 @@ func (m *ShellModel) ElaborateMessage() {
 		}
 	}
 
-	llmStart := time.Now()
 	resultMessages, err := agent.CallLLM(ctx, executor, commonMessages)
-	llmDuration := time.Since(llmStart)
-	totalDuration := time.Since(startTime)
-	otherDuration := totalDuration - llmDuration
-
-	if m.cfg.LogLevel == "debug" {
-		log.Printf("[debug] timing: total=%v llm=%v other=%v messages=%d",
-			totalDuration, llmDuration, otherDuration, len(commonMessages))
-	}
 
 	if err != nil {
 		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})

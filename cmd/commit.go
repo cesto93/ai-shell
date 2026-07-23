@@ -3,7 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -75,6 +75,7 @@ func runCommit() error {
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
+	config.InitLogger(cfg.LogLevel)
 
 	systemPrompt := "You are a helpful assistant that writes concise git commit messages."
 	userPrompt := fmt.Sprintf(`Generate a concise git commit message for the following staged changes.
@@ -98,11 +99,9 @@ Only output the commit message, nothing else.`,
 		{Role: "user", Content: userPrompt},
 	}
 
-	if cfg.LogLevel == "debug" {
-		log.Printf("[debug] provider=%s model=%s", cfg.LLM.Provider, cfg.LLM.Model)
-		log.Printf("[debug] system prompt: %s", systemPrompt)
-		log.Printf("[debug] user prompt: %s", userPrompt)
-	}
+	slog.Debug("provider", "name", cfg.LLM.Provider, "model", cfg.LLM.Model)
+	slog.Debug("system prompt", "prompt", systemPrompt)
+	slog.Debug("user prompt", "prompt", userPrompt)
 
 	caller := llm.NewProviderCaller(cfg.LLM.Provider, cfg.LLM.Model, noopExecutor{})
 	llmStart := time.Now()
@@ -112,9 +111,7 @@ Only output the commit message, nothing else.`,
 		return fmt.Errorf("LLM call failed: %w", err)
 	}
 
-	if cfg.LogLevel == "debug" {
-		log.Printf("[debug] timing: llm=%v", llmDuration)
-	}
+	slog.Debug("timing", "llm", llmDuration)
 
 	if len(resultMessages) == 0 {
 		return fmt.Errorf("no response from LLM")

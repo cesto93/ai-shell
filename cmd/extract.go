@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -96,6 +96,7 @@ func runExtract(inputPath, schemaPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
+	config.InitLogger(cfg.LogLevel)
 
 	responseFormat := map[string]any{
 		"type": "json_schema",
@@ -113,9 +114,7 @@ func runExtract(inputPath, schemaPath string) error {
 		{Role: "user", Content: userPrompt},
 	}
 
-	if cfg.LogLevel == "debug" {
-		log.Printf("[debug] provider=%s model=%s", cfg.LLM.Provider, cfg.LLM.Model)
-	}
+	slog.Debug("provider", "name", cfg.LLM.Provider, "model", cfg.LLM.Model)
 
 	caller := llm.NewProviderCallerRaw(cfg.LLM.Provider, cfg.LLM.Model, noopExtractExecutor{})
 	llmStart := time.Now()
@@ -125,9 +124,7 @@ func runExtract(inputPath, schemaPath string) error {
 		return fmt.Errorf("LLM call failed: %w", err)
 	}
 
-	if cfg.LogLevel == "debug" {
-		log.Printf("[debug] timing: llm=%v", llmDuration)
-	}
+	slog.Debug("timing", "llm", llmDuration)
 
 	if len(resultMessages) == 0 {
 		return fmt.Errorf("no response from LLM")

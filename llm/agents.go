@@ -3,7 +3,7 @@ package llm
 import (
 	"ai-shell/tools"
 	"bytes"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"text/template"
@@ -225,13 +225,13 @@ func GetDefaultSystemPrompt(enabledTools map[string]bool) string {
 func readPromptFile() []byte {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		log.Printf("Cannot determine home directory: %v, using embedded prompt", err)
+		slog.Warn("Cannot determine home directory, using embedded prompt", "err", err)
 		return GetDefaultPromptBytes()
 	}
 
 	raw, err := os.ReadFile(filepath.Join(home, ".ai-shell", "PROMPT.md"))
 	if err != nil {
-		log.Printf("Cannot read ~/.ai-shell/PROMPT.md: %v, using embedded prompt", err)
+		slog.Warn("Cannot read ~/.ai-shell/PROMPT.md, using embedded prompt", "err", err)
 		return GetDefaultPromptBytes()
 	}
 

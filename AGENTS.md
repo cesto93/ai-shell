@@ -32,7 +32,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 
 Defaults: provider=ollama, model=granite4:3b-h, log_level=info, confirm=true, allowed_commands=ls,pwd. All 6 tools enabled by default. Custom commands stored in config.
 
-Log level values: `debug`, `info`, `warn`, `error`. Debug logs print when `log_level=debug` — currently in `cmd/commit.go` (provider/model/prompt) and `cmd/shell.go` (LLM timing: total/llm/other duration and message count).
+Log level values: `debug`, `info`, `warn`, `error`. Uses `log/slog` throughout (no `log` package). Call `config.InitLogger(cfg.LogLevel)` after `LoadConfig()` to configure the global slog level. Debug messages use `slog.Debug`, warnings use `slog.Warn`. Debug logging in `cmd/commit.go` (provider/model/prompt) and `cmd/shell.go` (LLM timing: total/llm/other duration and message count).
 
 ## Testing
 
@@ -86,5 +86,6 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 - `config.LoadConfig()` may return partial defaults on error — check both return values
 - `.env` files are loaded at startup via `gotenv.Load()` — place API keys there, not in config.yaml
 - KV store uses bbolt at `~/.config/ai-shell/kv_store.db`
+- `config.InitLogger(cfg.LogLevel)` must be called after each `config.LoadConfig()` to configure the global slog level — it's already called in shell/commit/extract commands
 - System prompt is a Go constant in `llm/prompt.go`, copied to `~/.ai-shell/PROMPT.md` on first run — always read from there, never from local file
 - 100 char soft line limit, Go 1.25.5+
