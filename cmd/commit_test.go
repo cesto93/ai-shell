@@ -50,7 +50,7 @@ func requireProvider(t *testing.T, baseURL, model string) {
 	t.Fatalf("model %q not found at %s; available: %s (set TEST_MODEL to override)", model, baseURL, strings.Join(names, ", "))
 }
 
-func mockGitExecCommand() func(string, ...string) *exec.Cmd {
+func mockGitExecCommand(diffPath string) func(string, ...string) *exec.Cmd {
 	return func(command string, args ...string) *exec.Cmd {
 		if command != "git" {
 			return exec.Command(command, args...)
@@ -61,7 +61,7 @@ func mockGitExecCommand() func(string, ...string) *exec.Cmd {
 				`echo "abc1234 fix: previous change"`)
 		case len(args) >= 2 && args[0] == "diff" && args[1] == "--cached":
 			return exec.Command("sh", "-c",
-				`echo 'diff --git a/f.go b/f.go'; echo 'index abc..def 100644'; echo '--- a/f.go'; echo '+++ b/f.go'; echo '@@ -1 +1 @@'; echo '-old'; echo '+new'`)
+				"cat '"+diffPath+"'")
 		case args[0] == "add":
 			return exec.Command("true")
 		case args[0] == "reset":
@@ -118,6 +118,12 @@ func TestRunCommitWithRealLLM(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
+			diffPath, err := filepath.Abs(filepath.Join("testdata", "commit_diff.txt"))
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			os.Chdir(tmpDir)
 			defer os.Chdir(origDir)
 
@@ -125,7 +131,7 @@ func TestRunCommitWithRealLLM(t *testing.T) {
 			defer os.Unsetenv(tt.envVar)
 
 			origExecCommand := execCommand
-			execCommand = mockGitExecCommand()
+			execCommand = mockGitExecCommand(diffPath)
 			defer func() { execCommand = origExecCommand }()
 
 			configYAML := fmt.Sprintf("llm:\n  provider: %s\n  model: %s\n", tt.provider, model)

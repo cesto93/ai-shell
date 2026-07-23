@@ -1,0 +1,103 @@
+diff --git a/cmd/extract_test.go b/cmd/extract_test.go
+new file mode 100644
+index 0000000..b74475b
+--- /dev/null
++++ b/cmd/extract_test.go
+@@ -0,0 +1,97 @@
++//go:build integration
++
++package cmd
++
++import (
++       "fmt"
++       "os"
++       "path/filepath"
++       "testing"
++)
++
++func TestRunExtractWithRealLLM(t *testing.T) {
++       tests := []struct {
++               name       string
++               provider   string
++               model      string
++               envVar     string
++               defaultURL string
++       }{
++               {
++                       name:       "litertlm",
++                       provider:   "litertlm",
++                       model:      "gemma-4-E2B-it.litertlm",
++                       envVar:     "LITERTLM_BASE_URL",
++                       defaultURL: "http://localhost:9379",
++               },
++               {
++                       name:       "ollama",
++                       provider:   "ollama",
++                       model:      "granite4:350m",
++                       envVar:     "OLLAMA_HOST",
++                       defaultURL: "http://localhost:11434",
++               },
++       }
++
++       schema := `{
++               "type": "object",
++               "properties": {
++                       "invoice_number": { "type": "string" },
++                       "vendor":         { "type": "string" },
++                       "total_amount":   { "type": "number" }
++               },
++               "required": ["invoice_number", "vendor", "total_amount"]
++       }`
++
++       input := `Invoice INV-2024-001
++Vendor: Acme Corp
++Total: $1,234.56`
++
++       for _, tt := range tests {
++               t.Run(tt.name, func(t *testing.T) {
++                       baseURL := os.Getenv(tt.envVar)
++                       if baseURL == "" {
++                               baseURL = tt.defaultURL
++                       }
++
++                       model := tt.model
++                       if m := os.Getenv("TEST_MODEL"); m != "" {
++                               model = m
++                       }
++
++                       requireProvider(t, baseURL, model)
++
++                       tmpDir := t.TempDir()
++
++                       origDir, err := os.Getwd()
++                       if err != nil {
++                               t.Fatal(err)
++                       }
++                       os.Chdir(tmpDir)
++                       defer os.Chdir(origDir)
++
++                       os.Setenv(tt.envVar, baseURL)
++                       defer os.Unsetenv(tt.envVar)
++
++                       inputPath := filepath.Join(tmpDir, "invoice.txt")
++                       if err := os.WriteFile(inputPath, []byte(input), 0644); err != nil {
++                               t.Fatal(err)
++                       }
++
++                       schemaPath := filepath.Join(tmpDir, "schema.json")
++                       if err := os.WriteFile(schemaPath, []byte(schema), 0644); err != nil {
++                               t.Fatal(err)
++                       }
++
++                       configYAML := fmt.Sprintf("llm:\n  provider: %s\n  model: %s\n", tt.provider, model)
++                       if err := os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte(configYAML), 0644); err != nil {
++                               t.Fatal(err)
++                       }
++
++                       extractOutput = ""
++                       if err := runExtract(inputPath, schemaPath); err != nil {
++                               t.Fatalf("runExtract() error = %v", err)
++                       }
++               })
++       }
++}
