@@ -57,11 +57,6 @@ func runCommit() error {
 		staged = true
 	}
 
-	logOutput, err := execCommand("git", "log", "--oneline", "-3").Output()
-	if err != nil {
-		return fmt.Errorf("not a git repository or no commits yet: %w", err)
-	}
-
 	diffOutput, err := execCommand("git", "diff", "--cached").Output()
 	if err != nil {
 		return fmt.Errorf("failed to get staged diff: %w", err)
@@ -80,9 +75,6 @@ func runCommit() error {
 	systemPrompt := "You are a helpful assistant that writes concise git commit messages."
 	userPrompt := fmt.Sprintf(`Generate a concise git commit message for the following staged changes.
 
-Recent commits (for context):
-%s
-
 Staged changes (git diff --cached):
 %s
 
@@ -91,7 +83,6 @@ The first line should be a concise summary under 72 characters.
 If more detail is needed, add a blank line followed by bullet points or a short body.
 Use the imperative mood ("add" not "added").
 Only output the commit message, nothing else.`,
-		strings.TrimSpace(string(logOutput)),
 		strings.TrimSpace(string(diffOutput)),
 	)
 
