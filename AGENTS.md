@@ -37,14 +37,14 @@ Log level values: `debug`, `info`, `warn`, `error`. Debug logs print when `log_l
 ## Testing
 
 ```bash
-go test ./...           # all pass (config, llm, tools)
+go test ./...           # all pass (config, llm, tools, cmd)
 go test -v -run TestName ./package
 go test -cover ./...
 ```
 
 Test conventions: table-driven tests, `t.Run()` subtests, function variable mocking (e.g. `userConfigDirFunc`, `loadEnvFunc` in `config/`, `dbPathFunc` in `tools/`).
 
-TUI code in `cmd/` has no tests yet.
+`cmd/commit_test.go` has integration tests for the commit flow (both litertlm and ollama providers) using an httptest server to mock the LLM API.
 
 ## TUI conventions (cmd/shell.go)
 

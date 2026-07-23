@@ -15,6 +15,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var execCommand = exec.Command
+
 type noopExecutor struct{}
 
 func (n noopExecutor) ExecuteTool(call llm.ToolCall) (string, error) {
@@ -49,18 +51,18 @@ func init() {
 func runCommit() error {
 	var staged bool
 	if commitAll {
-		if out, err := exec.Command("git", "add", "-A").CombinedOutput(); err != nil {
+		if out, err := execCommand("git", "add", "-A").CombinedOutput(); err != nil {
 			return fmt.Errorf("git add -A failed: %w\n%s", err, out)
 		}
 		staged = true
 	}
 
-	logOutput, err := exec.Command("git", "log", "--oneline", "-5").Output()
+	logOutput, err := execCommand("git", "log", "--oneline", "-5").Output()
 	if err != nil {
 		return fmt.Errorf("not a git repository or no commits yet: %w", err)
 	}
 
-	diffOutput, err := exec.Command("git", "diff", "--cached").Output()
+	diffOutput, err := execCommand("git", "diff", "--cached").Output()
 	if err != nil {
 		return fmt.Errorf("failed to get staged diff: %w", err)
 	}
@@ -139,7 +141,7 @@ Only output the commit message, nothing else.`,
 
 	if dryRun {
 		if staged {
-			exec.Command("git", "reset").Run()
+			execCommand("git", "reset").Run()
 		}
 		return nil
 	}
@@ -156,7 +158,7 @@ Only output the commit message, nothing else.`,
 	}
 	tmpFile.Close()
 
-	commitCmd := exec.Command("git", "commit", "-F", tmpFile.Name())
+	commitCmd := execCommand("git", "commit", "-F", tmpFile.Name())
 	commitCmd.Stdout = os.Stdout
 	commitCmd.Stderr = os.Stderr
 
