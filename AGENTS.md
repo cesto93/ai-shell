@@ -66,6 +66,7 @@ TUI code in `cmd/` has no tests yet.
 
 - Usable as `ai-shell commit` or via `go run . commit`
 - Flag `-A` / `--all` stages all changes (`git add -A`) before committing
+- Flag `-d` / `--dry-run` prints the commit message without committing; if used with `-A`, files are unstaged (`git reset`) after the dry run
 - Runs `git log --oneline -5` and `git diff --cached`, sends both as context to the LLM
 - Uses `llm.NewProviderCaller` directly (not through `Agent`) with a noop executor and no tools
 - Strips markdown code fences from the LLM response

@@ -47,10 +47,12 @@ func init() {
 }
 
 func runCommit() error {
+	var staged bool
 	if commitAll {
 		if out, err := exec.Command("git", "add", "-A").CombinedOutput(); err != nil {
 			return fmt.Errorf("git add -A failed: %w\n%s", err, out)
 		}
+		staged = true
 	}
 
 	logOutput, err := exec.Command("git", "log", "--oneline", "-5").Output()
@@ -136,6 +138,9 @@ Only output the commit message, nothing else.`,
 	fmt.Printf("\n%s\n\n", msg)
 
 	if dryRun {
+		if staged {
+			exec.Command("git", "reset").Run()
+		}
 		return nil
 	}
 
