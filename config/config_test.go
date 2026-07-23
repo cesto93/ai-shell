@@ -665,6 +665,7 @@ func TestSaveConfig(t *testing.T) {
 
 	cfg := &Config{
 		ConfigFile: configFile,
+		LogLevel:   "info",
 		LLM: struct {
 			Provider   string   `mapstructure:"provider"`
 			Model      string   `mapstructure:"model"`
@@ -714,6 +715,7 @@ func TestSaveConfigEmptyPath(t *testing.T) {
 	defer func() { getConfigPathFunc = origGetConfigPath }()
 
 	cfg := &Config{
+		LogLevel: "info",
 		LLM: struct {
 			Provider   string   `mapstructure:"provider"`
 			Model      string   `mapstructure:"model"`

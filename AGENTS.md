@@ -30,7 +30,9 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 2. `./.env` (local overrides)
 3. `config.yaml` from `./` or `~/.config/ai-shell/`
 
-Defaults: provider=ollama, model=granite4:3b-h, confirm=true, allowed_commands=ls,pwd. All 6 tools enabled by default. Custom commands stored in config.
+Defaults: provider=ollama, model=granite4:3b-h, log_level=info, confirm=true, allowed_commands=ls,pwd. All 6 tools enabled by default. Custom commands stored in config.
+
+Log level values: `debug`, `info`, `warn`, `error`. Debug logs in `cmd/commit.go` only print when `log_level=debug`.
 
 ## Testing
 
