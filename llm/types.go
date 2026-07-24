@@ -48,3 +48,9 @@ type ToolExecutor interface {
 type Caller interface {
 	Call(ctx context.Context, systemPrompt string, messages []Message, tools []any) ([]Message, error)
 }
+
+// RawCaller extends Caller with structured output support.
+type RawCaller interface {
+	Caller
+	CallStructured(ctx context.Context, systemPrompt string, messages []Message, tools []any, responseFormat any) ([]Message, error)
+}

@@ -28,6 +28,8 @@ func getProviderConfig(provider string) ProviderConfig {
 			baseURL = "http://localhost:9379"
 		}
 		return ProviderConfig{BaseURL: baseURL + "/v1"}
+	case "llamacpp":
+		return ProviderConfig{}
 	default: // ollama
 		baseURL := os.Getenv("OLLAMA_HOST")
 		if baseURL == "" {
@@ -38,11 +40,17 @@ func getProviderConfig(provider string) ProviderConfig {
 }
 
 func NewProviderCaller(provider, model string, executor ToolExecutor) Caller {
+	if provider == "llamacpp" {
+		return NewLlamacppCaller(model, executor)
+	}
 	cfg := getProviderConfig(provider)
 	return NewOpenAICaller(cfg.BaseURL, cfg.APIKey, model, executor)
 }
 
-func NewProviderCallerRaw(provider, model string, executor ToolExecutor) *OpenAICaller {
+func NewProviderCallerRaw(provider, model string, executor ToolExecutor) RawCaller {
+	if provider == "llamacpp" {
+		return NewLlamacppCaller(model, executor)
+	}
 	cfg := getProviderConfig(provider)
 	return NewOpenAICaller(cfg.BaseURL, cfg.APIKey, model, executor)
 }

@@ -2,7 +2,7 @@
 
 ## Project
 
-Interactive AI shell TUI (Bubbletea) with 4 LLM providers: Ollama, Gemini, OpenRouter, LitertLM. All providers share `OpenAICaller` (`llm/openai.go`) via a single `NewProviderCaller` factory (`llm/providers.go`) that routes by provider name with different base URLs and API keys.
+Interactive AI shell TUI (Bubbletea) with 5 LLM providers: Ollama, Gemini, OpenRouter, LitertLM, Llamacpp. OpenAI-compatible providers (Ollama, Gemini, OpenRouter, LiteRT-LM) share `OpenAICaller` (`llm/openai.go`) via `NewProviderCaller` factory (`llm/providers.go`). The `llamacpp` provider uses `LlamacppCaller` (`llm/llamacpp.go`) with the `yzma` Go binding (`github.com/hybridgroup/yzma`) for in-process llama.cpp inference — no HTTP server required.
 
 Entry point: `main.go` → `cmd.Execute()`. Default command launches Bubbletea TUI in `cmd/shell.go` (MVU pattern). When the `litertlm` provider is configured, `cmd/litertlm_service.go` auto-starts `litert-lm serve --port <port> --api openai` as a background process and health-checks it before the TUI begins.
 
@@ -21,7 +21,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 |-----------|----------|
 | `cmd/` | Cobra commands: default (TUI shell), `get-config`, `config`, `commit`, `extract` |
 | `config/` | Viper YAML config, model lists, `.env` loading via `gotenv` |
-| `llm/` | `Agent` struct, `Caller` interface, `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, `NewProviderCallerRaw` (returns `*OpenAICaller`), `CallStructured` method (with `response_format`), `ProviderConfig` struct, default system prompt |
+| `llm/` | `Agent` struct, `Caller` interface, `RawCaller` interface (adds `CallStructured`), `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, `NewProviderCallerRaw` (returns `RawCaller`), `CallStructured` method (with `response_format`), `ProviderConfig` struct, default system prompt, `LlamacppCaller` (in-process llama.cpp via yzma) |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
 
 ## Config layering
@@ -79,7 +79,7 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 - Flag `-o` / `--output` writes result to a file (default: stdout)
 - Reads text from input (uses `pdftotext` for PDF)
 - Calls LLM with `response_format: json_schema` for structured output
-- Uses `llm.NewProviderCallerRaw` to get `*OpenAICaller` and calls `CallStructured`
+- Uses `llm.NewProviderCallerRaw` to get `RawCaller` and calls `CallStructured`
 
 ## Key gotchas
 
@@ -89,3 +89,4 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 - `config.InitLogger(cfg.LogLevel)` must be called after each `config.LoadConfig()` to configure the global slog level — it's already called in shell/commit/extract commands
 - System prompt is a Go constant in `llm/prompt.go`, copied to `~/.ai-shell/PROMPT.md` on first run — always read from there, never from local file
 - 100 char soft line limit, Go 1.25.5+
+- Llamacpp provider (`llm/llamacpp.go`) loads the llama.cpp shared library and GGUF model from `~/.ai-shell/`. The `model` config field should be the GGUF filename (e.g. `granite4-3b-h.Q4_K_M.gguf`). Model + shared libs (libllama.so, libggml.so, etc.) must be placed in `~/.ai-shell/` manually. Structured output (`extract` command) is not supported for this provider.
