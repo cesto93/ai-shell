@@ -318,6 +318,8 @@ func SaveModelWithProvider(modelName, provider string) error {
 		cfg.LLM.Provider = "litertlm"
 	} else if modelInList(modelName, OpenRouterModels) {
 		cfg.LLM.Provider = "openrouter"
+	} else if IsLlamacppModel(modelName) {
+		cfg.LLM.Provider = "llamacpp"
 	} else {
 		cfg.LLM.Provider = "ollama"
 	}
@@ -387,6 +389,38 @@ func GetLitertLMModels() ([]ModelInfo, error) {
 	return result, nil
 }
 
+func GetLlamacppModels() []ModelInfo {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	dir := filepath.Join(home, ".ai-shell", "models", "llamacpp")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var models []ModelInfo
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(strings.ToLower(name), ".gguf") {
+			continue
+		}
+		modelName := strings.TrimSuffix(name, ".gguf")
+		models = append(models, ModelInfo{
+			Name:     modelName,
+			Provider: "llamacpp",
+		})
+	}
+	return models
+}
+
+func IsLlamacppModel(modelName string) bool {
+	return modelInList(modelName, GetLlamacppModels())
+}
+
 var OpenRouterModels = []ModelInfo{
 	{Name: "nvidia/nemotron-3-super-120b-a12b:free", Provider: "openrouter"},
 	{Name: "z-ai/glm-4.5-air:free", Provider: "openrouter"},
@@ -405,6 +439,7 @@ func GetAllAvailableModels() []ModelInfo {
 	if litertlmModels, err := GetLitertLMModels(); err == nil {
 		models = append(models, litertlmModels...)
 	}
+	models = append(models, GetLlamacppModels()...)
 	return models
 }
 

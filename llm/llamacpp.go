@@ -73,7 +73,6 @@ func (l *LlamacppCaller) Call(ctx context.Context, systemPrompt string, messages
 	}
 
 	batch := llama.BatchGetOne(tokens)
-	defer llama.BatchFree(batch)
 
 	var response strings.Builder
 	for pos := int32(0); pos < llamacppDefaultMaxTokens; pos += batch.NTokens {
@@ -98,7 +97,6 @@ func (l *LlamacppCaller) Call(ctx context.Context, systemPrompt string, messages
 			response.Write(buf[:n])
 		}
 
-		llama.BatchFree(batch)
 		batch = llama.BatchGetOne([]llama.Token{token})
 	}
 
@@ -122,10 +120,17 @@ func (l *LlamacppCaller) CallStructured(ctx context.Context, systemPrompt string
 }
 
 func (l *LlamacppCaller) applyChatTemplate(chatMsgs []llama.ChatMessage, addAssistant bool) string {
-	buf := make([]byte, 4096)
+	buf := make([]byte, 131072)
 	n := llama.ChatApplyTemplate(l.template, chatMsgs, addAssistant, buf)
-	if n <= 0 || n >= int32(len(buf)) {
+	if n <= 0 {
 		return ""
+	}
+	if n >= int32(len(buf)) {
+		buf = make([]byte, n+1)
+		n = llama.ChatApplyTemplate(l.template, chatMsgs, addAssistant, buf)
+		if n <= 0 {
+			return ""
+		}
 	}
 	return string(buf[:n])
 }
@@ -169,7 +174,7 @@ func (l *LlamacppCaller) initialize() error {
 
 	ctxParams := llama.ContextDefaultParams()
 	ctxParams.NCtx = llamacppDefaultCtxSize
-	ctxParams.NBatch = 512
+	ctxParams.NBatch = llamacppDefaultCtxSize
 
 	slog.Debug("llamacpp: creating context")
 	lctx, err := llama.InitFromModel(llm, ctxParams)
