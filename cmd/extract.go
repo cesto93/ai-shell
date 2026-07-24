@@ -48,7 +48,6 @@ Example:
 }
 
 func init() {
-	rootCmd.AddCommand(extractCmd)
 	extractCmd.Flags().StringVarP(&extractOutput, "output", "o", "", "output file (default: stdout)")
 }
 

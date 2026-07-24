@@ -10,7 +10,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "ai-shell",
 	Short: "AI Shell is an interactive shell powered by AI",
-	Long:  `An interactive shell powered by AI (Ollama) that can help you with commands and explanations.`,
+	Long:  `An interactive shell powered by AI that can help you with commands and explanations.`,
 	Example: `  ai-shell
   ai-shell get-config
   ai-shell commit

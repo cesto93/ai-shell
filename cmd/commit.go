@@ -43,7 +43,6 @@ var commitCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(commitCmd)
 	commitCmd.Flags().BoolVarP(&commitAll, "all", "A", false, "stage all changes before committing")
 	commitCmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "print the commit message without creating a commit")
 }
