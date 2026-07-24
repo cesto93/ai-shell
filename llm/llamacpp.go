@@ -136,7 +136,7 @@ func (l *LlamacppCaller) initialize() error {
 		return fmt.Errorf("cannot get home dir: %w", err)
 	}
 
-	l.libDir = filepath.Join(home, ".ai-shell")
+	l.libDir = filepath.Join(home, ".ai-shell", "models", "llamacpp")
 
 	slog.Debug("llamacpp: loading library", "dir", l.libDir)
 	if err := llama.Load(l.libDir); err != nil {
