@@ -20,7 +20,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 
 | Directory | Contents |
 |-----------|----------|
-| `cmd/` | Cobra commands: default (TUI shell), `get-config`, `config`, `commit`, `extract` |
+| `cmd/` | Cobra commands: default (TUI shell), `get-config`, `config`, `commit`, `extract`, `pull` |
 | `config/` | Viper YAML config, model lists, `.env` loading via `gotenv` |
 | `llm/` | `Agent` struct, `Caller` interface, `RawCaller` interface (adds `CallStructured`), `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, `NewProviderCallerRaw` (returns `RawCaller`), `CallStructured` method (with `response_format`), `ProviderConfig` struct, default system prompt, `LlamacppCaller` (in-process llama.cpp via yzma) |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
@@ -81,6 +81,15 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 - Reads text from input (uses `pdftotext` for PDF)
 - Calls LLM with `response_format: json_schema` for structured output
 - Uses `llm.NewProviderCallerRaw` to get `RawCaller` and calls `CallStructured`
+
+## Pull command (cmd/pull.go)
+
+- Usable as `ai-shell pull <repo> <filename>`
+- Downloads a GGUF model from HuggingFace to `~/.ai-shell/models/llamacpp/`
+- Shows progress bar with percentage and bytes downloaded
+- Auto-updates config via `config.SaveModelWithProvider(modelName, "llamacpp")`
+- Cleans up partial file on download failure
+- Uses `net/http` directly (no external download libraries)
 
 ## Key gotchas
 
