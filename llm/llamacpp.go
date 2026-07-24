@@ -24,6 +24,7 @@ type LlamacppCaller struct {
 	smplr    llama.Sampler
 	template string
 	libDir   string
+	modelDir string
 }
 
 const llamacppDefaultCtxSize = 4096
@@ -141,7 +142,8 @@ func (l *LlamacppCaller) initialize() error {
 		return fmt.Errorf("cannot get home dir: %w", err)
 	}
 
-	l.libDir = filepath.Join(home, ".ai-shell", "models", "llamacpp")
+	l.libDir = filepath.Join(home, ".ai-shell", "lib")
+	l.modelDir = filepath.Join(home, ".ai-shell", "models", "llamacpp")
 
 	slog.Debug("llamacpp: loading library", "dir", l.libDir)
 	if err := llama.Load(l.libDir); err != nil {
@@ -151,12 +153,12 @@ func (l *LlamacppCaller) initialize() error {
 	llama.LogSet(llama.LogSilent())
 	llama.Init()
 
-	modelPath := filepath.Join(l.libDir, l.Model)
+	modelPath := filepath.Join(l.modelDir, l.Model)
 	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		modelPath = filepath.Join(l.libDir, l.Model+".gguf")
+		modelPath = filepath.Join(l.modelDir, l.Model+".gguf")
 		if _, err := os.Stat(modelPath); os.IsNotExist(err) {
 			return fmt.Errorf("model file not found: tried %s and %s",
-				filepath.Join(l.libDir, l.Model), modelPath)
+				filepath.Join(l.modelDir, l.Model), modelPath)
 		}
 	}
 
