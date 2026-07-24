@@ -3,7 +3,7 @@ AI_SHELL_DIR := $(HOME)/.ai-shell
 
 build:
 	go build -o ai-shell .
-install:
+install: install-yzma
 	go install .
 install-yzma:
 	go install github.com/hybridgroup/yzma@latest
