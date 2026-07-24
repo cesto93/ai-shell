@@ -20,7 +20,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 
 | Directory | Contents |
 |-----------|----------|
-| `cmd/` | Cobra commands: default (TUI shell), `get-config`, `config`, `commit`, `extract`, `pull` |
+| `cmd/` | Cobra commands: default (TUI shell), `get-config`, `config`, `commit`, `extract`, `pull`, `models` |
 | `config/` | Viper YAML config, model lists, `.env` loading via `gotenv` |
 | `llm/` | `Agent` struct, `Caller` interface, `RawCaller` interface (adds `CallStructured`), `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, `NewProviderCallerRaw` (returns `RawCaller`), `CallStructured` method (with `response_format`), `ProviderConfig` struct, default system prompt, `LlamacppCaller` (in-process llama.cpp via yzma) |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
@@ -90,6 +90,15 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 - Auto-updates config via `config.SaveModelWithProvider(modelName, "llamacpp")`
 - Cleans up partial file on download failure
 - Uses `net/http` directly (no external download libraries)
+
+## Models command (cmd/models.go)
+
+- Usable as `ai-shell models`
+- Lists all available models from all providers in a table: Model, Provider, Size
+- Sorted by provider then model name
+- For llamacpp models, shows the GGUF file size (from `config.GetLlamacppModels()`, now populates `Size` via `entry.Info()`)
+- Uses `text/tabwriter` for aligned output
+- Current model is prefixed with `* `
 
 ## Key gotchas
 

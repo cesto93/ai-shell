@@ -409,9 +409,15 @@ func GetLlamacppModels() []ModelInfo {
 			continue
 		}
 		modelName := strings.TrimSuffix(name, ".gguf")
+		info, err := entry.Info()
+		size := ""
+		if err == nil {
+			size = formatFileSize(info.Size())
+		}
 		models = append(models, ModelInfo{
 			Name:     modelName,
 			Provider: "llamacpp",
+			Size:     size,
 		})
 	}
 	return models
@@ -647,4 +653,17 @@ func EnsureCommandsDir() error {
 	}
 	localDir := filepath.Join(cwd, ".ai-shell", "commands")
 	return os.MkdirAll(localDir, 0755)
+}
+
+func formatFileSize(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
