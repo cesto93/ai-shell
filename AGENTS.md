@@ -11,6 +11,7 @@ Entry point: `main.go` → `cmd.Execute()`. Default command launches Bubbletea T
 ```
 make build         # go build -o ai-shell .
 make install       # go install .
+make install-yzma  # install yzma CLI + llama.cpp libraries to ~/.ai-shell
 make coverage      # test + HTML report
 go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 ```
@@ -89,4 +90,4 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 - `config.InitLogger(cfg.LogLevel)` must be called after each `config.LoadConfig()` to configure the global slog level — it's already called in shell/commit/extract commands
 - System prompt is a Go constant in `llm/prompt.go`, copied to `~/.ai-shell/PROMPT.md` on first run — always read from there, never from local file
 - 100 char soft line limit, Go 1.25.5+
-- Llamacpp provider (`llm/llamacpp.go`) loads the llama.cpp shared library and GGUF model from `~/.ai-shell/`. The `model` config field should be the GGUF filename (e.g. `granite4-3b-h.Q4_K_M.gguf`). Model + shared libs (libllama.so, libggml.so, etc.) must be placed in `~/.ai-shell/` manually. Structured output (`extract` command) is not supported for this provider.
+- Llamacpp provider (`llm/llamacpp.go`) loads the llama.cpp shared library and GGUF model from `~/.ai-shell/`. The `model` config field should be the GGUF filename (e.g. `granite4-3b-h.Q4_K_M.gguf`). Run `make install-yzma` to download the llama.cpp shared libraries to `~/.ai-shell/`. Then place GGUF model files in the same directory. Structured output (`extract` command) is not supported for this provider.
