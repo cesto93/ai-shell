@@ -429,8 +429,8 @@ func IsLlamacppModel(modelName string) bool {
 
 var OpenRouterModels = []ModelInfo{
 	{Name: "nvidia/nemotron-3-super-120b-a12b:free", Provider: "openrouter"},
-	{Name: "z-ai/glm-4.5-air:free", Provider: "openrouter"},
-	{Name: "minimax/minimax-m2.5:free", Provider: "openrouter"},
+	{Name: "google/gemma-4-31b-it:free", Provider: "openrouter"},
+	{Name: "deepseek/deepseek-v4-flash-0731", Provider: "openrouter"},
 }
 
 var getAvailableModelsFunc = GetAvailableModels
