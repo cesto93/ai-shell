@@ -1,0 +1,38 @@
+name: Build LiteRT-LM Shared Libraries
+
+on:
+  workflow_dispatch:
+    inputs:
+      litert_tag:
+        description: 'Tag o Commit di LiteRT-LM da compilare'
+        required: true
+        default: 'main'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout LiteRT-LM upstream
+        uses: actions/checkout@v4
+        with:
+          repository: google-ai-edge/LiteRT-LM
+          ref: ${{ github.event.inputs.litert_tag }}
+          submodules: recursive
+
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@0.9.1
+        with:
+          bazel-version: 7.x
+
+      - name: Build C-API Shared Library
+        run: |
+          # Esegui la build del target dinamico C-API (adatta il target al build system del repo)
+          bazel build -c opt //litert/c:litert_c
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: litert-lm-linux-amd64
+          path: |
+            bazel-bin/litert/c/liblitert_c.so
