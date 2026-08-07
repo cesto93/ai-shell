@@ -27,12 +27,12 @@ jobs:
 
       - name: Build C-API Shared Library
         run: |
-          # Esegui la build del target dinamico C-API (adatta il target al build system del repo)
-          bazel build -c opt //litert/c:litert_c
+          # Target C-API presente nel repository LiteRT-LM corrente (directory c/), produce liblitert-lm.so
+          bazel build -c opt //c:litert-lm
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: litert-lm-linux-amd64
           path: |
-            bazel-bin/litert/c/liblitert_c.so
+            bazel-bin/c/liblitert-lm.so
