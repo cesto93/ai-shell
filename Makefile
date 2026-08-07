@@ -7,7 +7,7 @@ LITERTLM_AUX_LIBS := libGemmaModelConstraintProvider.so libLiteRt.so libLiteRtWe
 
 build:
 	go build -o ai-shell .
-install: install-yzma
+install:
 	go install .
 install-yzma:
 	go install github.com/hybridgroup/yzma@latest
