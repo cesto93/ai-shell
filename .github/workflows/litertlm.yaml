@@ -25,13 +25,20 @@ jobs:
         with:
           bazel-version: 7.x
 
+      - name: Pre-fetch zlib into Bazel distdir
+        run: |
+          mkdir -p distdir
+          curl -fsSL -o distdir/zlib-1.3.1.tar.gz https://zlib.net/fossils/zlib-1.3.1.tar.gz
+          echo "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23  distdir/zlib-1.3.1.tar.gz" | sha256sum -c -
+
       - name: Build C-API Shared Library
         run: |
           # Target C-API presente nel repository LiteRT-LM corrente (directory c/), produce liblitert-lm.so
-          bazel build -c opt //c:litert-lm
+          # --distdir usa zlib scaricato localmente, evitando il download non affidabile da zlib.net
+          bazel build --distdir="$(pwd)/distdir" -c opt //c:litert-lm
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: litert-lm-linux-amd64
           path: |
