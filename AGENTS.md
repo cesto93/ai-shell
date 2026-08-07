@@ -100,6 +100,11 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 - Uses `text/tabwriter` for aligned output
 - Current model is prefixed with `* `
 
+## CI workflows (.github/workflows)
+
+- `ci.yml`: runs format/vet/build/test
+- `litertlm.yaml` (manual, `workflow_dispatch`): builds LiteRT-LM `//c:litert-lm` with Bazel and uploads `liblitert-lm.so`. Use `--distdir` to avoid the unreliable zlib.net download. Caching: `setup-bazel` is configured with `bazelisk-cache: true`, `disk-cache: ${{ github.workflow }}`, and `repository-cache: true`; the zlib tarball is restored/saved with `actions/cache`. When changing the zlib version, bump the cache `key` and the tarball's sha256 checksum.
+
 ## Key gotchas
 
 - `config.LoadConfig()` may return partial defaults on error — check both return values

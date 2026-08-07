@@ -20,12 +20,26 @@ jobs:
           ref: ${{ github.event.inputs.litert_tag }}
           submodules: recursive
 
-      - name: Setup Bazel
+      - name: Setup Bazel (with cache)
         uses: bazel-contrib/setup-bazel@0.19.0
         with:
           bazel-version: 7.x
+          # Avoid re-downloading the Bazel distribution on every run.
+          bazelisk-cache: true
+          # Cache compiled build outputs (marked by BUILD file contents) across runs.
+          disk-cache: ${{ github.workflow }}
+          # Cache external dependencies (LLVM/XNNPACK/etc. downloads) across runs.
+          repository-cache: true
+
+      - name: Cache zlib tarball for Bazel distdir
+        uses: actions/cache@v4
+        id: zlib-cache
+        with:
+          path: distdir
+          key: zlib-1.3.1
 
       - name: Pre-fetch zlib into Bazel distdir
+        if: steps.zlib-cache.outputs.cache-hit != 'true'
         run: |
           mkdir -p distdir
           curl -fsSL -o distdir/zlib-1.3.1.tar.gz https://zlib.net/fossils/zlib-1.3.1.tar.gz
