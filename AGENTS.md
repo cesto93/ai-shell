@@ -103,7 +103,7 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 ## CI workflows (.github/workflows)
 
 - `ci.yml`: runs format/vet/build/test
-- `litertlm.yaml` (manual, `workflow_dispatch`): builds LiteRT-LM `//c:litert-lm` with Bazel and uploads `liblitert-lm.so`. Use `--distdir` to avoid the unreliable zlib.net download. Caching: `setup-bazel` is configured with `bazelisk-cache: true`, `disk-cache: ${{ github.workflow }}`, and `repository-cache: true`; the zlib tarball is restored/saved with `actions/cache`. When changing the zlib version, bump the cache `key` and the tarball's sha256 checksum.
+- `litertlm.yaml` (manual, `workflow_dispatch`): builds LiteRT-LM `//c:litert-lm` with Bazel and uploads `liblitert-lm.so`. Already builds Linux x86-64 only (job runs on `ubuntu-latest`; target/linkopts are Linux-specific). Speed levers, highest impact first: (1) `--config=public_cache` pulls prebuilt artifacts from LiteRT-LM's public read-only remote cache (`storage.googleapis.com/litert-bazel-artifacts`); (2) `setup-bazel` `bazelisk-cache: true`, `disk-cache: ${{ github.workflow }}`, `repository-cache: true`; (3) `--distdir` avoids the unreliable zlib.net download, with the tarball restored/saved via `actions/cache`. When changing the zlib version, bump the cache `key` and the tarball's sha256 checksum. The checkout uses `lfs: true` because prebuilt `.so` files are Git LFS pointers — without it the linker fails with `unknown directive: version`.
 
 ## Key gotchas
 
