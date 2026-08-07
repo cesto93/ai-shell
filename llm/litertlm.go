@@ -211,7 +211,7 @@ func (l *LitertLMCaller) client(ctx context.Context) (*litertlm.Client, error) {
 		return c, nil
 	}
 
-	litertlm.SetMinLogLevel(litertlm.LogWarning)
+	litertlm.SetMinLogLevel(litertlm.LogQuiet)
 	slog.Debug("litertlm: initializing engine", "lib", libDir, "model", modelPath, "backend", backend)
 	c, err := litertlm.New(ctx,
 		litertlm.WithLib(libDir),
