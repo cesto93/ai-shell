@@ -56,9 +56,15 @@ jobs:
           # gli artefatti linux-x86_64 già compilati da Google invece di ricompilarli da zero.
           bazel build --config=public_cache --distdir="$(pwd)/distdir" -c opt //c:litert-lm
 
+      - name: Rename artifact to binding-expected filename
+        # The litertlm-go binding dlopens liblitertlm_c_cpu.so (cpu backend) by a fixed name,
+        # so ship the artifact under that name and avoid a post-install symlink.
+        run: |
+          cp bazel-bin/c/liblitert-lm.so bazel-bin/c/liblitertlm_c_cpu.so
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v5
         with:
           name: litert-lm-linux-amd64
           path: |
-            bazel-bin/c/liblitert-lm.so
+            bazel-bin/c/liblitertlm_c_cpu.so

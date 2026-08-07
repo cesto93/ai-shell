@@ -17,10 +17,10 @@ install-yzma:
 	@echo "✓ yzma + llama.cpp libraries installed to $(AI_SHELL_LIB)"
 	@echo "  Set YZMA_LIB=$(AI_SHELL_LIB) in your shell rc file if needed."
 install-litertlm:
-	@if [ ! -f "$(AI_SHELL_LIB)/liblitert-lm.so" ]; then \
-		echo "✗ $(AI_SHELL_LIB)/liblitert-lm.so not found."; \
+	@if [ ! -f "$(AI_SHELL_LIB)/liblitertlm_c_cpu.so" ]; then \
+		echo "✗ $(AI_SHELL_LIB)/liblitertlm_c_cpu.so not found."; \
 		echo "  Build it first via the 'Build LiteRT-LM Shared Libraries' workflow (.github/workflows/litertlm.yaml)"; \
-		echo "  and place the downloaded artifact (liblitert-lm.so) into $(AI_SHELL_LIB)/."; \
+		echo "  and place the downloaded artifact (liblitertlm_c_cpu.so) into $(AI_SHELL_LIB)/."; \
 		exit 1; \
 	fi
 	mkdir -p $(AI_SHELL_LIB)
@@ -30,7 +30,6 @@ install-litertlm:
 			curl -fsSL "$(LITERTLM_PREBUILT)/$$lib" -o "$(AI_SHELL_LIB)/$$lib" || { echo "✗ failed to download $$lib"; exit 1; }; \
 		fi; \
 	done
-	ln -sfn liblitert-lm.so $(AI_SHELL_LIB)/liblitertlm_c_cpu.so
 	@echo ""
 	@echo "✓ LiteRT-LM libraries installed to $(AI_SHELL_LIB)"
 	@echo "  Model files (.litertlm) go in $(AI_SHELL_DIR)/models/litertlm/"

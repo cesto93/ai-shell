@@ -1,6 +1,7 @@
 ai-shell
 coverage.out
 coverage.html
+*.profraw
 config.yaml
 .env
 data/
