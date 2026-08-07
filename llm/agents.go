@@ -15,6 +15,7 @@ type Agent struct {
 	Model    string
 	Provider string
 	Tools    []any
+	Backend  string
 }
 
 // GetAllTools returns the full list of tools for the agent.

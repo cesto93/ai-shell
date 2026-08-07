@@ -94,6 +94,9 @@ Only output the commit message, nothing else.`,
 	slog.Debug("user prompt", "prompt", userPrompt)
 
 	caller := llm.NewProviderCaller(cfg.LLM.Provider, cfg.LLM.Model, noopExecutor{})
+	if lc, ok := caller.(*llm.LitertLMCaller); ok {
+		lc.Backend = cfg.LitertLM.Backend
+	}
 	llmStart := time.Now()
 	resultMessages, err := caller.Call(context.Background(), systemPrompt, messages, nil)
 	llmDuration := time.Since(llmStart)

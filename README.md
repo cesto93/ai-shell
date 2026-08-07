@@ -18,7 +18,7 @@ An interactive shell powered by AI (**Ollama, Gemini, OpenRouter, LitertLM, Llam
   - **Ollama**: Must be running locally (default, port 11434).
   - **Gemini**: Requires `GEMINI_API_KEY` environment variable.
   - **OpenRouter**: Requires `OPEN_ROUTE_KEY` environment variable.
-  - **LitertLM**: Local provider on port 9379.
+  - **LitertLM**: In-process LiteRT-LM via litertlm-go. Requires a `.litertlm` model and the LiteRT-LM shared libraries (see LitertLM Provider).
   - **Llamacpp**: In-process llama.cpp via yzma. Requires GGUF model and yzma libs in `~/.ai-shell/models/llamacpp/` (see Installation).
 - **LLM Model**: By default, it expects the `granite4:3b-h` model, but this can be changed in the config.
 
@@ -104,9 +104,40 @@ shell:
 ### Configuration Options
 
 - **`llm.provider`**: The AI provider to use (`ollama`, `gemini`, `openrouter`, `litertlm` or `llamacpp`).
-- **`llm.model`**: The specific model name. For `llamacpp`, this is a GGUF filename (e.g., `granite4-3b-h.Q4_K_M.gguf`).
+- **`llm.model`**: The specific model name. For `litertlm`, this is a `.litertlm` filename without extension. For `llamacpp`, this is a GGUF filename (e.g., `granite4-3b-h.Q4_K_M.gguf`).
+- **`litertlm.backend`**: The LiteRT-LM inference backend (`cpu` or `gpu`, default `cpu`).
 - **`shell.confirm`**: If `true`, the application will always ask for confirmation before executing an AI-suggested command.
 - **`shell.allowed_commands`**: A comma-separated list of safe commands that the AI can execute without requiring user confirmation (e.g., "ls,pwd,date").
+
+## LitertLM Provider
+
+The `litertlm` provider runs LiteRT-LM inference **in-process** using the [litertlm-go](https://github.com/vladimirvivien/litertlm-go) Go binding. It loads the LiteRT-LM shared libraries and a `.litertlm` model directly into the ai-shell process — no server binary needed.
+
+### Setup
+
+1. Place the LiteRT-LM shared libraries in `~/.ai-shell/lib/` (or set `LITERTLM_LIB` to point elsewhere).
+
+2. Place a `.litertlm` model file in `~/.ai-shell/models/litertlm/` (or set `LITERTLM_MODELS_DIR` / `LITERTLM_MODEL`). You can download one with `ai-shell pull`:
+   ```bash
+   ai-shell pull <repo> <filename.litertlm>
+   ```
+   Files ending in `.litertlm` are saved to `~/.ai-shell/models/litertlm/` and auto-registered as LiteRT-LM models; any other file is treated as a GGUF model for the `llamacpp` provider.
+
+3. Configure `~/.config/ai-shell/config.yaml`:
+   ```yaml
+   llm:
+     provider: "litertlm"
+     model: "gemma-4-E2B-it"
+   litertlm:
+     backend: "cpu"
+   ```
+
+   The `.litertlm` extension is appended automatically if omitted. The backend (`cpu`/`gpu`, default `cpu`) can also be set via `LITERTLM_BACKEND`.
+
+### Limitations
+
+- **Structured output** (`ai-shell extract`) uses schema prompting, not the binding's native structured-output path.
+- **No API key or base URL** needed — purely local.
 
 ## Llamacpp Provider
 
@@ -139,7 +170,6 @@ The `llamacpp` provider runs llama.cpp inference **in-process** using the [yzma]
 - **Structured output** (`ai-shell extract`) is not supported.
 - **Image/audio input** is not supported.
 - **No API key or base URL** needed — purely local.
-- No auto-start mechanism (unlike `litertlm`).
 
 ## How it works
 

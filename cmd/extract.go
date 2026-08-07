@@ -116,6 +116,9 @@ func runExtract(inputPath, schemaPath string) error {
 	slog.Debug("provider", "name", cfg.LLM.Provider, "model", cfg.LLM.Model)
 
 	caller := llm.NewProviderCallerRaw(cfg.LLM.Provider, cfg.LLM.Model, noopExtractExecutor{})
+	if lc, ok := caller.(*llm.LitertLMCaller); ok {
+		lc.Backend = cfg.LitertLM.Backend
+	}
 	llmStart := time.Now()
 	resultMessages, err := caller.CallStructured(context.Background(), systemPrompt, messages, nil, responseFormat)
 	llmDuration := time.Since(llmStart)

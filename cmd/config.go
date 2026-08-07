@@ -17,7 +17,7 @@ var setConfigCmd = &cobra.Command{
   ai-shell config --log-level debug
   ai-shell config --confirm=false
   ai-shell config --allowed-commands "ls,pwd,git,curl"
-  ai-shell config --auto-start=false
+  ai-shell config --backend gpu
   ai-shell config --add-cmd "hello=say hello world"
   ai-shell config --rm-cmd "hello"
   ai-shell config --enable-tool WriteFile
@@ -67,9 +67,9 @@ var setConfigCmd = &cobra.Command{
 			changed = true
 		}
 
-		if fl.Changed("auto-start") {
-			v, _ := fl.GetBool("auto-start")
-			cfg.LitertLM.AutoStart = v
+		if fl.Changed("backend") {
+			v, _ := fl.GetString("backend")
+			cfg.LitertLM.Backend = v
 			changed = true
 		}
 
@@ -129,7 +129,7 @@ func init() {
 	setConfigCmd.Flags().String("log-level", "", "Set log level (debug, info, warn, error)")
 	setConfigCmd.Flags().Bool("confirm", false, "Require confirmation for tool execution")
 	setConfigCmd.Flags().StringSlice("allowed-commands", nil, "Comma-separated list of commands that skip confirmation")
-	setConfigCmd.Flags().Bool("auto-start", false, "Auto-start litert-lm service on TUI launch")
+	setConfigCmd.Flags().String("backend", "", "LiteRT-LM inference backend (cpu, gpu)")
 	setConfigCmd.Flags().String("enable-tool", "", "Enable a tool by name")
 	setConfigCmd.Flags().String("disable-tool", "", "Disable a tool by name")
 	setConfigCmd.Flags().String("add-cmd", "", "Add a custom command (format: name=prompt)")

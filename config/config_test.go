@@ -3,8 +3,6 @@ package config
 import (
 	"bytes"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -350,19 +348,18 @@ shell:
 }
 
 func TestIsLitertLMModel(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"object":"list","data":[{"id":"gemma-4-E2B-it.litertlm","object":"model","created":0,"owned_by":"litertlm"}]}`))
-	}))
-	defer server.Close()
+	modelDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(modelDir, "gemma-4-E2B-it.litertlm"), []byte("model"), 0644); err != nil {
+		t.Fatalf("Failed to write model file: %v", err)
+	}
 
-	origBaseURL := os.Getenv("LITERTLM_BASE_URL")
-	os.Setenv("LITERTLM_BASE_URL", server.URL)
+	origDir := os.Getenv("LITERTLM_MODELS_DIR")
+	os.Setenv("LITERTLM_MODELS_DIR", modelDir)
 	defer func() {
-		if origBaseURL == "" {
-			os.Unsetenv("LITERTLM_BASE_URL")
+		if origDir == "" {
+			os.Unsetenv("LITERTLM_MODELS_DIR")
 		} else {
-			os.Setenv("LITERTLM_BASE_URL", origBaseURL)
+			os.Setenv("LITERTLM_MODELS_DIR", origDir)
 		}
 	}()
 
@@ -373,7 +370,7 @@ func TestIsLitertLMModel(t *testing.T) {
 	}{
 		{
 			name:  "litertlm model",
-			model: "gemma-4-E2B-it.litertlm",
+			model: "gemma-4-E2B-it",
 			want:  true,
 		},
 		{
@@ -390,6 +387,40 @@ func TestIsLitertLMModel(t *testing.T) {
 				t.Errorf("IsLitertLMModel(%q) = %v, want %v", tt.model, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestGetLitertLMModels(t *testing.T) {
+	modelDir := t.TempDir()
+	for _, name := range []string{"gemma-4-E2B-it.litertlm", "gemma-4-E4B-it.litertlm", "notes.txt"} {
+		if err := os.WriteFile(filepath.Join(modelDir, name), []byte("model"), 0644); err != nil {
+			t.Fatalf("Failed to write file %s: %v", name, err)
+		}
+	}
+
+	origDir := os.Getenv("LITERTLM_MODELS_DIR")
+	os.Setenv("LITERTLM_MODELS_DIR", modelDir)
+	defer func() {
+		if origDir == "" {
+			os.Unsetenv("LITERTLM_MODELS_DIR")
+		} else {
+			os.Setenv("LITERTLM_MODELS_DIR", origDir)
+		}
+	}()
+
+	models := GetLitertLMModels()
+	if len(models) != 2 {
+		t.Fatalf("GetLitertLMModels() returned %d models, want 2: %+v", len(models), models)
+	}
+	found := map[string]bool{}
+	for _, m := range models {
+		if m.Provider != "litertlm" {
+			t.Errorf("model %q provider = %q, want litertlm", m.Name, m.Provider)
+		}
+		found[m.Name] = true
+	}
+	if !found["gemma-4-E2B-it"] || !found["gemma-4-E4B-it"] {
+		t.Errorf("GetLitertLMModels() did not list both models, got: %+v", found)
 	}
 }
 

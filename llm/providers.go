@@ -22,13 +22,7 @@ func getProviderConfig(provider string) ProviderConfig {
 			BaseURL: "https://openrouter.ai/api/v1",
 			APIKey:  os.Getenv("OPEN_ROUTE_KEY"),
 		}
-	case "litertlm":
-		baseURL := os.Getenv("LITERTLM_BASE_URL")
-		if baseURL == "" {
-			baseURL = "http://localhost:9379"
-		}
-		return ProviderConfig{BaseURL: baseURL + "/v1"}
-	case "llamacpp":
+	case "litertlm", "llamacpp":
 		return ProviderConfig{}
 	default: // ollama
 		baseURL := os.Getenv("OLLAMA_HOST")
@@ -40,16 +34,22 @@ func getProviderConfig(provider string) ProviderConfig {
 }
 
 func NewProviderCaller(provider, model string, executor ToolExecutor) Caller {
-	if provider == "llamacpp" {
+	switch provider {
+	case "llamacpp":
 		return NewLlamacppCaller(model, executor)
+	case "litertlm":
+		return NewLitertLMCaller(model, executor)
 	}
 	cfg := getProviderConfig(provider)
 	return NewOpenAICaller(cfg.BaseURL, cfg.APIKey, model, executor)
 }
 
 func NewProviderCallerRaw(provider, model string, executor ToolExecutor) RawCaller {
-	if provider == "llamacpp" {
+	switch provider {
+	case "llamacpp":
 		return NewLlamacppCaller(model, executor)
+	case "litertlm":
+		return NewLitertLMCaller(model, executor)
 	}
 	cfg := getProviderConfig(provider)
 	return NewOpenAICaller(cfg.BaseURL, cfg.APIKey, model, executor)
@@ -57,5 +57,8 @@ func NewProviderCallerRaw(provider, model string, executor ToolExecutor) RawCall
 
 func (a *Agent) CallLLM(ctx context.Context, executor ToolExecutor, messages []Message) ([]Message, error) {
 	caller := NewProviderCaller(a.Provider, a.Model, executor)
+	if lc, ok := caller.(*LitertLMCaller); ok {
+		lc.Backend = a.Backend
+	}
 	return caller.Call(ctx, a.Prompt, messages, a.Tools)
 }

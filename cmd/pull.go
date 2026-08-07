@@ -15,13 +15,16 @@ import (
 
 var pullCmd = &cobra.Command{
 	Use:   "pull <repo> <filename>",
-	Short: "Download a GGUF model from HuggingFace",
-	Long: `Download a GGUF model file from a HuggingFace repository to the llamacpp models directory.
+	Short: "Download a model from HuggingFace",
+	Long: `Download a model file from a HuggingFace repository to the local models directory.
 
 The repo is the HuggingFace repository path (e.g., unsloth/Qwen3.5-2B-GGUF).
-The filename is the specific GGUF file to download (e.g., Qwen3.5-2B-Q4_K_M.gguf).
+The filename is the specific model file to download (e.g., Qwen3.5-2B-Q4_K_M.gguf).
 
-The file is saved to ~/.ai-shell/models/llamacpp/ and the config is updated to use this model.`,
+The destination is chosen by the filename extension: .litertlm files are saved
+to ~/.ai-shell/models/litertlm/ and registered as LiteRT-LM models; anything
+else is saved to ~/.ai-shell/models/llamacpp/ as a GGUF model. The config is
+updated to use this model.`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runPull(args[0], args[1])
@@ -37,7 +40,14 @@ func runPull(repo, filename string) error {
 	if err != nil {
 		return fmt.Errorf("cannot get home dir: %w", err)
 	}
+	ext := ".gguf"
+	provider := "llamacpp"
 	destDir := filepath.Join(home, ".ai-shell", "models", "llamacpp")
+	if strings.HasSuffix(strings.ToLower(filename), ".litertlm") {
+		ext = ".litertlm"
+		provider = "litertlm"
+		destDir = filepath.Join(home, ".ai-shell", "models", "litertlm")
+	}
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return fmt.Errorf("failed to create models directory: %w", err)
 	}
@@ -97,8 +107,8 @@ func runPull(repo, filename string) error {
 	}
 	fmt.Fprintf(os.Stderr, "\n")
 
-	modelName := strings.TrimSuffix(filename, ".gguf")
-	if err := config.SaveModelWithProvider(modelName, "llamacpp"); err != nil {
+	modelName := strings.TrimSuffix(filename, ext)
+	if err := config.SaveModelWithProvider(modelName, provider); err != nil {
 		fmt.Printf("Warning: failed to update config: %v\n", err)
 	}
 

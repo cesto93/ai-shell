@@ -36,8 +36,8 @@ func TestGetProviderConfigOpenRouter(t *testing.T) {
 func TestGetProviderConfigLiteRTLM(t *testing.T) {
 	cfg := getProviderConfig("litertlm")
 
-	if cfg.BaseURL != "http://localhost:9379/v1" {
-		t.Errorf("litertlm BaseURL = %q, want %q", cfg.BaseURL, "http://localhost:9379/v1")
+	if cfg.BaseURL != "" {
+		t.Errorf("litertlm BaseURL = %q, want empty (in-process provider)", cfg.BaseURL)
 	}
 }
 
@@ -47,8 +47,8 @@ func TestGetProviderConfigLiteRTLMCustomURL(t *testing.T) {
 
 	cfg := getProviderConfig("litertlm")
 
-	if cfg.BaseURL != "http://custom:8080/v1" {
-		t.Errorf("litertlm BaseURL = %q, want %q", cfg.BaseURL, "http://custom:8080/v1")
+	if cfg.BaseURL != "" {
+		t.Errorf("litertlm BaseURL = %q, want empty (in-process provider)", cfg.BaseURL)
 	}
 }
 
@@ -104,15 +104,24 @@ func TestNewProviderCallerGemini(t *testing.T) {
 func TestNewProviderCallerLiteRTLM(t *testing.T) {
 	caller := NewProviderCaller("litertlm", "test-model", nil)
 
-	oac, ok := caller.(*OpenAICaller)
+	lc, ok := caller.(*LitertLMCaller)
 	if !ok {
-		t.Fatalf("Expected *OpenAICaller, got %T", caller)
+		t.Fatalf("Expected *LitertLMCaller, got %T", caller)
 	}
-	if oac.BaseURL != "http://localhost:9379/v1" {
-		t.Errorf("BaseURL = %q, want %q", oac.BaseURL, "http://localhost:9379/v1")
+	if lc.Model != "test-model" {
+		t.Errorf("Model = %q, want %q", lc.Model, "test-model")
 	}
-	if oac.Model != "test-model" {
-		t.Errorf("Model = %q, want %q", oac.Model, "test-model")
+}
+
+func TestNewProviderCallerRawLiteRTLM(t *testing.T) {
+	caller := NewProviderCallerRaw("litertlm", "test-model", nil)
+
+	lc, ok := caller.(*LitertLMCaller)
+	if !ok {
+		t.Fatalf("Expected *LitertLMCaller, got %T", caller)
+	}
+	if lc.Model != "test-model" {
+		t.Errorf("Model = %q, want %q", lc.Model, "test-model")
 	}
 }
 

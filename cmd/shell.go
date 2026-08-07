@@ -257,7 +257,6 @@ type ShellModel struct {
 	waitingConfirm     bool
 	menu               menuState
 	commands           []config.CommandInfo
-	litertlmService    *LitertLMService
 	allowedCmdMode     struct {
 		active bool
 	}
@@ -286,23 +285,6 @@ func NewShellModel() (*ShellModel, error) {
 		cfg:                cfg,
 		commands:           config.LoadCommands(cfg),
 		confirmationChan:   make(chan bool, 1),
-	}
-
-	if cfg.LitertLM.AutoStart {
-		port := extractPort(os.Getenv("LITERTLM_BASE_URL"))
-		if IsPortAvailable(port) {
-			svc := NewLitertLMService(port)
-			if err := svc.Start(); err == nil {
-				m.litertlmService = svc
-			}
-		}
-	} else if cfg.LLM.Provider == "litertlm" {
-		port := extractPort(os.Getenv("LITERTLM_BASE_URL"))
-		svc := NewLitertLMService(port)
-		if err := svc.Start(); err != nil {
-			return nil, fmt.Errorf("failed to start litertlm service: %w", err)
-		}
-		m.litertlmService = svc
 	}
 
 	return m, nil
@@ -339,9 +321,6 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyCtrlD:
-			if m.litertlmService != nil {
-				m.litertlmService.Stop()
-			}
 			m.quitting = true
 			return m, tea.Quit
 
@@ -647,9 +626,6 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 func (m *ShellModel) handleBuiltinCommand(cmd string) (handled bool, model tea.Model, cmd2 tea.Cmd) {
 	switch cmd {
 	case "exit", "quit":
-		if m.litertlmService != nil {
-			m.litertlmService.Stop()
-		}
 		m.quitting = true
 		return true, m, tea.Quit
 	case "get-config":
@@ -1083,16 +1059,6 @@ func (m *ShellModel) selectModel() {
 		}
 	}
 
-	if provider == "litertlm" && (m.litertlmService == nil || !m.litertlmService.IsRunning()) {
-		port := extractPort(os.Getenv("LITERTLM_BASE_URL"))
-		svc := NewLitertLMService(port)
-		if err := svc.Start(); err != nil {
-			m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Failed to start litertlm service: %v", err)})
-		} else {
-			m.litertlmService = svc
-		}
-	}
-
 	m.menu.close()
 }
 
@@ -1106,6 +1072,7 @@ func (m *ShellModel) ElaborateMessage() {
 	}()
 
 	agent := llm.NewAgent(m.cfg.LLM.Model, m.cfg.LLM.Provider, m.cfg.Tools)
+	agent.Backend = m.cfg.LitertLM.Backend
 
 	executor := &ShellExecutorForLLM{m: m}
 

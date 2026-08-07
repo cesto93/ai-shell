@@ -2,10 +2,8 @@ package config
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -38,7 +36,7 @@ type Config struct {
 		AllowedCommands []string `mapstructure:"allowed_commands"`
 	} `mapstructure:"shell"`
 	LitertLM struct {
-		AutoStart bool `mapstructure:"auto_start"`
+		Backend string `mapstructure:"backend"`
 	} `mapstructure:"litertlm"`
 	Tools    map[string]bool   `mapstructure:"tools"`
 	Commands map[string]string `mapstructure:"commands"`
@@ -104,7 +102,7 @@ func LoadConfig() (*Config, error) {
 	v.SetDefault("shell.confirm", true)
 	v.SetDefault("shell.allowed_commands", []string{"ls", "pwd", "git"})
 	v.SetDefault("log_level", "info")
-	v.SetDefault("litertlm.auto_start", true)
+	v.SetDefault("litertlm.backend", "cpu")
 	v.SetDefault("tools", map[string]bool{
 		"RunCommand": true,
 		"WriteFile":  true,
@@ -147,9 +145,9 @@ func LoadConfig() (*Config, error) {
 					AllowedCommands: []string{"ls", "pwd", "git"},
 				},
 				LitertLM: struct {
-					AutoStart bool `mapstructure:"auto_start"`
+					Backend string `mapstructure:"backend"`
 				}{
-					AutoStart: true,
+					Backend: "cpu",
 				},
 				Tools: map[string]bool{
 					"RunCommand": true,
@@ -166,7 +164,7 @@ func LoadConfig() (*Config, error) {
 				if err == nil {
 					defaultConfigFile := filepath.Join(configPath, "config.yaml")
 					if _, err := os.Stat(defaultConfigFile); os.IsNotExist(err) {
-						content := "log_level: \"info\"\nllm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\n  input_types:\n    - \"text\"\nshell:\n  confirm: true\n  allowed_commands:\n    - \"ls\"\n    - \"pwd\"\n    - \"git\"\nlitertlm:\n  auto_start: true\ntools:\n  RunCommand: true\n  WriteFile: true\n  ReadFile: true\n  KVSet: true\n  KVGet: true\n  KVList: true\n"
+						content := "log_level: \"info\"\nllm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\n  input_types:\n    - \"text\"\nshell:\n  confirm: true\n  allowed_commands:\n    - \"ls\"\n    - \"pwd\"\n    - \"git\"\nlitertlm:\n  backend: \"cpu\"\ntools:\n  RunCommand: true\n  WriteFile: true\n  ReadFile: true\n  KVSet: true\n  KVGet: true\n  KVList: true\n"
 						_ = os.WriteFile(defaultConfigFile, []byte(content), 0644)
 						defaultConfig.ConfigFile = defaultConfigFile
 					}
@@ -226,11 +224,7 @@ func modelInList(modelName string, models []ModelInfo) bool {
 }
 
 func IsLitertLMModel(modelName string) bool {
-	models, err := GetLitertLMModels()
-	if err != nil {
-		return false
-	}
-	return modelInList(modelName, models)
+	return modelInList(modelName, GetLitertLMModels())
 }
 
 func SaveConfig(cfg *Config) error {
@@ -255,7 +249,7 @@ func SaveConfig(cfg *Config) error {
 			AllowedCommands []string `yaml:"allowed_commands,omitempty"`
 		} `yaml:"shell"`
 		LitertLM struct {
-			AutoStart bool `yaml:"auto_start"`
+			Backend string `yaml:"backend"`
 		} `yaml:"litertlm"`
 		Tools    map[string]bool   `yaml:"tools,omitempty"`
 		Commands map[string]string `yaml:"commands,omitempty"`
@@ -269,7 +263,7 @@ func SaveConfig(cfg *Config) error {
 	out.LLM.InputTypes = cfg.LLM.InputTypes
 	out.Shell.Confirm = cfg.Shell.Confirm
 	out.Shell.AllowedCommands = cfg.Shell.AllowedCommands
-	out.LitertLM.AutoStart = cfg.LitertLM.AutoStart
+	out.LitertLM.Backend = cfg.LitertLM.Backend
 
 	data, err := yaml.Marshal(out)
 	if err != nil {
@@ -348,45 +342,44 @@ var GeminiModels = []ModelInfo{
 	{Name: "gemma-4-26b-a4b-it", Provider: "gemini"},
 }
 
-type openAIModelsResponse struct {
-	Object string             `json:"object"`
-	Data   []openAIModelEntry `json:"data"`
-}
-
-type openAIModelEntry struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	OwnedBy string `json:"owned_by"`
-}
-
-func GetLitertLMModels() ([]ModelInfo, error) {
-	baseURL := os.Getenv("LITERTLM_BASE_URL")
-	if baseURL == "" {
-		baseURL = "http://localhost:9379"
+// GetLitertLMModels lists the native LiteRT-LM models available on disk
+// by scanning LITERTLM_MODELS_DIR (default ~/.ai-shell/models/litertlm/)
+// for .litertlm files.
+func GetLitertLMModels() []ModelInfo {
+	dir := os.Getenv("LITERTLM_MODELS_DIR")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil
+		}
+		dir = filepath.Join(home, ".ai-shell", "models", "litertlm")
 	}
-	baseURL = strings.TrimRight(baseURL, "/")
-
-	resp, err := http.Get(baseURL + "/v1/models")
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch litertlm models: %w", err)
+		return nil
 	}
-	defer resp.Body.Close()
-
-	var modelsResp openAIModelsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&modelsResp); err != nil {
-		return nil, fmt.Errorf("failed to decode litertlm models response: %w", err)
-	}
-
-	var result []ModelInfo
-	for _, m := range modelsResp.Data {
-		result = append(result, ModelInfo{
-			Name:       m.ID,
-			Provider:   "litertlm",
-			InputTypes: []string{"text"},
+	var models []ModelInfo
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasSuffix(strings.ToLower(name), ".litertlm") {
+			continue
+		}
+		modelName := strings.TrimSuffix(name, ".litertlm")
+		info, err := entry.Info()
+		size := ""
+		if err == nil {
+			size = formatFileSize(info.Size())
+		}
+		models = append(models, ModelInfo{
+			Name:     modelName,
+			Provider: "litertlm",
+			Size:     size,
 		})
 	}
-	return result, nil
+	return models
 }
 
 func GetLlamacppModels() []ModelInfo {
@@ -442,9 +435,7 @@ func GetAllAvailableModels() []ModelInfo {
 	}
 	models = append(models, GeminiModels...)
 	models = append(models, OpenRouterModels...)
-	if litertlmModels, err := GetLitertLMModels(); err == nil {
-		models = append(models, litertlmModels...)
-	}
+	models = append(models, GetLitertLMModels()...)
 	models = append(models, GetLlamacppModels()...)
 	return models
 }
