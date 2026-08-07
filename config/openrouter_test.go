@@ -12,8 +12,8 @@ func TestModelInListOpenRouter(t *testing.T) {
 		want  bool
 	}{
 		{"nvidia/nemotron-3-super-120b-a12b:free", true},
-		{"z-ai/glm-4.5-air:free", true},
-		{"minimax/minimax-m2.5:free", true},
+		{"google/gemma-4-31b-it:free", true},
+		{"deepseek/deepseek-v4-flash-0731", true},
 		{"gemini-3-flash-preview", false},
 		{"other-model", false},
 	}
