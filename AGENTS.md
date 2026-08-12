@@ -21,7 +21,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 
 | Directory | Contents |
 |-----------|----------|
-| `cmd/` | Cobra commands: default (TUI shell), `get-config`, `config`, `commit`, `extract`, `pull`, `models` |
+| `cmd/` | Cobra commands: default (TUI shell), `get-config`, `config`, `commit`, `extract`, `pull`, `models`, `commands` |
 | `config/` | Viper YAML config, model lists (OpenRouter free models fetched live from `https://openrouter.ai/api/v1/models` via `config.GetOpenRouterModels()`, 10 min cache), `.env` loading via `gotenv` |
 | `llm/` | `Agent` struct, `Caller` interface, `RawCaller` interface (adds `CallStructured`), `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, `NewProviderCallerRaw` (returns `RawCaller`), `CallStructured` method (with `response_format`), `ProviderConfig` struct, default system prompt, `LlamacppCaller` (in-process llama.cpp via yzma), `LitertLMCaller` (in-process LiteRT-LM via litertlm-go) |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
@@ -65,6 +65,12 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 - When `--model` is set without `--provider`, auto-detects provider via `config.LookupModelInfo`
 - `--add-cmd` uses `name=prompt` format
 - `SaveConfig` now persists `commands` map to YAML
+
+## Commands command (cmd/commands.go)
+
+- Usable as `ai-shell commands` (lists custom commands) or `ai-shell commands --run <name> [args...]` to run one non-interactively
+- `--run` looks the command up via `config.LoadCommands` (merges `.ai-shell/commands/*.md` files and config `commands` map, matching the shell's `/name` handling); extra args are appended to the command prompt
+- Running uses `llm.NewAgent` with the default system prompt and a `cliExecutor` (in `cmd/commands.go`) that executes all tools without confirmation, prints the final assistant text to stdout
 
 ## Commit command (cmd/commit.go)
 
