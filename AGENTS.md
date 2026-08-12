@@ -21,10 +21,11 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 
 | Directory | Contents |
 |-----------|----------|
-| `cmd/` | Cobra commands: default (TUI shell), `config`, `commit`, `extract`, `pull`, `models`, `commands` |
+| `cmd/` | Cobra commands: default (TUI shell), `config`, `commit`, `extract`, `pull`, `models`, `commands`, `stats` |
 | `config/` | Viper YAML config, model lists (OpenRouter free models fetched live from `https://openrouter.ai/api/v1/models` via `config.GetOpenRouterModels()`, 10 min cache), `.env` loading via `gotenv` |
-| `llm/` | `Agent` struct, `Caller` interface, `RawCaller` interface (adds `CallStructured`), `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, `NewProviderCallerRaw` (returns `RawCaller`), `CallStructured` method (with `response_format`), `ProviderConfig` struct, default system prompt, `LlamacppCaller` (in-process llama.cpp via yzma), `LitertLMCaller` (in-process LiteRT-LM via litertlm-go). `OpenAICaller` logs token usage (`openrouter usage` debug line: prompt/completion/total tokens, cost, cached/reasoning tokens when present) but only when `BaseURL` contains `openrouter.ai` |
+| `llm/` | `Agent` struct, `Caller` interface, `RawCaller` interface (adds `CallStructured`), `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, `NewProviderCallerRaw` (returns `RawCaller`), `CallStructured` method (with `response_format`), `ProviderConfig` struct, default system prompt, `LlamacppCaller` (in-process llama.cpp via yzma), `LitertLMCaller` (in-process LiteRT-LM via litertlm-go). `OpenAICaller` logs token usage (`openrouter usage` debug line: prompt/completion/total tokens, cost, cached/reasoning tokens when present) but only when `BaseURL` contains `openrouter.ai`; every OpenAI-compatible call with a `usage` in the response is also persisted via `stats.RecordUsage` (provider derived from `BaseURL`). `LlamacppCaller` records prompt/completion tokens (from tokenize + generation loop). LitertLM usage is not tracked (binding exposes no token counts) |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
+| `stats/` | Persistent token usage store backed by bbolt at `~/.config/ai-shell/usage.db`. `stats.RecordUsage(provider, model, Usage)` accumulates per (provider, model); `stats.GetStats()` returns sorted `[]Entry` (calls, prompt/completion/total/cached/reasoning tokens, cost); `stats.Reset()` wipes all entries. `dbPathFunc` is swappable for tests |
 
 ## Config layering
 
@@ -41,7 +42,7 @@ Log level values: `debug`, `info`, `warn`, `error`. Uses `log/slog` throughout (
 ## Testing
 
 ```bash
-go test ./...           # all pass (config, llm, tools, cmd)
+go test ./...           # all pass (config, llm, tools, stats, cmd)
 go test -v -run TestName ./package
 go test -cover ./...
 ```
@@ -117,6 +118,14 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 - Uses `text/tabwriter` for aligned output
 - Current model is prefixed with `* `
 
+## Stats command (cmd/stats.go)
+
+- Usable as `ai-shell stats`
+- Prints a table of aggregated token usage per provider and model: CALLS, INPUT (prompt), OUTPUT (completion), CACHED, REASONING, TOTAL, COST, plus a TOTAL row
+- Data comes from `stats.GetStats()` (bbolt at `~/.config/ai-shell/usage.db`)
+- Flag `--reset` clears all recorded usage (idempotent — no-op when empty)
+- Usage is recorded automatically: `OpenAICaller` records every OpenAI-compatible response that carries a `usage` (ollama/gemini/openrouter, provider derived from `BaseURL`); `LlamacppCaller` records prompt tokens (from tokenize) and completion tokens (from the generation loop). LitertLM usage is not tracked.
+
 ## CI workflows (.github/workflows)
 
 - `ci.yml`: runs format/vet/build/test
@@ -127,6 +136,7 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 - `config.LoadConfig()` may return partial defaults on error — check both return values
 - `.env` files are loaded at startup via `gotenv.Load()` — place API keys there, not in config.yaml
 - KV store uses bbolt at `~/.config/ai-shell/kv_store.db`
+- Usage stats use bbolt at `~/.config/ai-shell/usage.db` (recorded by every LLM call that reports usage)
 - `config.InitLogger(cfg.LogLevel)` must be called after each `config.LoadConfig()` to configure the global slog level — it's already called in shell/commit/extract commands
 - System prompt is a Go constant in `llm/prompt.go`, copied to `~/.ai-shell/PROMPT.md` on first run — always read from there, never from local file
 - 100 char soft line limit, Go 1.26.0+

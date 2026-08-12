@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 
+	"ai-shell/stats"
+
 	"github.com/hybridgroup/yzma/pkg/llama"
 )
 
@@ -72,10 +74,12 @@ func (l *LlamacppCaller) Call(ctx context.Context, systemPrompt string, messages
 	if len(tokens) == 0 {
 		return nil, fmt.Errorf("tokenization failed")
 	}
+	promptTokens := len(tokens)
 
 	batch := llama.BatchGetOne(tokens)
 
 	var response strings.Builder
+	completionTokens := 0
 	for pos := int32(0); pos < llamacppDefaultMaxTokens; pos += batch.NTokens {
 		select {
 		case <-ctx.Done():
@@ -91,6 +95,7 @@ func (l *LlamacppCaller) Call(ctx context.Context, systemPrompt string, messages
 		if llama.VocabIsEOG(l.vocab, token) {
 			break
 		}
+		completionTokens++
 
 		buf := make([]byte, 256)
 		n := llama.TokenToPiece(l.vocab, token, buf, 0, false)
@@ -102,6 +107,11 @@ func (l *LlamacppCaller) Call(ctx context.Context, systemPrompt string, messages
 	}
 
 	text := strings.TrimSpace(response.String())
+	stats.RecordUsage("llamacpp", l.Model, stats.Usage{
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		TotalTokens:      promptTokens + completionTokens,
+	})
 	return []Message{{Role: "assistant", Content: text}}, nil
 }
 

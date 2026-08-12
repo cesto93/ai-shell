@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+
+	"ai-shell/stats"
 )
 
 type OpenAICaller struct {
@@ -63,6 +65,35 @@ func NewOpenAICaller(baseURL, apiKey, model string, executor ToolExecutor) *Open
 
 func (o *OpenAICaller) isOpenRouter() bool {
 	return strings.Contains(o.BaseURL, "openrouter.ai")
+}
+
+func (o *OpenAICaller) providerName() string {
+	switch {
+	case strings.Contains(o.BaseURL, "openrouter.ai"):
+		return "openrouter"
+	case strings.Contains(o.BaseURL, "generativelanguage.googleapis.com"):
+		return "gemini"
+	default:
+		return "ollama"
+	}
+}
+
+// recordUsage persists a call's token usage so it can be reported by the
+// stats command, aggregating by provider and model.
+func (o *OpenAICaller) recordUsage(u *OpenAIUsage) {
+	usage := stats.Usage{
+		PromptTokens:     u.PromptTokens,
+		CompletionTokens: u.CompletionTokens,
+		TotalTokens:      u.TotalTokens,
+		Cost:             u.Cost,
+	}
+	if u.PromptTokensDetails != nil {
+		usage.CachedTokens = u.PromptTokensDetails.CachedTokens
+	}
+	if u.CompletionTokensDetails != nil {
+		usage.ReasoningTokens = u.CompletionTokensDetails.ReasoningTokens
+	}
+	stats.RecordUsage(o.providerName(), o.Model, usage)
 }
 
 func (o *OpenAICaller) Call(ctx context.Context, systemPrompt string, messages []Message, tools []any) ([]Message, error) {
@@ -141,6 +172,10 @@ func (o *OpenAICaller) call(ctx context.Context, systemPrompt string, messages [
 				args = append(args, "reasoning_tokens", u.CompletionTokensDetails.ReasoningTokens)
 			}
 			slog.Debug("openrouter usage", args...)
+		}
+
+		if openAIResp.Usage != nil {
+			o.recordUsage(openAIResp.Usage)
 		}
 
 		if len(openAIResp.Choices) == 0 {
