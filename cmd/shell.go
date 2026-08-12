@@ -267,7 +267,7 @@ func NewShellModel() (*ShellModel, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
-	config.InitLogger(cfg.LogLevel)
+	initLogger(cfg)
 
 	ti := textinput.New()
 	ti.Placeholder = "Ask the AI..."

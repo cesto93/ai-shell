@@ -31,7 +31,7 @@ func runModels(cmd *cobra.Command) error {
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
-	config.InitLogger(cfg.LogLevel)
+	initLogger(cfg)
 
 	if cmd.Flags().Changed("set") {
 		info := config.LookupModelInfo(modelsSet)

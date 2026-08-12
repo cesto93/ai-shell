@@ -37,7 +37,7 @@ func runCommands(args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
-	config.InitLogger(cfg.LogLevel)
+	initLogger(cfg)
 
 	if runCommandName != "" {
 		return runCustomCommand(cfg, runCommandName, args)

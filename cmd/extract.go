@@ -95,7 +95,7 @@ func runExtract(inputPath, schemaPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
-	config.InitLogger(cfg.LogLevel)
+	initLogger(cfg)
 
 	responseFormat := map[string]any{
 		"type": "json_schema",

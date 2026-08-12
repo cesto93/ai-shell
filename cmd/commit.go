@@ -69,7 +69,7 @@ func runCommit() error {
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
-	config.InitLogger(cfg.LogLevel)
+	initLogger(cfg)
 
 	systemPrompt := "You are a helpful assistant that writes concise git commit messages."
 	userPrompt := fmt.Sprintf(`Generate a concise git commit message for the following staged changes.

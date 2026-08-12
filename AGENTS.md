@@ -57,6 +57,12 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 - Tool execution requires user confirmation unless command is in `allowed_commands`
 - Lipgloss styles: `promptStyle`, `systemStyle`, `userStyle`, `aiStyle`, `errorStyle`, `cmdStyle`, `helpStyle`, `dimStyle`
 
+## Debug flag (cmd/cmd.go)
+
+- Persistent `--debug` flag on the root command, available to every subcommand (e.g. `ai-shell commit --debug`, `ai-shell models --debug`)
+- `cmd.initLogger(cfg)` temporarily forces the slog level to debug when the flag is passed, without touching the saved config — it mutates only the in-memory `cfg.LogLevel` before calling `config.InitLogger`
+- All subcommands must call `initLogger(cfg)` (not `config.InitLogger(cfg.LogLevel)`) after `config.LoadConfig()` so the flag override applies
+
 ## Config command (cmd/config.go)
 
 - Usable as `ai-shell config --flag value`
