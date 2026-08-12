@@ -32,6 +32,8 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 2. `./.env` (local overrides)
 3. `config.yaml` from `./` or `~/.config/ai-shell/`
 
+`.env.example` documents the recognized env vars (`GEMINI_API_KEY`, `OPEN_ROUTE_KEY`, `OLLAMA_HOST`, `LITERTLM_LIB`, `LITERTLM_MODEL`, `LITERTLM_MODELS_DIR`, `LITERTLM_BACKEND`).
+
 Defaults: provider=ollama, model=granite4:3b-h, log_level=info, confirm=true, allowed_commands=ls,pwd. litertlm backend defaults to `cpu`. All 6 tools enabled by default. Custom commands stored in config.
 
 Log level values: `debug`, `info`, `warn`, `error`. Uses `log/slog` throughout (no `log` package). Call `config.InitLogger(cfg.LogLevel)` after `LoadConfig()` to configure the global slog level. Debug messages use `slog.Debug`, warnings use `slog.Warn`. Debug logging in `cmd/commit.go` (provider/model/prompt) and `cmd/shell.go` (LLM timing: total/llm/other duration and message count).
