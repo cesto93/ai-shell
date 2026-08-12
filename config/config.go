@@ -2,13 +2,17 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -279,7 +283,7 @@ func SaveConfig(cfg *Config) error {
 
 func lookupModelInfo(modelName string) *ModelInfo {
 	allModels := append([]ModelInfo{}, GeminiModels...)
-	allModels = append(allModels, OpenRouterModels...)
+	allModels = append(allModels, getOpenRouterModelsFunc()...)
 	for _, m := range allModels {
 		if m.Name == modelName {
 			return &m
@@ -310,7 +314,7 @@ func SaveModelWithProvider(modelName, provider string) error {
 		cfg.LLM.Provider = "gemini"
 	} else if IsLitertLMModel(modelName) {
 		cfg.LLM.Provider = "litertlm"
-	} else if modelInList(modelName, OpenRouterModels) {
+	} else if modelInList(modelName, getOpenRouterModelsFunc()) {
 		cfg.LLM.Provider = "openrouter"
 	} else if IsLlamacppModel(modelName) {
 		cfg.LLM.Provider = "llamacpp"
@@ -420,10 +424,78 @@ func IsLlamacppModel(modelName string) bool {
 	return modelInList(modelName, GetLlamacppModels())
 }
 
-var OpenRouterModels = []ModelInfo{
-	{Name: "nvidia/nemotron-3-super-120b-a12b:free", Provider: "openrouter"},
-	{Name: "google/gemma-4-31b-it:free", Provider: "openrouter"},
-	{Name: "deepseek/deepseek-v4-flash-0731", Provider: "openrouter"},
+// openRouterModelsURL is the OpenRouter API endpoint listing all models.
+var openRouterModelsURL = "https://openrouter.ai/api/v1/models"
+
+// openRouterModelsCache caches the fetched list of free OpenRouter models for
+// a short TTL to avoid hitting the API on every models listing.
+var (
+	openRouterModelsCache    []ModelInfo
+	openRouterModelsCached   time.Time
+	openRouterModelsCacheTTL = 10 * time.Minute
+)
+
+// getOpenRouterModelsFunc is swappable for tests.
+var getOpenRouterModelsFunc = GetOpenRouterModels
+
+// GetOpenRouterModels returns the list of free OpenRouter models, fetched
+// from the OpenRouter API and cached briefly.
+func GetOpenRouterModels() []ModelInfo {
+	if openRouterModelsCache != nil && time.Since(openRouterModelsCached) < openRouterModelsCacheTTL {
+		return openRouterModelsCache
+	}
+	openRouterModelsCache = fetchOpenRouterFreeModels()
+	openRouterModelsCached = time.Now()
+	return openRouterModelsCache
+}
+
+type openRouterModelsResponse struct {
+	Data []struct {
+		ID      string `json:"id"`
+		Pricing struct {
+			Prompt     string `json:"prompt"`
+			Completion string `json:"completion"`
+		} `json:"pricing"`
+	} `json:"data"`
+}
+
+// fetchOpenRouterFreeModels GETs openRouterModelsURL and keeps only the models
+// whose prompt and completion pricing is zero.
+func fetchOpenRouterFreeModels() []ModelInfo {
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Get(openRouterModelsURL)
+	if err != nil {
+		slog.Debug("failed to fetch OpenRouter models", "error", err)
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		slog.Debug("openrouter models request failed", "status", resp.StatusCode)
+		return nil
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		slog.Debug("failed to read OpenRouter models response", "error", err)
+		return nil
+	}
+	var payload openRouterModelsResponse
+	if err := json.Unmarshal(body, &payload); err != nil {
+		slog.Debug("failed to parse OpenRouter models response", "error", err)
+		return nil
+	}
+	var models []ModelInfo
+	for _, m := range payload.Data {
+		if !isZeroPrice(m.Pricing.Prompt) || !isZeroPrice(m.Pricing.Completion) {
+			continue
+		}
+		models = append(models, ModelInfo{Name: m.ID, Provider: "openrouter"})
+	}
+	return models
+}
+
+func isZeroPrice(s string) bool {
+	f, err := strconv.ParseFloat(s, 64)
+	return err == nil && f == 0
 }
 
 var getAvailableModelsFunc = GetAvailableModels
@@ -434,7 +506,7 @@ func GetAllAvailableModels() []ModelInfo {
 		models = append(models, ollamaModels...)
 	}
 	models = append(models, GeminiModels...)
-	models = append(models, OpenRouterModels...)
+	models = append(models, getOpenRouterModelsFunc()...)
 	models = append(models, GetLitertLMModels()...)
 	models = append(models, GetLlamacppModels()...)
 	return models
