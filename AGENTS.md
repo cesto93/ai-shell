@@ -21,7 +21,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 
 | Directory | Contents |
 |-----------|----------|
-| `cmd/` | Cobra commands: default (TUI shell), `get-config`, `config`, `commit`, `extract`, `pull`, `models`, `commands` |
+| `cmd/` | Cobra commands: default (TUI shell), `config`, `commit`, `extract`, `pull`, `models`, `commands` |
 | `config/` | Viper YAML config, model lists (OpenRouter free models fetched live from `https://openrouter.ai/api/v1/models` via `config.GetOpenRouterModels()`, 10 min cache), `.env` loading via `gotenv` |
 | `llm/` | `Agent` struct, `Caller` interface, `RawCaller` interface (adds `CallStructured`), `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, `NewProviderCallerRaw` (returns `RawCaller`), `CallStructured` method (with `response_format`), `ProviderConfig` struct, default system prompt, `LlamacppCaller` (in-process llama.cpp via yzma), `LitertLMCaller` (in-process LiteRT-LM via litertlm-go) |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
@@ -65,9 +65,10 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 
 ## Config command (cmd/config.go)
 
-- Usable as `ai-shell config --flag value`
+- Usable as `ai-shell config` (shows current config via `PrintConfig`) or `ai-shell config --flag value`
 - Flags: `--provider`, `--model`, `--log-level`, `--confirm`, `--allowed-commands`, `--backend`, `--enable-tool`, `--disable-tool`, `--add-cmd`, `--rm-cmd`
 - Loads config via `config.LoadConfig()`, modifies specified fields, calls `config.SaveConfig()`
+- When run without any flags, calls `PrintConfig()` (replaces the removed `get-config` command)
 - When `--model` is set without `--provider`, auto-detects provider via `config.LookupModelInfo`
 - `--add-cmd` uses `name=prompt` format
 - `SaveConfig` now persists `commands` map to YAML

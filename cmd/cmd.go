@@ -16,7 +16,7 @@ var rootCmd = &cobra.Command{
 	Short: "AI Shell is an interactive shell powered by AI",
 	Long:  `An interactive shell powered by AI that can help you with commands and explanations.`,
 	Example: `  ai-shell
-  ai-shell get-config
+  ai-shell config
   ai-shell commit
   ai-shell models
   ai-shell extract notes.txt schema.json
@@ -26,14 +26,6 @@ var rootCmd = &cobra.Command{
 			fmt.Println(err)
 			os.Exit(1)
 		}
-	},
-}
-
-var configCmd = &cobra.Command{
-	Use:   "get-config",
-	Short: "Show current configuration",
-	Run: func(cmd *cobra.Command, args []string) {
-		PrintConfig()
 	},
 }
 

@@ -9,11 +9,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var setConfigCmd = &cobra.Command{
+var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "Modify configuration settings",
-	Long:  `Modify ai-shell configuration settings. Use flags to set specific config fields.`,
-	Example: `  ai-shell config --provider gemini --model gemini-2.0-flash
+	Short: "Show or modify configuration settings",
+	Long:  `Show the current ai-shell configuration, or modify it by passing flags to set specific config fields.`,
+	Example: `  ai-shell config
+  ai-shell config --provider gemini --model gemini-2.0-flash
   ai-shell config --log-level debug
   ai-shell config --confirm=false
   ai-shell config --allowed-commands "ls,pwd,git,curl"
@@ -111,7 +112,8 @@ var setConfigCmd = &cobra.Command{
 		}
 
 		if !changed {
-			return fmt.Errorf("no flags provided. See ai-shell config --help for available flags")
+			PrintConfig()
+			return nil
 		}
 
 		if err := config.SaveConfig(cfg); err != nil {
@@ -124,16 +126,16 @@ var setConfigCmd = &cobra.Command{
 }
 
 func init() {
-	setConfigCmd.Flags().String("provider", "", "Set LLM provider (ollama, gemini, openrouter, litertlm)")
-	setConfigCmd.Flags().String("model", "", "Set LLM model name")
-	setConfigCmd.Flags().String("log-level", "", "Set log level (debug, info, warn, error)")
-	setConfigCmd.Flags().Bool("confirm", false, "Require confirmation for tool execution")
-	setConfigCmd.Flags().StringSlice("allowed-commands", nil, "Comma-separated list of commands that skip confirmation")
-	setConfigCmd.Flags().String("backend", "", "LiteRT-LM inference backend (cpu, gpu)")
-	setConfigCmd.Flags().String("enable-tool", "", "Enable a tool by name")
-	setConfigCmd.Flags().String("disable-tool", "", "Disable a tool by name")
-	setConfigCmd.Flags().String("add-cmd", "", "Add a custom command (format: name=prompt)")
-	setConfigCmd.Flags().String("rm-cmd", "", "Remove a custom command by name")
+	configCmd.Flags().String("provider", "", "Set LLM provider (ollama, gemini, openrouter, litertlm)")
+	configCmd.Flags().String("model", "", "Set LLM model name")
+	configCmd.Flags().String("log-level", "", "Set log level (debug, info, warn, error)")
+	configCmd.Flags().Bool("confirm", false, "Require confirmation for tool execution")
+	configCmd.Flags().StringSlice("allowed-commands", nil, "Comma-separated list of commands that skip confirmation")
+	configCmd.Flags().String("backend", "", "LiteRT-LM inference backend (cpu, gpu)")
+	configCmd.Flags().String("enable-tool", "", "Enable a tool by name")
+	configCmd.Flags().String("disable-tool", "", "Disable a tool by name")
+	configCmd.Flags().String("add-cmd", "", "Add a custom command (format: name=prompt)")
+	configCmd.Flags().String("rm-cmd", "", "Remove a custom command by name")
 
-	rootCmd.AddCommand(setConfigCmd)
+	rootCmd.AddCommand(configCmd)
 }
