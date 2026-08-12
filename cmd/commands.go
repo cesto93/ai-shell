@@ -153,7 +153,7 @@ func runCustomCommand(cfg *config.Config, name string, extraArgs []string) error
 		fullPrompt = found.Prompt + " " + args
 	}
 
-	agent := llm.NewAgent(cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools)
+	agent := llm.NewAgentFor(cfg.Agent, cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools)
 	agent.Backend = cfg.LitertLM.Backend
 
 	messages := []llm.Message{

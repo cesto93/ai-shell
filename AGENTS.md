@@ -23,7 +23,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 |-----------|----------|
 | `cmd/` | Cobra commands: default (TUI shell), `config`, `commit`, `extract`, `pull`, `models`, `commands`, `stats` |
 | `config/` | Viper YAML config, model lists (OpenRouter free models fetched live from `https://openrouter.ai/api/v1/models` via `config.GetOpenRouterModels()`, 10 min cache), `.env` loading via `gotenv` |
-| `llm/` | `Agent` struct, `Caller` interface, `RawCaller` interface (adds `CallStructured`), `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, `NewProviderCallerRaw` (returns `RawCaller`), `CallStructured` method (with `response_format`), `ProviderConfig` struct, default system prompt, `LlamacppCaller` (in-process llama.cpp via yzma), `LitertLMCaller` (in-process LiteRT-LM via litertlm-go). `OpenAICaller` logs token usage (`openrouter usage` debug line: prompt/completion/total tokens, cost, cached/reasoning tokens when present) but only when `BaseURL` contains `openrouter.ai`; every OpenAI-compatible call with a `usage` in the response is also persisted via `stats.RecordUsage` (provider derived from `BaseURL`). `LlamacppCaller` records prompt/completion tokens (from tokenize + generation loop). LitertLM usage is not tracked (binding exposes no token counts) |
+| `llm/` | `Agent` struct, `Caller` interface, `RawCaller` interface (adds `CallStructured`), `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, `NewProviderCallerRaw` (returns `RawCaller`), `CallStructured` method (with `response_format`), `ProviderConfig` struct, default system prompt, `LlamacppCaller` (in-process llama.cpp via yzma), `LitertLMCaller` (in-process LiteRT-LM via litertlm-go). Built-in agents: `GetAgentDefs()`/`GetAgentDef(name)` return `AgentDef`s (`build` = all tools + default prompt, `plan` = no `WriteFile`/`RunCommand` with its own planning prompt); `NewAgentFor(name, model, provider, cfgTools)` builds an `Agent` whose tools are the intersection of the agent's allowed tools and the user's tool toggles. `OpenAICaller` logs token usage (`openrouter usage` debug line: prompt/completion/total tokens, cost, cached/reasoning tokens when present) but only when `BaseURL` contains `openrouter.ai`; every OpenAI-compatible call with a `usage` in the response is also persisted via `stats.RecordUsage` (provider derived from `BaseURL`). `LlamacppCaller` records prompt/completion tokens (from tokenize + generation loop). LitertLM usage is not tracked (binding exposes no token counts) |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
 | `stats/` | Persistent token usage store backed by bbolt at `~/.config/ai-shell/usage.db`. `stats.RecordUsage(provider, model, Usage)` accumulates per (provider, model); `stats.GetStats()` returns sorted `[]Entry` (calls, prompt/completion/total/cached/reasoning tokens, cost); `stats.Reset()` wipes all entries. `dbPathFunc` is swappable for tests |
 
@@ -35,7 +35,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 
 `.env.example` documents the recognized env vars (`GEMINI_API_KEY`, `OPEN_ROUTE_KEY`, `OLLAMA_HOST`, `LITERTLM_LIB`, `LITERTLM_MODEL`, `LITERTLM_MODELS_DIR`, `LITERTLM_BACKEND`).
 
-Defaults: provider=ollama, model=granite4:3b-h, log_level=info, confirm=true, allowed_commands=ls,pwd. litertlm backend defaults to `cpu`. All 6 tools enabled by default. Custom commands stored in config.
+Defaults: provider=ollama, model=granite4:3b-h, log_level=info, confirm=true, allowed_commands=ls,pwd, agent=build. litertlm backend defaults to `cpu`. All 6 tools enabled by default. Custom commands stored in config.
 
 Log level values: `debug`, `info`, `warn`, `error`. Uses `log/slog` throughout (no `log` package). Call `config.InitLogger(cfg.LogLevel)` after `LoadConfig()` to configure the global slog level. Debug messages use `slog.Debug`, warnings use `slog.Warn`. Debug logging in `cmd/commit.go` (provider/model/prompt) and `cmd/shell.go` (LLM timing: total/llm/other duration and message count).
 
@@ -53,9 +53,10 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 
 ## TUI conventions (cmd/shell.go)
 
-- `/` commands: help, get-config, config, models, reset, add-cmd, exit, quit
+- `/` commands: help, get-config, config, models, agent, reset, add-cmd, exit, quit
 - `@filepath` for image attachments (base64 encoded)
 - Tool execution requires user confirmation unless command is in `allowed_commands`
+- `/agent` opens an agent selection menu (`menuAgent`); `m.cfg.Agent` names the active agent and is persisted to config. `ElaborateMessage` builds the agent via `llm.NewAgentFor(m.cfg.Agent, ...)`, so the agent's allowed tools (e.g. plan: no WriteFile/RunCommand) are intersected with the user's tool toggles before calling the LLM. `showConfig` marks tools `blocked by agent`
 - Lipgloss styles: `promptStyle`, `systemStyle`, `userStyle`, `aiStyle`, `errorStyle`, `cmdStyle`, `helpStyle`, `dimStyle`
 
 ## Debug flag (cmd/cmd.go)
@@ -67,7 +68,7 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 ## Config command (cmd/config.go)
 
 - Usable as `ai-shell config` (shows current config via `PrintConfig`) or `ai-shell config --flag value`
-- Flags: `--provider`, `--model`, `--log-level`, `--confirm`, `--allowed-commands`, `--backend`, `--enable-tool`, `--disable-tool`, `--add-cmd`, `--rm-cmd`
+- Flags: `--provider`, `--model`, `--agent`, `--log-level`, `--confirm`, `--allowed-commands`, `--backend`, `--enable-tool`, `--disable-tool`, `--add-cmd`, `--rm-cmd`
 - Loads config via `config.LoadConfig()`, modifies specified fields, calls `config.SaveConfig()`
 - When run without any flags, calls `PrintConfig()` (replaces the removed `get-config` command)
 - When `--model` is set without `--provider`, auto-detects provider via `config.LookupModelInfo`
@@ -78,7 +79,7 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 
 - Usable as `ai-shell commands` (lists custom commands) or `ai-shell commands --run <name> [args...]` to run one non-interactively
 - `--run` looks the command up via `config.LoadCommands` (merges `.ai-shell/commands/*.md` files and config `commands` map, matching the shell's `/name` handling); extra args are appended to the command prompt
-- Running uses `llm.NewAgent` with the default system prompt and a `cliExecutor` (in `cmd/commands.go`) that executes all tools without confirmation, prints the final assistant text to stdout
+- Running uses `llm.NewAgentFor(cfg.Agent, ...)` with the agent's system prompt and a `cliExecutor` (in `cmd/commands.go`) that executes all tools without confirmation, prints the final assistant text to stdout
 
 ## Commit command (cmd/commit.go)
 

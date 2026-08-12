@@ -30,6 +30,7 @@ type CommandInfo struct {
 type Config struct {
 	ConfigFile string
 	LogLevel   string `mapstructure:"log_level"`
+	Agent      string `mapstructure:"agent"`
 	LLM        struct {
 		Provider   string   `mapstructure:"provider"`
 		Model      string   `mapstructure:"model"`
@@ -106,6 +107,7 @@ func LoadConfig() (*Config, error) {
 	v.SetDefault("shell.confirm", true)
 	v.SetDefault("shell.allowed_commands", []string{"ls", "pwd", "git"})
 	v.SetDefault("log_level", "info")
+	v.SetDefault("agent", "build")
 	v.SetDefault("litertlm.backend", "cpu")
 	v.SetDefault("tools", map[string]bool{
 		"RunCommand": true,
@@ -132,6 +134,7 @@ func LoadConfig() (*Config, error) {
 			defaultConfig := &Config{
 				ConfigFile: "",
 				LogLevel:   "info",
+				Agent:      "build",
 				LLM: struct {
 					Provider   string   `mapstructure:"provider"`
 					Model      string   `mapstructure:"model"`
@@ -168,7 +171,7 @@ func LoadConfig() (*Config, error) {
 				if err == nil {
 					defaultConfigFile := filepath.Join(configPath, "config.yaml")
 					if _, err := os.Stat(defaultConfigFile); os.IsNotExist(err) {
-						content := "log_level: \"info\"\nllm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\n  input_types:\n    - \"text\"\nshell:\n  confirm: true\n  allowed_commands:\n    - \"ls\"\n    - \"pwd\"\n    - \"git\"\nlitertlm:\n  backend: \"cpu\"\ntools:\n  RunCommand: true\n  WriteFile: true\n  ReadFile: true\n  KVSet: true\n  KVGet: true\n  KVList: true\n"
+						content := "log_level: \"info\"\nagent: \"build\"\nllm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\n  input_types:\n    - \"text\"\nshell:\n  confirm: true\n  allowed_commands:\n    - \"ls\"\n    - \"pwd\"\n    - \"git\"\nlitertlm:\n  backend: \"cpu\"\ntools:\n  RunCommand: true\n  WriteFile: true\n  ReadFile: true\n  KVSet: true\n  KVGet: true\n  KVList: true\n"
 						_ = os.WriteFile(defaultConfigFile, []byte(content), 0644)
 						defaultConfig.ConfigFile = defaultConfigFile
 					}
@@ -243,6 +246,7 @@ func SaveConfig(cfg *Config) error {
 
 	out := struct {
 		LogLevel string `yaml:"log_level"`
+		Agent    string `yaml:"agent,omitempty"`
 		LLM      struct {
 			Provider   string   `yaml:"provider"`
 			Model      string   `yaml:"model"`
@@ -259,6 +263,7 @@ func SaveConfig(cfg *Config) error {
 		Commands map[string]string `yaml:"commands,omitempty"`
 	}{
 		LogLevel: cfg.LogLevel,
+		Agent:    cfg.Agent,
 		Tools:    cfg.Tools,
 		Commands: cfg.Commands,
 	}

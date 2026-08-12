@@ -51,6 +51,7 @@ var availableCommands = []string{
 	"get-config",
 	"config",
 	"models",
+	"agent",
 	"reset",
 	"exit",
 	"quit",
@@ -61,6 +62,7 @@ type menuKind int
 const (
 	menuNone menuKind = iota
 	menuModel
+	menuAgent
 	menuConfig
 	menuTools
 	menuCommands
@@ -88,7 +90,7 @@ func (ms *menuState) itemCount() int {
 	switch ms.kind {
 	case menuModel:
 		return len(ms.models)
-	case menuConfig, menuTools, menuCommands:
+	case menuAgent, menuConfig, menuTools, menuCommands:
 		return len(ms.options)
 	}
 	return 0
@@ -392,6 +394,9 @@ func (m *ShellModel) handleEnterKey() (tea.Model, tea.Cmd) {
 	case menuModel:
 		m.selectModel()
 		return m, nil
+	case menuAgent:
+		m.selectAgentOption()
+		return m, nil
 	case menuConfig:
 		m.selectConfigOption()
 		return m, nil
@@ -531,6 +536,27 @@ func (m *ShellModel) renderMenu(sb *strings.Builder) {
 			}
 			sb.WriteString("\n")
 		}
+	case menuAgent:
+		sb.WriteString(systemStyle.Render("Select Agent (↑/↓ to navigate, Enter to select, Esc to cancel):"))
+		sb.WriteString("\n")
+		for i, opt := range m.menu.options {
+			marker := " "
+			if opt == m.cfg.Agent {
+				marker = "*"
+			}
+			label := fmt.Sprintf(" %s %s ", marker, opt)
+			if i == m.menu.selectedIdx {
+				sb.WriteString(highlightStyle.Render(label))
+			} else {
+				sb.WriteString(userStyle.Render(label))
+			}
+			sb.WriteString("\n")
+		}
+		sb.WriteString("\n")
+		for _, def := range llm.GetAgentDefs() {
+			sb.WriteString(dimStyle.Render(fmt.Sprintf("  %s: %s", def.Name, def.Description)))
+			sb.WriteString("\n")
+		}
 	case menuTools:
 		sb.WriteString(systemStyle.Render("Manage Tools (↑/↓ to navigate, Enter to toggle, Esc to back):"))
 		sb.WriteString("\n")
@@ -636,6 +662,8 @@ func (m *ShellModel) handleBuiltinCommand(cmd string) (handled bool, model tea.M
 		m.showHelp()
 	case "models":
 		m.openModelMenu()
+	case "agent":
+		m.openAgentMenu()
 	case "reset":
 		m.messages = nil
 	default:
@@ -859,6 +887,7 @@ func (m *ShellModel) showHelp() {
 	sb.WriteString("  /config       - Show configuration menu\n")
 	sb.WriteString("  /get-config   - Show current LLM settings\n")
 	sb.WriteString("  /models       - Switch to a different model\n")
+	sb.WriteString("  /agent        - Switch the active agent\n")
 	sb.WriteString("  /reset        - Clear the screen and messages\n")
 	sb.WriteString("  /exit, /quit  - Exit the shell\n")
 	sb.WriteString("  /<command>    - Execute a shell command\n")
@@ -887,17 +916,22 @@ func (m *ShellModel) showHelp() {
 
 func (m *ShellModel) showConfig() {
 	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Agent: %s\n", m.cfg.Agent))
 	sb.WriteString(fmt.Sprintf("Provider: %s\n", m.cfg.LLM.Provider))
 	sb.WriteString(fmt.Sprintf("Model: %s\n", m.cfg.LLM.Model))
 	sb.WriteString(fmt.Sprintf("Confirm Commands: %v\n", m.cfg.Shell.Confirm))
 	sb.WriteString(fmt.Sprintf("Allowed Commands: %s\n", strings.Join(m.cfg.Shell.AllowedCommands, ",")))
 
 	toolDescs := llm.GetToolDescriptions()
+	agentDef := llm.GetAgentDef(m.cfg.Agent)
 	sb.WriteString("\nTools:\n")
 	for _, name := range m.sortedToolNames() {
 		status := "disabled"
 		if m.cfg.Tools[name] {
 			status = "enabled"
+		}
+		if !agentDef.Tools[name] {
+			status = "blocked by agent"
 		}
 		desc := toolDescs[name]
 		sb.WriteString(fmt.Sprintf("  %s (%s)", name, status))
@@ -934,6 +968,40 @@ func (m *ShellModel) openModelMenu() {
 	m.input.SetValue("")
 }
 
+func (m *ShellModel) openAgentMenu() {
+	defs := llm.GetAgentDefs()
+	names := make([]string, len(defs))
+	for i, def := range defs {
+		names[i] = def.Name
+	}
+
+	m.menu.options = names
+	m.menu.open(menuAgent)
+	m.input.SetValue("")
+}
+
+func (m *ShellModel) selectAgentOption() {
+	if m.menu.selectedIdx < 0 || m.menu.selectedIdx >= len(m.menu.options) {
+		m.menu.close()
+		return
+	}
+
+	selected := m.menu.options[m.menu.selectedIdx]
+	if selected == m.cfg.Agent {
+		m.menu.close()
+		return
+	}
+
+	m.cfg.Agent = selected
+	if err := config.SaveConfig(m.cfg); err != nil {
+		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error saving config: %v", err)})
+	} else {
+		m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Switched to agent: %s", selected)})
+	}
+
+	m.menu.close()
+}
+
 func (m *ShellModel) openConfigMenu() {
 	m.menu.options = []string{
 		fmt.Sprintf("Confirm Commands: %v", m.cfg.Shell.Confirm),
@@ -941,6 +1009,7 @@ func (m *ShellModel) openConfigMenu() {
 		"Manage Tools",
 		"Manage Commands",
 		"Change Model",
+		fmt.Sprintf("Change Agent: %s", m.cfg.Agent),
 		"Back",
 	}
 	m.menu.open(menuConfig)
@@ -972,6 +1041,9 @@ func (m *ShellModel) selectConfigOption() {
 		m.menu.close()
 		m.openModelMenu()
 	case 5:
+		m.menu.close()
+		m.openAgentMenu()
+	case 6:
 		m.menu.close()
 	}
 }
@@ -1071,7 +1143,7 @@ func (m *ShellModel) ElaborateMessage() {
 		cancel()
 	}()
 
-	agent := llm.NewAgent(m.cfg.LLM.Model, m.cfg.LLM.Provider, m.cfg.Tools)
+	agent := llm.NewAgentFor(m.cfg.Agent, m.cfg.LLM.Model, m.cfg.LLM.Provider, m.cfg.Tools)
 	agent.Backend = m.cfg.LitertLM.Backend
 
 	executor := &ShellExecutorForLLM{m: m}

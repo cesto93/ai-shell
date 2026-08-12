@@ -1,12 +1,10 @@
 package llm
 
 import (
-	"ai-shell/tools"
 	"bytes"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"text/template"
 )
 
 // Agent represents an AI agent with its prompt, model, provider, and tools.
@@ -198,27 +196,7 @@ func buildToolDescriptions(tools []any) string {
 
 // GetDefaultSystemPrompt returns the default system prompt based on distro, shell, and current directory.
 func GetDefaultSystemPrompt(enabledTools map[string]bool) string {
-	cwd, _ := os.Getwd()
-	data := PromptData{
-		Distro: tools.GetDistro(),
-		Shell:  tools.GetShell(),
-		Cwd:    cwd,
-		Tools:  buildToolDescriptions(GetEnabledTools(enabledTools)),
-	}
-
-	raw := readPromptFile()
-
-	tmpl, err := template.New("prompt").Parse(string(raw))
-	if err != nil {
-		return "You are a helpful shell assistant."
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "You are a helpful shell assistant."
-	}
-
-	return buf.String()
+	return GetAgentSystemPrompt("build", GetEnabledTools(enabledTools))
 }
 
 // readPromptFile reads PROMPT.md from ~/.ai-shell/PROMPT.md.
@@ -246,5 +224,95 @@ func NewAgent(model, provider string, toolsEnabled map[string]bool) *Agent {
 		Model:    model,
 		Provider: provider,
 		Tools:    GetEnabledTools(toolsEnabled),
+	}
+}
+
+// AgentDef describes a named agent: which tools it is allowed to use.
+type AgentDef struct {
+	Name        string
+	Description string
+	Tools       map[string]bool
+}
+
+var buildAgentTools = map[string]bool{
+	"RunCommand": true,
+	"WriteFile":  true,
+	"ReadFile":   true,
+	"KVSet":      true,
+	"KVGet":      true,
+	"KVList":     true,
+}
+
+var planAgentTools = map[string]bool{
+	"RunCommand": false,
+	"WriteFile":  false,
+	"ReadFile":   true,
+	"KVSet":      true,
+	"KVGet":      true,
+	"KVList":     true,
+}
+
+// GetAgentDefs returns the list of built-in agents. The first entry (build) is
+// the default agent.
+func GetAgentDefs() []AgentDef {
+	return []AgentDef{
+		{
+			Name:        "build",
+			Description: "Full access: all tools enabled with the default prompt",
+			Tools:       buildAgentTools,
+		},
+		{
+			Name:        "plan",
+			Description: "Read-only planning: cannot write files or launch commands",
+			Tools:       planAgentTools,
+		},
+	}
+}
+
+// GetAgentDef returns the agent definition for the given name, falling back to
+// the default build agent for empty or unknown names.
+func GetAgentDef(name string) AgentDef {
+	if name == "" {
+		name = "build"
+	}
+	for _, def := range GetAgentDefs() {
+		if def.Name == name {
+			return def
+		}
+	}
+	return GetAgentDefs()[0]
+}
+
+// EnabledTools merges the agent's allowed tools with the user's tool toggles
+// (cfg.Tools). A tool is available only when the agent permits it AND the user
+// has not disabled it.
+func (d AgentDef) EnabledTools(cfgTools map[string]bool) []any {
+	merged := make(map[string]bool)
+	for _, t := range GetAllTools() {
+		if toolMap, ok := t.(map[string]any); ok {
+			if function, ok := toolMap["function"].(map[string]any); ok {
+				if name, ok := function["name"].(string); ok {
+					enabled := d.Tools[name]
+					if v, exists := cfgTools[name]; exists {
+						enabled = enabled && v
+					}
+					merged[name] = enabled
+				}
+			}
+		}
+	}
+	return GetEnabledTools(merged)
+}
+
+// NewAgentFor creates a new Agent for the named agent, restricted to the tools
+// the agent is allowed to use (intersected with the user's tool toggles).
+func NewAgentFor(agentName, model, provider string, cfgTools map[string]bool) *Agent {
+	def := GetAgentDef(agentName)
+	tools := def.EnabledTools(cfgTools)
+	return &Agent{
+		Prompt:   GetAgentSystemPrompt(def.Name, tools),
+		Model:    model,
+		Provider: provider,
+		Tools:    tools,
 	}
 }

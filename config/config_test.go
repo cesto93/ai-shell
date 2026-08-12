@@ -32,6 +32,7 @@ func TestLoadConfig(t *testing.T) {
 		configExists  bool
 		wantModel     string
 		wantConfirm   bool
+		wantAgent     string
 	}{
 		{
 			name: "valid config file",
@@ -44,6 +45,7 @@ shell:
 			configExists: true,
 			wantModel:    "custom-model:latest",
 			wantConfirm:  false,
+			wantAgent:    "build",
 		},
 		{
 			name:          "default config when file not found",
@@ -51,6 +53,7 @@ shell:
 			configExists:  false,
 			wantModel:     "granite4:3b-h",
 			wantConfirm:   true,
+			wantAgent:     "build",
 		},
 		{
 			name: "partial config uses defaults",
@@ -61,6 +64,19 @@ llm:
 			configExists: true,
 			wantModel:    "partial-model",
 			wantConfirm:  true,
+			wantAgent:    "build",
+		},
+		{
+			name: "custom agent",
+			configContent: `
+agent: "plan"
+llm:
+  model: "custom-model:latest"
+`,
+			configExists: true,
+			wantModel:    "custom-model:latest",
+			wantConfirm:  true,
+			wantAgent:    "plan",
 		},
 	}
 
@@ -86,6 +102,10 @@ llm:
 
 			if cfg.Shell.Confirm != tt.wantConfirm {
 				t.Errorf("LoadConfig().Shell.Confirm = %v, want %v", cfg.Shell.Confirm, tt.wantConfirm)
+			}
+
+			if cfg.Agent != tt.wantAgent {
+				t.Errorf("LoadConfig().Agent = %q, want %q", cfg.Agent, tt.wantAgent)
 			}
 		})
 	}

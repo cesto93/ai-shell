@@ -240,3 +240,134 @@ func TestNewAgentWithDisabledTools(t *testing.T) {
 		t.Errorf("NewAgent() with disabled tools returned %d tools, want 2", len(agent.Tools))
 	}
 }
+
+func toolNames(tools []any) map[string]bool {
+	names := make(map[string]bool)
+	for _, tool := range tools {
+		toolMap, ok := tool.(map[string]any)
+		if !ok {
+			continue
+		}
+		function, ok := toolMap["function"].(map[string]any)
+		if !ok {
+			continue
+		}
+		if name, ok := function["name"].(string); ok {
+			names[name] = true
+		}
+	}
+	return names
+}
+
+func TestGetAgentDefs(t *testing.T) {
+	defs := GetAgentDefs()
+	if len(defs) < 2 {
+		t.Fatalf("GetAgentDefs() returned %d agents, want at least 2", len(defs))
+	}
+	if defs[0].Name != "build" {
+		t.Errorf("GetAgentDefs()[0].Name = %q, want %q", defs[0].Name, "build")
+	}
+
+	names := make(map[string]bool)
+	for _, def := range defs {
+		if def.Name == "" {
+			t.Error("agent definition missing name")
+		}
+		if def.Description == "" {
+			t.Errorf("agent %q missing description", def.Name)
+		}
+		if len(def.Tools) == 0 {
+			t.Errorf("agent %q has no tools", def.Name)
+		}
+		names[def.Name] = true
+	}
+	if !names["build"] {
+		t.Error("GetAgentDefs() missing build agent")
+	}
+	if !names["plan"] {
+		t.Error("GetAgentDefs() missing plan agent")
+	}
+}
+
+func TestGetAgentDef(t *testing.T) {
+	if def := GetAgentDef("build"); def.Name != "build" {
+		t.Errorf("GetAgentDef(build).Name = %q, want build", def.Name)
+	}
+	if def := GetAgentDef("plan"); def.Name != "plan" {
+		t.Errorf("GetAgentDef(plan).Name = %q, want plan", def.Name)
+	}
+	if def := GetAgentDef(""); def.Name != "build" {
+		t.Errorf("GetAgentDef(\"\").Name = %q, want build", def.Name)
+	}
+	if def := GetAgentDef("nonexistent"); def.Name != "build" {
+		t.Errorf("GetAgentDef(nonexistent).Name = %q, want build", def.Name)
+	}
+}
+
+func TestPlanAgentTools(t *testing.T) {
+	def := GetAgentDef("plan")
+	names := toolNames(def.EnabledTools(nil))
+
+	if names["RunCommand"] {
+		t.Error("plan agent should not enable RunCommand")
+	}
+	if names["WriteFile"] {
+		t.Error("plan agent should not enable WriteFile")
+	}
+	for _, expected := range []string{"ReadFile", "KVSet", "KVGet", "KVList"} {
+		if !names[expected] {
+			t.Errorf("plan agent should enable %s", expected)
+		}
+	}
+}
+
+func TestBuildAgentTools(t *testing.T) {
+	def := GetAgentDef("build")
+	names := toolNames(def.EnabledTools(nil))
+
+	for _, expected := range []string{"RunCommand", "WriteFile", "ReadFile", "KVSet", "KVGet", "KVList"} {
+		if !names[expected] {
+			t.Errorf("build agent should enable %s", expected)
+		}
+	}
+}
+
+func TestAgentEnabledToolsRespectsUserToggle(t *testing.T) {
+	def := GetAgentDef("build")
+	names := toolNames(def.EnabledTools(map[string]bool{"ReadFile": false}))
+
+	if names["ReadFile"] {
+		t.Error("user-disabled ReadFile should stay disabled for build agent")
+	}
+	if !names["RunCommand"] {
+		t.Error("RunCommand should remain enabled for build agent")
+	}
+}
+
+func TestNewAgentFor(t *testing.T) {
+	plan := NewAgentFor("plan", "test-model", "ollama", nil)
+	if plan == nil {
+		t.Fatal("NewAgentFor(plan) returned nil")
+	}
+	if len(plan.Tools) != 4 {
+		t.Errorf("NewAgentFor(plan) returned %d tools, want 4", len(plan.Tools))
+	}
+	if !strings.Contains(plan.Prompt, "planning agent") {
+		t.Errorf("plan agent prompt missing planning role, got: %s", plan.Prompt)
+	}
+
+	build := NewAgentFor("build", "test-model", "ollama", nil)
+	if len(build.Tools) != 6 {
+		t.Errorf("NewAgentFor(build) returned %d tools, want 6", len(build.Tools))
+	}
+	if !strings.Contains(build.Prompt, "expert shell assistant") {
+		t.Errorf("build agent prompt missing default role, got: %s", build.Prompt)
+	}
+}
+
+func TestNewAgentForUnknownFallsBackToBuild(t *testing.T) {
+	agent := NewAgentFor("nonexistent", "test-model", "ollama", nil)
+	if len(agent.Tools) != 6 {
+		t.Errorf("NewAgentFor(nonexistent) returned %d tools, want 6", len(agent.Tools))
+	}
+}

@@ -16,6 +16,7 @@ var configCmd = &cobra.Command{
 	Example: `  ai-shell config
   ai-shell config --provider gemini --model gemini-2.0-flash
   ai-shell config --log-level debug
+  ai-shell config --agent plan
   ai-shell config --confirm=false
   ai-shell config --allowed-commands "ls,pwd,git,curl"
   ai-shell config --backend gpu
@@ -47,6 +48,12 @@ var configCmd = &cobra.Command{
 					cfg.LLM.InputTypes = info.InputTypes
 				}
 			}
+			changed = true
+		}
+
+		if fl.Changed("agent") {
+			v, _ := fl.GetString("agent")
+			cfg.Agent = v
 			changed = true
 		}
 
@@ -128,6 +135,7 @@ var configCmd = &cobra.Command{
 func init() {
 	configCmd.Flags().String("provider", "", "Set LLM provider (ollama, gemini, openrouter, litertlm)")
 	configCmd.Flags().String("model", "", "Set LLM model name")
+	configCmd.Flags().String("agent", "", "Set active agent (build, plan)")
 	configCmd.Flags().String("log-level", "", "Set log level (debug, info, warn, error)")
 	configCmd.Flags().Bool("confirm", false, "Require confirmation for tool execution")
 	configCmd.Flags().StringSlice("allowed-commands", nil, "Comma-separated list of commands that skip confirmation")
