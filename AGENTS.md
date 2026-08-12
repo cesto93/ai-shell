@@ -21,7 +21,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 
 | Directory | Contents |
 |-----------|----------|
-| `cmd/` | Cobra commands: default (TUI shell), `config`, `commit`, `extract`, `pull`, `models`, `commands`, `stats` |
+| `cmd/` | Cobra commands: default (TUI shell), `config`, `commit`, `extract`, `pull`, `models`, `commands`, `agents`, `stats` |
 | `config/` | Viper YAML config, model lists (OpenRouter free models fetched live from `https://openrouter.ai/api/v1/models` via `config.GetOpenRouterModels()`, 10 min cache), `.env` loading via `gotenv` |
 | `llm/` | `Agent` struct, `Caller` interface, `RawCaller` interface (adds `CallStructured`), `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, `NewProviderCallerRaw` (returns `RawCaller`), `CallStructured` method (with `response_format`), `ProviderConfig` struct, default system prompt, `LlamacppCaller` (in-process llama.cpp via yzma), `LitertLMCaller` (in-process LiteRT-LM via litertlm-go). Built-in agents: `GetAgentDefs()`/`GetAgentDef(name)` return `AgentDef`s (`build` = all tools + default prompt, `plan` = no `WriteFile`/`RunCommand` with its own planning prompt); `NewAgentFor(name, model, provider, cfgTools)` builds an `Agent` whose tools are the intersection of the agent's allowed tools and the user's tool toggles. `OpenAICaller` logs token usage (`openrouter usage` debug line: prompt/completion/total tokens, cost, cached/reasoning tokens when present) but only when `BaseURL` contains `openrouter.ai`; every OpenAI-compatible call with a `usage` in the response is also persisted via `stats.RecordUsage` (provider derived from `BaseURL`). `LlamacppCaller` records prompt/completion tokens (from tokenize + generation loop). LitertLM usage is not tracked (binding exposes no token counts) |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
@@ -109,6 +109,13 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 - Auto-updates config via `config.SaveModelWithProvider(modelName, provider)`
 - Cleans up partial file on download failure
 - Uses `net/http` directly (no external download libraries)
+
+## Agents command (cmd/agents.go)
+
+- Usable as `ai-shell agents`
+- Lists all agents from `llm.GetAgentDefs()` in a table: AGENT, DESCRIPTION, TOOLS
+- Sorted by agent name; uses `text/tabwriter` for aligned output
+- Current agent (from config `agent` field) is prefixed with `* `
 
 ## Models command (cmd/models.go)
 
