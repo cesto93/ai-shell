@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"strings"
 )
 
 type OpenAICaller struct {
@@ -29,6 +31,24 @@ type OpenAIResponse struct {
 	Choices []struct {
 		Message Message `json:"message"`
 	} `json:"choices"`
+	Usage *OpenAIUsage `json:"usage,omitempty"`
+}
+
+type OpenAIUsage struct {
+	PromptTokens            int                           `json:"prompt_tokens"`
+	CompletionTokens        int                           `json:"completion_tokens"`
+	TotalTokens             int                           `json:"total_tokens"`
+	Cost                    float64                       `json:"cost"`
+	PromptTokensDetails     *OpenAIUsagePromptDetails     `json:"prompt_tokens_details,omitempty"`
+	CompletionTokensDetails *OpenAIUsageCompletionDetails `json:"completion_tokens_details,omitempty"`
+}
+
+type OpenAIUsagePromptDetails struct {
+	CachedTokens int `json:"cached_tokens"`
+}
+
+type OpenAIUsageCompletionDetails struct {
+	ReasoningTokens int `json:"reasoning_tokens"`
 }
 
 func NewOpenAICaller(baseURL, apiKey, model string, executor ToolExecutor) *OpenAICaller {
@@ -39,6 +59,10 @@ func NewOpenAICaller(baseURL, apiKey, model string, executor ToolExecutor) *Open
 		Executor: executor,
 		Client:   &http.Client{},
 	}
+}
+
+func (o *OpenAICaller) isOpenRouter() bool {
+	return strings.Contains(o.BaseURL, "openrouter.ai")
 }
 
 func (o *OpenAICaller) Call(ctx context.Context, systemPrompt string, messages []Message, tools []any) ([]Message, error) {
@@ -98,6 +122,25 @@ func (o *OpenAICaller) call(ctx context.Context, systemPrompt string, messages [
 		var openAIResp OpenAIResponse
 		if err := json.Unmarshal(body, &openAIResp); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+		}
+
+		if o.isOpenRouter() && openAIResp.Usage != nil {
+			u := openAIResp.Usage
+			args := []any{
+				"prompt_tokens", u.PromptTokens,
+				"completion_tokens", u.CompletionTokens,
+				"total_tokens", u.TotalTokens,
+			}
+			if u.Cost > 0 {
+				args = append(args, "cost", u.Cost)
+			}
+			if u.PromptTokensDetails != nil {
+				args = append(args, "cached_tokens", u.PromptTokensDetails.CachedTokens)
+			}
+			if u.CompletionTokensDetails != nil {
+				args = append(args, "reasoning_tokens", u.CompletionTokensDetails.ReasoningTokens)
+			}
+			slog.Debug("openrouter usage", args...)
 		}
 
 		if len(openAIResp.Choices) == 0 {
