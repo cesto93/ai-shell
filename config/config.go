@@ -345,8 +345,8 @@ type ModelInfo struct {
 }
 
 var GeminiModels = []ModelInfo{
-	{Name: "gemini-3-flash-preview", Provider: "gemini"},
-	{Name: "gemini-3.1-flash-lite-preview", Provider: "gemini"},
+	{Name: "gemini-3.7-flash", Provider: "gemini"},
+	{Name: "gemini-3.5-flash-lite", Provider: "gemini"},
 	{Name: "gemma-4-31b-it", Provider: "gemini"},
 	{Name: "gemma-4-26b-a4b-it", Provider: "gemini"},
 }

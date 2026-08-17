@@ -492,8 +492,8 @@ func TestModelInListGemini(t *testing.T) {
 		model string
 		want  bool
 	}{
-		{"gemini-3-flash-preview", true},
-		{"gemini-3.1-flash-lite-preview", true},
+		{"gemini-3.7-flash", true},
+		{"gemini-3.5-flash-lite", true},
 		{"gemma-4-31b-it", true},
 		{"gemma-4-26b-a4b-it", true},
 		{"other-model", false},
@@ -673,7 +673,7 @@ func TestLookupModelInfo(t *testing.T) {
 		{
 			name:     "gemini model found",
 			wantNil:  false,
-			wantName: "gemini-3-flash-preview",
+			wantName: "gemini-3.7-flash",
 		},
 		{
 			name:    "unknown model not found",
@@ -773,7 +773,7 @@ func TestSaveConfigEmptyPath(t *testing.T) {
 			InputTypes []string `mapstructure:"input_types"`
 		}{
 			Provider: "gemini",
-			Model:    "gemini-3-flash-preview",
+			Model:    "gemini-3.7-flash",
 		},
 	}
 
@@ -788,7 +788,7 @@ func TestSaveConfigEmptyPath(t *testing.T) {
 		t.Fatalf("Failed to read config file: %v", err)
 	}
 
-	if !bytes.Contains(data, []byte("model: gemini-3-flash-preview")) {
+	if !bytes.Contains(data, []byte("model: gemini-3.7-flash")) {
 		t.Errorf("Config file missing model, got: %s", string(data))
 	}
 }

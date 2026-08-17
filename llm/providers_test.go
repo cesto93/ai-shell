@@ -87,7 +87,7 @@ func TestNewProviderCallerGemini(t *testing.T) {
 	os.Setenv("GEMINI_API_KEY", "test-key")
 	defer os.Unsetenv("GEMINI_API_KEY")
 
-	caller := NewProviderCaller("gemini", "gemini-3-flash-preview", nil)
+	caller := NewProviderCaller("gemini", "gemini-3.7-flash", nil)
 
 	oac, ok := caller.(*OpenAICaller)
 	if !ok {
@@ -96,8 +96,8 @@ func TestNewProviderCallerGemini(t *testing.T) {
 	if oac.APIKey != "test-key" {
 		t.Errorf("APIKey = %q, want %q", oac.APIKey, "test-key")
 	}
-	if oac.Model != "gemini-3-flash-preview" {
-		t.Errorf("Model = %q, want %q", oac.Model, "gemini-3-flash-preview")
+	if oac.Model != "gemini-3.7-flash" {
+		t.Errorf("Model = %q, want %q", oac.Model, "gemini-3.7-flash")
 	}
 }
 
