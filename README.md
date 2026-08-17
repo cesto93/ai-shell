@@ -115,11 +115,11 @@ The `litertlm` provider runs LiteRT-LM inference **in-process** using the [liter
 
 ### Setup
 
-1. Build `liblitertlm_c_cpu.so` via the "Build LiteRT-LM Shared Libraries" GitHub workflow (`.github/workflows/litertlm.yaml`) and place it in `~/.ai-shell/lib/`. Then fetch the prebuilt aux/GPU libraries:
+1. Download the LiteRT-LM C API release and place it in `~/.ai-shell/lib/`, then fetch the prebuilt aux/GPU libraries:
    ```bash
    make install-litertlm
    ```
-   This downloads the prebuilt LiteRT-LM libs into `~/.ai-shell/lib/`. The workflow artifact is already named `liblitertlm_c_cpu.so`, the filename the binding actually dlopens, so no symlink is needed.
+   This downloads the official `litert_lm_c_api` release from `google-ai-edge/LiteRT-LM`, extracts `lib/linux_x86_64/liblitert-lm.so`, renames it to `liblitertlm_c_cpu.so` (the filename the binding actually dlopens), and fetches the prebuilt aux/GPU libs into `~/.ai-shell/lib/`. No symlink is needed.
 
 2. Place a `.litertlm` model file in `~/.ai-shell/models/litertlm/` (or set `LITERTLM_MODELS_DIR` / `LITERTLM_MODEL`). You can download one with `ai-shell pull`:
    ```bash

@@ -2,13 +2,10 @@ SHELL := /bin/bash
 AI_SHELL_DIR := $(HOME)/.ai-shell
 AI_SHELL_LIB := $(AI_SHELL_DIR)/lib
 LITERTLM_TAG ?= main
+LITERTLM_VERSION ?= v0.16.0
 LITERTLM_PREBUILT := https://github.com/google-ai-edge/LiteRT-LM/raw/$(LITERTLM_TAG)/prebuilt/linux_x86_64
 LITERTLM_AUX_LIBS := libGemmaModelConstraintProvider.so libLiteRt.so libLiteRtWebGpuAccelerator.so libLiteRtTopKWebGpuSampler.so
-LITERTLM_ARTIFACT_OWNER ?= cesto93
-LITERTLM_ARTIFACT_REPO ?= ai-shell
-LITERTLM_ARTIFACT_RUN ?= 31204830010
-LITERTLM_ARTIFACT_NAME ?= litert-lm-linux-amd64
-LITERTLM_ARTIFACT_URL ?= https://nightly.link/$(LITERTLM_ARTIFACT_OWNER)/$(LITERTLM_ARTIFACT_REPO)/actions/runs/$(LITERTLM_ARTIFACT_RUN)/$(LITERTLM_ARTIFACT_NAME).zip
+LITERTLM_RELEASE_URL ?= https://github.com/google-ai-edge/LiteRT-LM/releases/download/$(LITERTLM_VERSION)/litert_lm_c_api-0.1.0.zip
 
 build:
 	go build -o ai-shell .
@@ -24,10 +21,11 @@ install-yzma:
 install-litertlm:
 	mkdir -p $(AI_SHELL_LIB)
 	@if [ ! -f "$(AI_SHELL_LIB)/liblitertlm_c_cpu.so" ]; then \
-		echo "Downloading liblitertlm_c_cpu.so from $(LITERTLM_ARTIFACT_URL) ..."; \
+		echo "Downloading liblitert-lm.so from $(LITERTLM_RELEASE_URL) ..."; \
 		tmp=$$(mktemp -d); \
-		curl -fsSL "$(LITERTLM_ARTIFACT_URL)" -o "$$tmp/$(LITERTLM_ARTIFACT_NAME).zip" || { echo "✗ failed to download $(LITERTLM_ARTIFACT_NAME)"; exit 1; }; \
-		unzip -jo "$$tmp/$(LITERTLM_ARTIFACT_NAME).zip" "liblitertlm_c_cpu.so" -d "$(AI_SHELL_LIB)" || { echo "✗ failed to extract liblitertlm_c_cpu.so"; exit 1; }; \
+		curl -fsSL "$(LITERTLM_RELEASE_URL)" -o "$$tmp/litert_lm_c_api.zip" || { echo "✗ failed to download LiteRT-LM release $(LITERTLM_VERSION)"; exit 1; }; \
+		unzip -jo "$$tmp/litert_lm_c_api.zip" "lib/linux_x86_64/liblitert-lm.so" -d "$(AI_SHELL_LIB)" || { echo "✗ failed to extract liblitert-lm.so"; exit 1; }; \
+		mv "$(AI_SHELL_LIB)/liblitert-lm.so" "$(AI_SHELL_LIB)/liblitertlm_c_cpu.so" || { echo "✗ failed to rename liblitert-lm.so"; exit 1; }; \
 		rm -rf "$$tmp"; \
 	fi
 	@for lib in $(LITERTLM_AUX_LIBS); do \
