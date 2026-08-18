@@ -48,6 +48,8 @@ func (s *Server) Ping(_ context.Context, _ *proto.PingRequest) (*proto.PingRespo
 // (not as a gRPC error) so clients can distinguish them from connectivity
 // failures.
 func (s *Server) Chat(ctx context.Context, req *proto.ChatRequest) (*proto.ChatResponse, error) {
+	slog.Info("service request received", "agent", req.Agent, "model", req.Model, "provider", req.Provider, "messages", len(req.Messages))
+
 	messages := messagesFromProto(req.Messages)
 
 	var agent *llm.Agent
