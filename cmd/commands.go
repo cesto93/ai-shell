@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"ai-shell/config"
 	"ai-shell/llm"
+	"ai-shell/service"
 	"ai-shell/tools"
 
 	"github.com/spf13/cobra"
@@ -153,23 +155,18 @@ func runCustomCommand(cfg *config.Config, name string, extraArgs []string) error
 		fullPrompt = found.Prompt + " " + args
 	}
 
-	agent := llm.NewAgentFor(cfg.Agent, cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools)
-	agent.Backend = cfg.LitertLM.Backend
-	agent.AgentFiles = llm.GetAgentFiles(cfg.AgentFiles)
-
 	messages := []llm.Message{
 		{Role: "user", Content: fullPrompt},
 	}
 
 	slog.Debug("provider", "name", cfg.LLM.Provider, "model", cfg.LLM.Model)
-	slog.Debug("system prompt", "prompt", agent.Prompt)
 	slog.Debug("user prompt", "prompt", fullPrompt)
 
 	llmStart := time.Now()
-	resultMessages, err := agent.CallLLM(context.Background(), cliExecutor{}, messages)
+	resultMessages, err := customCommandCallLLM(cfg, messages)
 	llmDuration := time.Since(llmStart)
 	if err != nil {
-		return fmt.Errorf("LLM call failed: %w", err)
+		return err
 	}
 
 	slog.Debug("timing", "llm", llmDuration)
@@ -186,4 +183,40 @@ func runCustomCommand(cfg *config.Config, name string, extraArgs []string) error
 
 	fmt.Println(strings.TrimSpace(content))
 	return nil
+}
+
+// customCommandCallLLM runs the custom command through the running service
+// when available, falling back to a local LLM call otherwise.
+func customCommandCallLLM(cfg *config.Config, messages []llm.Message) ([]llm.Message, error) {
+	if service.IsActive() {
+		req := service.ChatRequest{
+			Messages:        messages,
+			Agent:           cfg.Agent,
+			Model:           cfg.LLM.Model,
+			Provider:        cfg.LLM.Provider,
+			Tools:           cfg.Tools,
+			Backend:         cfg.LitertLM.Backend,
+			AgentFiles:      cfg.AgentFiles,
+			Confirm:         cfg.Shell.Confirm,
+			AllowedCommands: cfg.Shell.AllowedCommands,
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		result, err := service.Chat(ctx, req)
+		if err == nil {
+			return result, nil
+		}
+		if !errors.Is(err, service.ErrUnavailable) {
+			return nil, fmt.Errorf("LLM call failed: %w", err)
+		}
+		slog.Debug("service unavailable, falling back to local execution", "err", err)
+	}
+
+	agent := llm.NewAgentFor(cfg.Agent, cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools)
+	agent.Backend = cfg.LitertLM.Backend
+	agent.AgentFiles = llm.GetAgentFiles(cfg.AgentFiles)
+
+	slog.Debug("system prompt", "prompt", agent.Prompt)
+
+	return agent.CallLLM(context.Background(), cliExecutor{}, messages)
 }

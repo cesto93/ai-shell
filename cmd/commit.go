@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"ai-shell/config"
 	"ai-shell/llm"
+	"ai-shell/service"
 
 	"github.com/spf13/cobra"
 )
@@ -29,6 +31,37 @@ func (n noopExecutor) IsAllowedCommand(cmd string) bool {
 
 func (n noopExecutor) AskConfirmation(cmd string) bool {
 	return true
+}
+
+// commitCallLLM runs the commit prompt through the running service when
+// available, falling back to a local LLM call otherwise.
+func commitCallLLM(cfg *config.Config, systemPrompt string, messages []llm.Message) ([]llm.Message, error) {
+	if service.IsActive() {
+		req := service.ChatRequest{
+			Messages:        messages,
+			SystemPrompt:    systemPrompt,
+			Model:           cfg.LLM.Model,
+			Provider:        cfg.LLM.Provider,
+			Confirm:         cfg.Shell.Confirm,
+			AllowedCommands: cfg.Shell.AllowedCommands,
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		result, err := service.Chat(ctx, req)
+		if err == nil {
+			return result, nil
+		}
+		if !errors.Is(err, service.ErrUnavailable) {
+			return nil, err
+		}
+		slog.Debug("service unavailable, falling back to local execution", "err", err)
+	}
+
+	caller := llm.NewProviderCaller(cfg.LLM.Provider, cfg.LLM.Model, noopExecutor{})
+	if lc, ok := caller.(*llm.LitertLMCaller); ok {
+		lc.Backend = cfg.LitertLM.Backend
+	}
+	return caller.Call(context.Background(), systemPrompt, messages, nil)
 }
 
 var commitAll bool
@@ -93,12 +126,8 @@ Only output the commit message, nothing else.`,
 	slog.Debug("system prompt", "prompt", systemPrompt)
 	slog.Debug("user prompt", "prompt", userPrompt)
 
-	caller := llm.NewProviderCaller(cfg.LLM.Provider, cfg.LLM.Model, noopExecutor{})
-	if lc, ok := caller.(*llm.LitertLMCaller); ok {
-		lc.Backend = cfg.LitertLM.Backend
-	}
 	llmStart := time.Now()
-	resultMessages, err := caller.Call(context.Background(), systemPrompt, messages, nil)
+	resultMessages, err := commitCallLLM(cfg, systemPrompt, messages)
 	llmDuration := time.Since(llmStart)
 	if err != nil {
 		return fmt.Errorf("LLM call failed: %w", err)

@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package aishield.service;
+
+option go_package = "ai-shell/service/proto";
+
+// AIService is the gRPC API exposed by the ai-shell service over a unix
+// socket. Sessions send their messages and session configuration to the
+// running service, which wraps the full ai-shell logic (prompts, AGENTS.md,
+// tools, and LLM calls) on the service side.
+service AIService {
+  // Ping reports liveness and the service version.
+  rpc Ping(PingRequest) returns (PingResponse);
+  // Chat runs the agent loop for the given messages and session config.
+  rpc Chat(ChatRequest) returns (ChatResponse);
+  // Stop asks the service to shut down gracefully.
+  rpc Stop(StopRequest) returns (StopResponse);
+}
+
+message PingRequest {}
+
+message PingResponse {
+  string version = 1;
+}
+
+// RPCContent carries a message body: either plain text or a list of
+// multimodal content parts (base64 images/audio).
+message RPCContent {
+  oneof kind {
+    string text = 1;
+    RPCContentParts parts = 2;
+  }
+}
+
+message RPCContentParts {
+  repeated RPCContentPart parts = 1;
+}
+
+message RPCContentPart {
+  string type = 1;
+  string text = 2;
+  string image_url = 3;
+  string input_audio_data = 4;
+  string input_audio_format = 5;
+}
+
+message RPCToolCall {
+  string id = 1;
+  string type = 2;
+  string name = 3;
+  string arguments = 4;
+}
+
+message RPCMessage {
+  string role = 1;
+  RPCContent content = 2;
+  string tool_call_id = 3;
+  repeated RPCToolCall tool_calls = 4;
+}
+
+message ChatRequest {
+  repeated RPCMessage messages = 1;
+  // system_prompt, when non-empty, overrides the agent prompt entirely
+  // (used by non-agent callers such as the commit command).
+  string system_prompt = 2;
+  string agent = 3;
+  string model = 4;
+  string provider = 5;
+  map<string, bool> tools = 6;
+  string backend = 7;
+  bool agent_files = 8;
+  bool confirm = 9;
+  repeated string allowed_commands = 10;
+}
+
+message ChatResponse {
+  repeated RPCMessage messages = 1;
+  string error = 2;
+}
+
+message StopRequest {}
+
+message StopResponse {}

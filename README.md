@@ -175,6 +175,33 @@ The `llamacpp` provider runs llama.cpp inference **in-process** using the [yzma]
 - **Image/audio input** is not supported.
 - **No API key or base URL** needed — purely local.
 
+## Service Modality
+
+`ai-shell service` runs a lightweight gRPC server that exposes the full
+ai-shell logic (prompts, AGENTS.md files, tools, and LLM calls) over a unix
+socket at `~/.ai-shell/service.sock`. When the service is running, other
+ai-shell sessions detect it and route their requests through it instead of
+calling the LLM locally.
+
+```bash
+ai-shell service           # start the service (foreground)
+ai-shell service --stop    # stop a running service
+ai-shell service --status  # show whether a service is running
+```
+
+Sessions route through the service automatically when it is active — no extra
+configuration needed. The interactive shell, `ai-shell commands --run`, and
+`ai-shell commit` all use it when available and fall back to local execution
+if the service becomes unreachable. The session's own model/provider/agent
+settings are honored (e.g. switching models with `/models` still works), while
+the service supplies the prompts, AGENTS.md context, tool execution, and the
+LLM calls from its working directory.
+
+Tool confirmation is honored inside the service: with the default
+`shell.confirm: true`, commands outside `allowed_commands` and all file
+writes are denied (the service cannot prompt interactively). Set
+`ai-shell config --confirm=false` to let the service auto-execute everything.
+
 ## How it works
 
 AI-Shell uses a unified OpenAI-compatible API to communicate with your LLM models. It uses a system prompt to inform the LLM about your environment (e.g., "running on Ubuntu 22.04 using /bin/bash"). 

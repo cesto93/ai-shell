@@ -3,7 +3,9 @@ package cmd
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -12,6 +14,7 @@ import (
 
 	"ai-shell/config"
 	"ai-shell/llm"
+	"ai-shell/service"
 	"ai-shell/tools"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -259,6 +262,7 @@ type ShellModel struct {
 	waitingConfirm     bool
 	menu               menuState
 	commands           []config.CommandInfo
+	serviceClient      *service.Client
 	allowedCmdMode     struct {
 		active bool
 	}
@@ -1144,12 +1148,6 @@ func (m *ShellModel) ElaborateMessage() {
 		cancel()
 	}()
 
-	agent := llm.NewAgentFor(m.cfg.Agent, m.cfg.LLM.Model, m.cfg.LLM.Provider, m.cfg.Tools)
-	agent.Backend = m.cfg.LitertLM.Backend
-	agent.AgentFiles = llm.GetAgentFiles(m.cfg.AgentFiles)
-
-	executor := &ShellExecutorForLLM{m: m}
-
 	var commonMessages []llm.Message
 	for _, msg := range m.messages {
 		if msg.role == "user" || msg.role == "assistant" || msg.role == "tool" {
@@ -1170,6 +1168,35 @@ func (m *ShellModel) ElaborateMessage() {
 		}
 	}
 
+	if m.serviceClient != nil || service.IsActive() {
+		resultMessages, err := m.serviceChat(ctx, commonMessages)
+		if err != nil {
+			if errors.Is(err, service.ErrUnavailable) {
+				slog.Debug("service unavailable, falling back to local execution", "err", err)
+			} else {
+				m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})
+				m.loading = false
+				if m.teaProgram != nil {
+					m.teaProgram.Send(responseReadyMsg{})
+				}
+				return
+			}
+		} else {
+			m.appendLLMResult(resultMessages)
+			m.loading = false
+			if m.teaProgram != nil {
+				m.teaProgram.Send(responseReadyMsg{})
+			}
+			return
+		}
+	}
+
+	agent := llm.NewAgentFor(m.cfg.Agent, m.cfg.LLM.Model, m.cfg.LLM.Provider, m.cfg.Tools)
+	agent.Backend = m.cfg.LitertLM.Backend
+	agent.AgentFiles = llm.GetAgentFiles(m.cfg.AgentFiles)
+
+	executor := &ShellExecutorForLLM{m: m}
+
 	resultMessages, err := agent.CallLLM(ctx, executor, commonMessages)
 
 	if err != nil {
@@ -1181,6 +1208,52 @@ func (m *ShellModel) ElaborateMessage() {
 		return
 	}
 
+	m.appendLLMResult(resultMessages)
+
+	m.loading = false
+	if m.teaProgram != nil {
+		m.teaProgram.Send(responseReadyMsg{})
+	}
+}
+
+// serviceChat routes a request through the running service, maintaining a
+// cached client on the shell. Connectivity failures (ErrUnavailable) clear
+// the cached client so the caller can fall back to local execution.
+func (m *ShellModel) serviceChat(ctx context.Context, messages []llm.Message) ([]llm.Message, error) {
+	if m.serviceClient == nil {
+		c, err := service.NewClient()
+		if err != nil {
+			return nil, service.ErrUnavailable
+		}
+		m.serviceClient = c
+	}
+
+	req := service.ChatRequest{
+		Messages:        messages,
+		Agent:           m.cfg.Agent,
+		Model:           m.cfg.LLM.Model,
+		Provider:        m.cfg.LLM.Provider,
+		Tools:           m.cfg.Tools,
+		Backend:         m.cfg.LitertLM.Backend,
+		AgentFiles:      m.cfg.AgentFiles,
+		Confirm:         m.cfg.Shell.Confirm,
+		AllowedCommands: m.cfg.Shell.AllowedCommands,
+	}
+
+	result, err := m.serviceClient.Chat(ctx, req)
+	if err != nil {
+		if errors.Is(err, service.ErrUnavailable) {
+			m.serviceClient.Close()
+			m.serviceClient = nil
+		}
+		return nil, err
+	}
+	return result, nil
+}
+
+// appendLLMResult renders the messages returned by the LLM (locally or via
+// the service) into the shell transcript.
+func (m *ShellModel) appendLLMResult(resultMessages []llm.Message) {
 	for _, msg := range resultMessages {
 		contentStr := ""
 		if s, ok := msg.Content.(string); ok {
@@ -1197,11 +1270,6 @@ func (m *ShellModel) ElaborateMessage() {
 		case "tool":
 			m.messages = append(m.messages, Message{role: "tool", content: contentStr, toolCallID: msg.ToolCallID})
 		}
-	}
-
-	m.loading = false
-	if m.teaProgram != nil {
-		m.teaProgram.Send(responseReadyMsg{})
 	}
 }
 

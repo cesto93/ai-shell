@@ -11,6 +11,11 @@ build:
 	go build -o ai-shell .
 install:
 	go install .
+proto:
+	protoc --go_out=. --go_opt=paths=source_relative \
+	  --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+	  service/proto/service.proto
+	@echo "Regenerated service/proto/*.pb.go (commit the generated files; protoc is only needed for regeneration)"
 install-yzma:
 	go install github.com/hybridgroup/yzma@latest
 	mkdir -p $(AI_SHELL_LIB)
