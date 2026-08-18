@@ -17,9 +17,9 @@ proto:
 	  service/proto/service.proto
 	@echo "Regenerated service/proto/*.pb.go (commit the generated files; protoc is only needed for regeneration)"
 install-yzma:
-	go install github.com/hybridgroup/yzma@latest
+	go install github.com/hybridgroup/yzma@v1.23.0
 	mkdir -p $(AI_SHELL_LIB)
-	yzma install --lib $(AI_SHELL_LIB)
+	yzma install --lib $(AI_SHELL_LIB) --upgrade
 	@echo ""
 	@echo "✓ yzma + llama.cpp libraries installed to $(AI_SHELL_LIB)"
 	@echo "  Set YZMA_LIB=$(AI_SHELL_LIB) in your shell rc file if needed."

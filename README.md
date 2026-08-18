@@ -169,10 +169,25 @@ The `llamacpp` provider runs llama.cpp inference **in-process** using the [yzma]
 
    The `.gguf` extension is appended automatically if omitted.
 
+### Image input
+
+Attach images with `@filepath` as usual. For image input to work the model must be a vision model and a matching vision projector (`mmproj`) GGUF must be available:
+
+1. Place the `mmproj` file next to your model in `~/.ai-shell/models/llamacpp/`. It is auto-detected when its name contains `mmproj` (e.g. `mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf`) and is excluded from the model list. You can also point at one explicitly:
+   ```bash
+   ai-shell config --mmproj "mmproj-Qwen2.5-VL-3B-Instruct-Q8_0"
+   ```
+   or set `LLAMACPP_MMPROJ` (path or filename) in `.env`.
+
+2. Requires llama.cpp libraries ≥ b10273 (v1.23.0) — run `make install-yzma` again if you installed an older version.
+
+Vision models with matching GGUFs include moondream2 and Qwen2.5-VL. Without a projector, image requests return a clear error while text-only inference keeps working.
+
 ### Limitations
 
 - **Structured output** (`ai-shell extract`) is supported via a GBNF grammar derived from the JSON schema.
-- **Image/audio input** is not supported.
+- **Image input** is supported for vision models with an `mmproj` (see above).
+- **Audio input** is not supported.
 - **No API key or base URL** needed — purely local.
 
 ## Service Modality

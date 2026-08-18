@@ -45,6 +45,9 @@ type Config struct {
 	LitertLM struct {
 		Backend string `mapstructure:"backend"`
 	} `mapstructure:"litertlm"`
+	Llamacpp struct {
+		MMProj string `mapstructure:"mmproj"`
+	} `mapstructure:"llamacpp"`
 	Tools    map[string]bool   `mapstructure:"tools"`
 	Commands map[string]string `mapstructure:"commands"`
 }
@@ -52,6 +55,8 @@ type Config struct {
 var configPaths = []string{"."}
 
 var userConfigDirFunc = os.UserConfigDir
+
+var userHomeDirFunc = os.UserHomeDir
 
 var loadEnvFunc = loadEnv
 
@@ -217,7 +222,7 @@ func getConfigPath() (string, error) {
 
 // AiShellDir returns ~/.ai-shell, creating it if necessary.
 func AiShellDir() (string, error) {
-	home, err := os.UserHomeDir()
+	home, err := userHomeDirFunc()
 	if err != nil {
 		return "", err
 	}
@@ -286,6 +291,9 @@ func SaveConfig(cfg *Config) error {
 		LitertLM struct {
 			Backend string `yaml:"backend"`
 		} `yaml:"litertlm"`
+		Llamacpp struct {
+			MMProj string `yaml:"mmproj,omitempty"`
+		} `yaml:"llamacpp"`
 		Tools    map[string]bool   `yaml:"tools,omitempty"`
 		Commands map[string]string `yaml:"commands,omitempty"`
 	}{
@@ -301,6 +309,7 @@ func SaveConfig(cfg *Config) error {
 	out.Shell.Confirm = cfg.Shell.Confirm
 	out.Shell.AllowedCommands = cfg.Shell.AllowedCommands
 	out.LitertLM.Backend = cfg.LitertLM.Backend
+	out.Llamacpp.MMProj = cfg.Llamacpp.MMProj
 
 	data, err := yaml.Marshal(out)
 	if err != nil {
@@ -399,7 +408,68 @@ func GetLlamacppModels() []ModelInfo {
 	if err != nil {
 		return nil
 	}
-	return scanModels(dir, "llamacpp", ".gguf")
+	var models []ModelInfo
+	for _, m := range scanModels(dir, "llamacpp", ".gguf") {
+		if strings.Contains(strings.ToLower(m.Name), "mmproj") {
+			continue
+		}
+		models = append(models, m)
+	}
+	return models
+}
+
+// FindLlamacppMMProj resolves the vision projector (mmproj) GGUF file used for
+// image input. It honors, in order: $LLAMACPP_MMPROJ (path or filename in the
+// llamacpp models dir), the `llamacpp.mmproj` config field, and finally scans
+// the llamacpp models dir for a file whose name contains "mmproj". Returns ""
+// when no projector is configured or present.
+func FindLlamacppMMProj() (string, error) {
+	dir, err := ModelsDir("llamacpp")
+	if err != nil {
+		return "", err
+	}
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		return "", fmt.Errorf("failed to load config: %w", err)
+	}
+
+	name := os.Getenv("LLAMACPP_MMPROJ")
+	if name == "" {
+		name = cfg.Llamacpp.MMProj
+	}
+	if name != "" {
+		if filepath.IsAbs(name) {
+			if _, err := os.Stat(name); err == nil {
+				return name, nil
+			}
+			return "", nil
+		}
+		candidate := filepath.Join(dir, name)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+		candidate = filepath.Join(dir, name+".gguf")
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+		return "", nil
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", nil
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		lower := strings.ToLower(entry.Name())
+		if strings.HasSuffix(lower, ".gguf") && strings.Contains(lower, "mmproj") {
+			return filepath.Join(dir, entry.Name()), nil
+		}
+	}
+	return "", nil
 }
 
 // scanModels lists the files with the given extension in dir as ModelInfos.

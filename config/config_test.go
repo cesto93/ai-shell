@@ -792,3 +792,115 @@ func TestSaveConfigEmptyPath(t *testing.T) {
 		t.Errorf("Config file missing model, got: %s", string(data))
 	}
 }
+
+func TestGetLlamacppModelsExcludesMMProj(t *testing.T) {
+	home := t.TempDir()
+	origHome := userHomeDirFunc
+	userHomeDirFunc = func() (string, error) { return home, nil }
+	defer func() { userHomeDirFunc = origHome }()
+
+	modelsDir := filepath.Join(home, ".ai-shell", "models", "llamacpp")
+	if err := os.MkdirAll(modelsDir, 0755); err != nil {
+		t.Fatalf("Failed to create models dir: %v", err)
+	}
+	for _, name := range []string{
+		"Qwen2.5-VL-3B-Instruct-Q8_0.gguf",
+		"mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf",
+		"granite4-3b-h.Q4_K_M.gguf",
+		"readme.txt",
+	} {
+		if err := os.WriteFile(filepath.Join(modelsDir, name), []byte("m"), 0644); err != nil {
+			t.Fatalf("Failed to write file %s: %v", name, err)
+		}
+	}
+
+	models := GetLlamacppModels()
+	if len(models) != 2 {
+		t.Fatalf("GetLlamacppModels() returned %d models, want 2: %+v", len(models), models)
+	}
+	for _, m := range models {
+		if strings.Contains(strings.ToLower(m.Name), "mmproj") {
+			t.Errorf("GetLlamacppModels() listed mmproj model %q", m.Name)
+		}
+	}
+}
+
+func TestFindLlamacppMMProj(t *testing.T) {
+	home := t.TempDir()
+	origHome := userHomeDirFunc
+	userHomeDirFunc = func() (string, error) { return home, nil }
+	defer func() { userHomeDirFunc = origHome }()
+
+	// Isolate from the real ~/.config/ai-shell config and avoid network
+	// lookups inside LoadConfig.
+	origUserConfigDirFunc := userConfigDirFunc
+	userConfigDirFunc = func() (string, error) { return t.TempDir(), nil }
+	defer func() { userConfigDirFunc = origUserConfigDirFunc }()
+
+	origConfigPaths := configPaths
+	defer func() { configPaths = origConfigPaths }()
+	configPaths = []string{t.TempDir()}
+
+	origOpenRouter := getOpenRouterModelsFunc
+	getOpenRouterModelsFunc = func() []ModelInfo { return nil }
+	defer func() { getOpenRouterModelsFunc = origOpenRouter }()
+
+	origEnv := os.Getenv("LLAMACPP_MMPROJ")
+	defer func() {
+		if origEnv == "" {
+			os.Unsetenv("LLAMACPP_MMPROJ")
+		} else {
+			os.Setenv("LLAMACPP_MMPROJ", origEnv)
+		}
+	}()
+	os.Unsetenv("LLAMACPP_MMPROJ")
+
+	modelsDir := filepath.Join(home, ".ai-shell", "models", "llamacpp")
+	if err := os.MkdirAll(modelsDir, 0755); err != nil {
+		t.Fatalf("Failed to create models dir: %v", err)
+	}
+	projFile := filepath.Join(modelsDir, "mmproj-qwen2.5-vl.gguf")
+	if err := os.WriteFile(projFile, []byte("m"), 0644); err != nil {
+		t.Fatalf("Failed to write mmproj: %v", err)
+	}
+
+	t.Run("auto-detect from models dir", func(t *testing.T) {
+		got, err := FindLlamacppMMProj()
+		if err != nil {
+			t.Fatalf("FindLlamacppMMProj() error = %v", err)
+		}
+		if got != projFile {
+			t.Errorf("FindLlamacppMMProj() = %q, want %q", got, projFile)
+		}
+	})
+
+	t.Run("env var path wins", func(t *testing.T) {
+		other := filepath.Join(t.TempDir(), "custom-mmproj.gguf")
+		if err := os.WriteFile(other, []byte("m"), 0644); err != nil {
+			t.Fatalf("Failed to write custom mmproj: %v", err)
+		}
+		os.Setenv("LLAMACPP_MMPROJ", other)
+		defer os.Unsetenv("LLAMACPP_MMPROJ")
+
+		got, err := FindLlamacppMMProj()
+		if err != nil {
+			t.Fatalf("FindLlamacppMMProj() error = %v", err)
+		}
+		if got != other {
+			t.Errorf("FindLlamacppMMProj() = %q, want %q", got, other)
+		}
+	})
+
+	t.Run("missing projector", func(t *testing.T) {
+		if err := os.Remove(projFile); err != nil {
+			t.Fatalf("Failed to remove mmproj: %v", err)
+		}
+		got, err := FindLlamacppMMProj()
+		if err != nil {
+			t.Fatalf("FindLlamacppMMProj() error = %v", err)
+		}
+		if got != "" {
+			t.Errorf("FindLlamacppMMProj() = %q, want empty", got)
+		}
+	})
+}
