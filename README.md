@@ -75,6 +75,50 @@ You can also pipe questions directly into `ai-shell`:
 echo "how do I list files by size?" | ai-shell
 ```
 
+### Extract Structured Data
+
+`ai-shell extract` sends a document or image to the LLM and gets back only the data you asked for, shaped by a JSON schema. The schema file is a standard [JSON Schema](https://json-schema.org/) document.
+
+```bash
+ai-shell extract invoice.pdf schema.json
+ai-shell extract notes.txt schema.json --output result.json
+ai-shell extract receipt.png schema.json
+```
+
+For example, to pull the key fields out of an invoice, save this schema as `schema.json`:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "invoice_number": { "type": "string" },
+    "vendor":          { "type": "string" },
+    "date":            { "type": "string", "format": "date" },
+    "total_amount":    { "type": "number" }
+  },
+  "required": ["invoice_number", "vendor", "total_amount"]
+}
+```
+
+Then run:
+
+```bash
+ai-shell extract invoice.pdf schema.json
+```
+
+Which returns something like:
+
+```json
+{
+  "invoice_number": "INV-2024-001",
+  "vendor": "Acme Corp",
+  "date": "2024-03-15",
+  "total_amount": 1234.56
+}
+```
+
+Supported inputs: `.txt`, `.md`, `.pdf` (extracted via `pdftotext`), and images `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp` (requires a vision-capable model). Use `-o result.json` to write the output to a file instead of stdout.
+
 ## Configuration
 
 The application looks for a `.env` file in:
