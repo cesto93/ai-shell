@@ -382,17 +382,12 @@ var GeminiModels = []ModelInfo{
 	{Name: "gemma-4-26b-a4b-it", Provider: "gemini", InputTypes: []string{"text", "image"}},
 }
 
-// GetLitertLMModels lists the native LiteRT-LM models available on disk
-// by scanning LITERTLM_MODELS_DIR (default ~/.ai-shell/models/litertlm/)
-// for .litertlm files.
+// GetLitertLMModels lists the native LiteRT-LM models available on disk by
+// scanning ~/.ai-shell/models/litertlm/ for .litertlm files.
 func GetLitertLMModels() []ModelInfo {
-	dir := os.Getenv("LITERTLM_MODELS_DIR")
-	if dir == "" {
-		var err error
-		dir, err = ModelsDir("litertlm")
-		if err != nil {
-			return nil
-		}
+	dir, err := ModelsDir("litertlm")
+	if err != nil {
+		return nil
 	}
 	return scanModels(dir, "litertlm", ".litertlm")
 }
@@ -505,13 +500,9 @@ func IsLlamacppModel(modelName string) bool {
 // (ollama/gemini/openrouter) cannot be deleted.
 func DeleteLocalModel(modelName string) ([]string, error) {
 	if IsLitertLMModel(modelName) {
-		dir := os.Getenv("LITERTLM_MODELS_DIR")
-		if dir == "" {
-			var err error
-			dir, err = ModelsDir("litertlm")
-			if err != nil {
-				return nil, err
-			}
+		dir, err := ModelsDir("litertlm")
+		if err != nil {
+			return nil, err
 		}
 		path, err := removeModelFile(filepath.Join(dir, modelName+".litertlm"))
 		if err != nil {

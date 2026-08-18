@@ -177,13 +177,9 @@ func (l *LitertLMCaller) client(ctx context.Context) (*litertlm.Client, error) {
 		}
 	}
 
-	modelDir := os.Getenv("LITERTLM_MODELS_DIR")
-	if modelDir == "" {
-		var err error
-		modelDir, err = config.ModelsDir("litertlm")
-		if err != nil {
-			return nil, fmt.Errorf("cannot determine models dir: %w", err)
-		}
+	modelDir, err := config.ModelsDir("litertlm")
+	if err != nil {
+		return nil, fmt.Errorf("cannot determine models dir: %w", err)
 	}
 	modelPath := filepath.Join(modelDir, l.Model)
 	if _, err := os.Stat(modelPath); os.IsNotExist(err) {

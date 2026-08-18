@@ -165,7 +165,7 @@ The `litertlm` provider runs LiteRT-LM inference **in-process** using the [liter
    ```
    This downloads the official `litert_lm_c_api` release from `google-ai-edge/LiteRT-LM`, extracts `lib/linux_x86_64/liblitert-lm.so`, renames it to `liblitertlm_c_cpu.so` (the filename the binding actually dlopens), and fetches the prebuilt aux/GPU libs into `~/.ai-shell/lib/`. No symlink is needed.
 
-2. Place a `.litertlm` model file in `~/.ai-shell/models/litertlm/` (or set `LITERTLM_MODELS_DIR`). You can download one with `ai-shell pull`:
+2. Place a `.litertlm` model file in `~/.ai-shell/models/litertlm/`. You can download one with `ai-shell pull`:
    ```bash
    ai-shell pull <repo> <filename.litertlm>
    ```

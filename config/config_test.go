@@ -369,20 +369,18 @@ shell:
 }
 
 func TestIsLitertLMModel(t *testing.T) {
-	modelDir := t.TempDir()
+	home := t.TempDir()
+	origHome := userHomeDirFunc
+	userHomeDirFunc = func() (string, error) { return home, nil }
+	defer func() { userHomeDirFunc = origHome }()
+
+	modelDir := filepath.Join(home, ".ai-shell", "models", "litertlm")
+	if err := os.MkdirAll(modelDir, 0755); err != nil {
+		t.Fatalf("Failed to create models dir: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(modelDir, "gemma-4-E2B-it.litertlm"), []byte("model"), 0644); err != nil {
 		t.Fatalf("Failed to write model file: %v", err)
 	}
-
-	origDir := os.Getenv("LITERTLM_MODELS_DIR")
-	os.Setenv("LITERTLM_MODELS_DIR", modelDir)
-	defer func() {
-		if origDir == "" {
-			os.Unsetenv("LITERTLM_MODELS_DIR")
-		} else {
-			os.Setenv("LITERTLM_MODELS_DIR", origDir)
-		}
-	}()
 
 	tests := []struct {
 		name  string
@@ -412,22 +410,20 @@ func TestIsLitertLMModel(t *testing.T) {
 }
 
 func TestGetLitertLMModels(t *testing.T) {
-	modelDir := t.TempDir()
+	home := t.TempDir()
+	origHome := userHomeDirFunc
+	userHomeDirFunc = func() (string, error) { return home, nil }
+	defer func() { userHomeDirFunc = origHome }()
+
+	modelDir := filepath.Join(home, ".ai-shell", "models", "litertlm")
+	if err := os.MkdirAll(modelDir, 0755); err != nil {
+		t.Fatalf("Failed to create models dir: %v", err)
+	}
 	for _, name := range []string{"gemma-4-E2B-it.litertlm", "gemma-4-E4B-it.litertlm", "notes.txt"} {
 		if err := os.WriteFile(filepath.Join(modelDir, name), []byte("model"), 0644); err != nil {
 			t.Fatalf("Failed to write file %s: %v", name, err)
 		}
 	}
-
-	origDir := os.Getenv("LITERTLM_MODELS_DIR")
-	os.Setenv("LITERTLM_MODELS_DIR", modelDir)
-	defer func() {
-		if origDir == "" {
-			os.Unsetenv("LITERTLM_MODELS_DIR")
-		} else {
-			os.Setenv("LITERTLM_MODELS_DIR", origDir)
-		}
-	}()
 
 	models := GetLitertLMModels()
 	if len(models) != 2 {
