@@ -19,8 +19,7 @@ var rootCmd = &cobra.Command{
   ai-shell config
   ai-shell commit
   ai-shell models
-  ai-shell extract notes.txt schema.json
-  echo "how do I list files?" | ai-shell`,
+  ai-shell extract notes.txt schema.json`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := RunShell(); err != nil {
 			fmt.Println(err)

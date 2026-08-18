@@ -67,14 +67,6 @@ Within the `ai-shell >` prompt, you can use the following commands (with or with
 - **Ctrl+C**: Stop the current operation or exit.
 - **Esc**: Cancel the current request or clear the input.
 
-### Pipe Support
-
-You can also pipe questions directly into `ai-shell`:
-
-```bash
-echo "how do I list files by size?" | ai-shell
-```
-
 ### Extract Structured Data
 
 `ai-shell extract` sends a document or image to the LLM and gets back only the data you asked for, shaped by a JSON schema. The schema file is a standard [JSON Schema](https://json-schema.org/) document.
