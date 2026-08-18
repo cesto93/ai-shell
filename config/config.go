@@ -373,6 +373,17 @@ func SaveModelWithProvider(modelName, provider string) error {
 	return SaveConfig(cfg)
 }
 
+// SaveMMProj sets the llamacpp vision projector (mmproj) GGUF file in config.
+// The name may be a bare filename or an absolute path.
+func SaveMMProj(name string) error {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+	cfg.Llamacpp.MMProj = name
+	return SaveConfig(cfg)
+}
+
 type ModelInfo struct {
 	Name       string
 	Provider   string

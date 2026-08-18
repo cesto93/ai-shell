@@ -106,11 +106,10 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 
 ## Pull command (cmd/pull.go)
 
-- Usable as `ai-shell pull <repo> <filename>`
-- Downloads a model from HuggingFace
-- Destination chosen by filename extension: `.litertlm` → `~/.ai-shell/models/litertlm/` + litertlm provider; otherwise `.gguf` → `~/.ai-shell/models/llamacpp/` + llamacpp provider
+- Usable as `ai-shell pull <repo> <model> [mmproj]` (up to 2 files from the same repo, enforced by `cobra.RangeArgs(2, 3)`)
+- Downloads one or more model files from HuggingFace; per-file destination chosen by filename extension: `.litertlm` → `~/.ai-shell/models/litertlm/` + litertlm provider; otherwise `.gguf` → `~/.ai-shell/models/llamacpp/` + llamacpp provider
 - Shows progress bar with percentage and bytes downloaded
-- Auto-updates config via `config.SaveModelWithProvider(modelName, provider)`
+- Auto-updates config: a single file saves the model via `config.SaveModelWithProvider(modelName, provider)`; with two files the first is saved as the model and the second as its vision projector via `config.SaveMMProj` (`llamacpp.mmproj`, filename without extension); each file is downloaded and failures are collected
 - Cleans up partial file on download failure
 - Uses `net/http` directly (no external download libraries)
 
