@@ -14,31 +14,48 @@ var (
 	agentFilesGetwd         = os.Getwd
 )
 
-// GetAgentFiles returns the combined contents of the global
-// (~/.config/ai-shell/AGENTS.md) and repo-level (./AGENTS.md) customization
-// files, formatted as additional instructions. Returns "" when support is
-// disabled or when neither file exists.
-func GetAgentFiles(enabled bool) string {
+// AgentFileInfo describes an AGENTS.md customization file read for the agent.
+type AgentFileInfo struct {
+	Path    string
+	Content string
+}
+
+// GetAgentFileInfo returns the global (~/.config/ai-shell/AGENTS.md) and
+// repo-level (./AGENTS.md) customization files that exist and are non-empty.
+// Returns nil when support is disabled or when neither file exists.
+func GetAgentFileInfo(enabled bool) []AgentFileInfo {
 	if !enabled {
-		return ""
+		return nil
 	}
 
-	var parts []string
+	var files []AgentFileInfo
 
 	if uc, err := agentFilesUserConfigDir(); err == nil {
 		global := filepath.Join(uc, "ai-shell", agentFileName)
 		if content, ok := readAgentFile(global); ok {
-			parts = append(parts, fmt.Sprintf("# Instructions from %s\n%s", global, content))
+			files = append(files, AgentFileInfo{Path: global, Content: content})
 		}
 	}
 
 	if cwd, err := agentFilesGetwd(); err == nil {
 		repo := filepath.Join(cwd, agentFileName)
 		if content, ok := readAgentFile(repo); ok {
-			parts = append(parts, fmt.Sprintf("# Instructions from %s\n%s", agentFileName, content))
+			files = append(files, AgentFileInfo{Path: repo, Content: content})
 		}
 	}
 
+	return files
+}
+
+// GetAgentFiles returns the combined contents of the global
+// (~/.config/ai-shell/AGENTS.md) and repo-level (./AGENTS.md) customization
+// files, formatted as additional instructions. Returns "" when support is
+// disabled or when neither file exists.
+func GetAgentFiles(enabled bool) string {
+	var parts []string
+	for _, f := range GetAgentFileInfo(enabled) {
+		parts = append(parts, fmt.Sprintf("# Instructions from %s\n%s", f.Path, f.Content))
+	}
 	return strings.Join(parts, "\n\n")
 }
 

@@ -1,0 +1,71 @@
+package cmd
+
+import (
+	"fmt"
+	"strings"
+
+	"ai-shell/config"
+	"ai-shell/llm"
+
+	"github.com/spf13/cobra"
+)
+
+var contextFull bool
+
+var contextCmd = &cobra.Command{
+	Use:   "context",
+	Short: "Show the AGENTS.md context provided to the agent",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runContext()
+	},
+}
+
+func init() {
+	contextCmd.Flags().BoolVar(&contextFull, "full", false, "print the full text of each AGENTS.md file instead of just the word count")
+	rootCmd.AddCommand(contextCmd)
+}
+
+func runContext() error {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+	initLogger(cfg)
+
+	files := llm.GetAgentFileInfo(cfg.AgentFiles)
+	if len(files) == 0 {
+		fmt.Println("No AGENTS.md context files found.")
+		return nil
+	}
+
+	if !cfg.AgentFiles {
+		fmt.Println("Note: agent_files is disabled in config; AGENTS.md context is not sent to the agent.")
+		fmt.Println()
+	}
+
+	var totalWords, totalTokens int
+	for _, f := range files {
+		words := len(strings.Fields(f.Content))
+		tokens := estimateTokens(f.Content)
+		totalWords += words
+		totalTokens += tokens
+		fmt.Printf("%s (%d words, ~%d tokens)\n", f.Path, words, tokens)
+		if contextFull {
+			fmt.Println("---")
+			fmt.Println(f.Content)
+			fmt.Println("---")
+		}
+	}
+
+	if len(files) > 1 {
+		fmt.Printf("\nTotal: %d words, ~%d tokens\n", totalWords, totalTokens)
+	}
+
+	return nil
+}
+
+// estimateTokens approximates token count using ~4 characters per token,
+// a common heuristic for English text.
+func estimateTokens(s string) int {
+	return (len(s) + 3) / 4
+}

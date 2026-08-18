@@ -21,9 +21,9 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 
 | Directory | Contents |
 |-----------|----------|
-| `cmd/` | Cobra commands: default (TUI shell), `config`, `commit`, `extract`, `pull`, `models`, `commands`, `agents`, `stats` |
+| `cmd/` | Cobra commands: default (TUI shell), `config`, `commit`, `extract`, `pull`, `models`, `commands`, `agents`, `stats`, `context` |
 | `config/` | Viper YAML config, model lists (OpenRouter free models fetched live from `https://openrouter.ai/api/v1/models` via `config.GetOpenRouterModels()`, 10 min cache), `.env` loading via `gotenv`. Free OpenRouter models are filtered by zero pricing AND by `architecture.output_modalities` (models with an `audio` output modality — e.g. Lyria music generation — are excluded) |
-| `llm/` | `Agent` struct, `Caller` interface, `RawCaller` interface (adds `CallStructured`), `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, `NewProviderCallerRaw` (returns `RawCaller`), `CallStructured` method (with `response_format`), `ProviderConfig` struct, default system prompt, `LlamacppCaller` (in-process llama.cpp via yzma), `LitertLMCaller` (in-process LiteRT-LM via litertlm-go). Built-in agents: `GetAgentDefs()`/`GetAgentDef(name)` return `AgentDef`s (`build` = all tools + default prompt, `plan` = no `WriteFile`/`RunCommand` with its own planning prompt); `NewAgentFor(name, model, provider, cfgTools)` builds an `Agent` whose tools are the intersection of the agent's allowed tools and the user's tool toggles. `OpenAICaller` logs token usage (`openrouter usage` debug line: prompt/completion/total tokens, cost, cached/reasoning tokens when present) but only when `BaseURL` contains `openrouter.ai`; every OpenAI-compatible call with a `usage` in the response is also persisted via `stats.RecordUsage` (provider derived from `BaseURL`). `LlamacppCaller` records prompt/completion tokens (from tokenize + generation loop). LitertLM usage is not tracked (binding exposes no token counts) |
+| `llm/` | `Agent` struct, `Caller` interface, `RawCaller` interface (adds `CallStructured`), `ToolExecutor` interface, 6 OpenAI tool definitions, `NewProviderCaller` factory, `NewProviderCallerRaw` (returns `RawCaller`), `CallStructured` method (with `response_format`), `ProviderConfig` struct, default system prompt, `LlamacppCaller` (in-process llama.cpp via yzma), `LitertLMCaller` (in-process LiteRT-LM via litertlm-go). Built-in agents: `GetAgentDefs()`/`GetAgentDef(name)` return `AgentDef`s (`build` = all tools + default prompt, `plan` = no `WriteFile`/`RunCommand` with its own planning prompt); `NewAgentFor(name, model, provider, cfgTools)` builds an `Agent` whose tools are the intersection of the agent's allowed tools and the user's tool toggles. `GetAgentFileInfo(enabled)` returns `[]AgentFileInfo` (path + content of the global and repo AGENTS.md files); `GetAgentFiles(enabled)` renders the same info as instructions. `OpenAICaller` logs token usage (`openrouter usage` debug line: prompt/completion/total tokens, cost, cached/reasoning tokens when present) but only when `BaseURL` contains `openrouter.ai`; every OpenAI-compatible call with a `usage` in the response is also persisted via `stats.RecordUsage` (provider derived from `BaseURL`). `LlamacppCaller` records prompt/completion tokens (from tokenize + generation loop). LitertLM usage is not tracked (binding exposes no token counts) |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
 | `stats/` | Persistent token usage store backed by bbolt at `~/.config/ai-shell/usage.db`. `stats.RecordUsage(provider, model, Usage)` accumulates per (provider, model); `stats.GetStats()` returns sorted `[]Entry` (calls, prompt/completion/total/cached/reasoning tokens, cost); `stats.Reset()` wipes all entries. `dbPathFunc` is swappable for tests |
 
@@ -135,6 +135,14 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 - Data comes from `stats.GetStats()` (bbolt at `~/.config/ai-shell/usage.db`)
 - Flag `--reset` clears all recorded usage (idempotent — no-op when empty)
 - Usage is recorded automatically: `OpenAICaller` records every OpenAI-compatible response that carries a `usage` (ollama/gemini/openrouter, provider derived from `BaseURL`); `LlamacppCaller` records prompt tokens (from tokenize) and completion tokens (from the generation loop). LitertLM usage is not tracked.
+
+## Context command (cmd/context.go)
+
+- Usable as `ai-shell context`
+- Shows the AGENTS.md files read into the agent context: for each file prints its path and word count
+- Flag `--full` prints the full text of each file instead of just the word count
+- Uses `llm.GetAgentFileInfo(cfg.AgentFiles)` (global `~/.config/ai-shell/AGENTS.md` + repo `./AGENTS.md`); warns when `agent_files` is disabled
+- Prints "No AGENTS.md context files found." when nothing exists
 
 ## CI workflows (.github/workflows)
 
