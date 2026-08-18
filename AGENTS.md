@@ -139,8 +139,10 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 ## Context command (cmd/context.go)
 
 - Usable as `ai-shell context`
-- Shows the AGENTS.md files read into the agent context: for each file prints its path and word count
-- Flag `--full` prints the full text of each file instead of just the word count
+- Shows the AGENTS.md files read into the agent context: for each file prints its path, word count, and estimated token count
+- Also prints the active agent's system prompt size (word + token estimate), built via `llm.NewAgentFor` like the shell
+- Flag `--prompt` prints the full text of the active agent's system prompt
+- Flag `--agents` prints the full text of each AGENTS.md file
 - Uses `llm.GetAgentFileInfo(cfg.AgentFiles)` (global `~/.config/ai-shell/AGENTS.md` + repo `./AGENTS.md`); warns when `agent_files` is disabled
 - Prints "No AGENTS.md context files found." when nothing exists
 

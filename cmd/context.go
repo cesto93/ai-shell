@@ -10,18 +10,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var contextFull bool
+var showPrompt, showAgents bool
 
 var contextCmd = &cobra.Command{
 	Use:   "context",
-	Short: "Show the AGENTS.md context provided to the agent",
+	Short: "Show the context provided to the agent",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runContext()
 	},
 }
 
 func init() {
-	contextCmd.Flags().BoolVar(&contextFull, "full", false, "print the full text of each AGENTS.md file instead of just the word count")
+	contextCmd.Flags().BoolVar(&showPrompt, "prompt", false, "print the full system prompt of the selected agent")
+	contextCmd.Flags().BoolVar(&showAgents, "agents", false, "print the full text of each AGENTS.md file")
 	rootCmd.AddCommand(contextCmd)
 }
 
@@ -32,15 +33,26 @@ func runContext() error {
 	}
 	initLogger(cfg)
 
+	if !cfg.AgentFiles {
+		fmt.Println("Note: agent_files is disabled in config; AGENTS.md context is not sent to the agent.")
+		fmt.Println()
+	}
+
+	agent := llm.NewAgentFor(cfg.Agent, cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools)
+	prompt := agent.Prompt
+	fmt.Printf("Agent %q system prompt (%d words, ~%d tokens)\n",
+		cfg.Agent, len(strings.Fields(prompt)), estimateTokens(prompt))
+	if showPrompt {
+		fmt.Println("---")
+		fmt.Println(prompt)
+		fmt.Println("---")
+	}
+	fmt.Println()
+
 	files := llm.GetAgentFileInfo(cfg.AgentFiles)
 	if len(files) == 0 {
 		fmt.Println("No AGENTS.md context files found.")
 		return nil
-	}
-
-	if !cfg.AgentFiles {
-		fmt.Println("Note: agent_files is disabled in config; AGENTS.md context is not sent to the agent.")
-		fmt.Println()
 	}
 
 	var totalWords, totalTokens int
@@ -50,7 +62,7 @@ func runContext() error {
 		totalWords += words
 		totalTokens += tokens
 		fmt.Printf("%s (%d words, ~%d tokens)\n", f.Path, words, tokens)
-		if contextFull {
+		if showAgents {
 			fmt.Println("---")
 			fmt.Println(f.Content)
 			fmt.Println("---")
