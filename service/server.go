@@ -7,13 +7,11 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 
 	"ai-shell/config"
 	"ai-shell/llm"
 	"ai-shell/service/proto"
-	"ai-shell/tools"
 
 	"google.golang.org/grpc"
 )
@@ -61,9 +59,7 @@ func (s *Server) Chat(ctx context.Context, req *proto.ChatRequest) (*proto.ChatR
 			Backend:  req.Backend,
 		}
 	} else {
-		agent = llm.NewAgentFor(req.Agent, req.Model, req.Provider, req.Tools)
-		agent.Backend = req.Backend
-		agent.AgentFiles = llm.GetAgentFiles(req.AgentFiles)
+		agent = llm.NewAgentForSession(req.Agent, req.Model, req.Provider, req.Tools, req.Backend, req.AgentFiles)
 	}
 
 	executor := &ServiceExecutor{
@@ -154,64 +150,19 @@ type ServiceExecutor struct {
 }
 
 func (e *ServiceExecutor) ExecuteTool(call llm.ToolCall) (string, error) {
-	switch call.Name {
-	case "RunCommand":
-		cmd, ok := call.Arguments["command"].(string)
-		if !ok {
-			return "Error: Invalid tool arguments", nil
-		}
-		if e.confirm && !config.IsAllowedCommand(getCommandName(cmd), e.allowed) {
-			return "Error: Command execution denied by user", nil
-		}
-		output, err := tools.RunCommand(cmd)
-		if err != nil {
-			return fmt.Sprintf("Error: %v\nOutput: %s", err, output), nil
-		}
-		return output, nil
-
-	case "WriteFile":
-		path, ok1 := call.Arguments["path"].(string)
-		content, ok2 := call.Arguments["content"].(string)
-		if !ok1 || !ok2 {
-			return "Error: Invalid tool arguments", nil
-		}
-		if e.confirm {
-			return "Error: File write denied by user", nil
-		}
-		return tools.WriteFile(strings.TrimPrefix(path, "@"), content)
-
-	case "ReadFile":
-		path, ok := call.Arguments["path"].(string)
-		if !ok {
-			return "Error: Invalid tool arguments", nil
-		}
-		return tools.ReadFile(strings.TrimPrefix(path, "@"))
-
-	case "KVSet":
-		key, ok1 := call.Arguments["key"].(string)
-		value, ok2 := call.Arguments["value"].(string)
-		if !ok1 || !ok2 {
-			return "Error: Invalid tool arguments", nil
-		}
-		return tools.KVSet(key, value)
-
-	case "KVGet":
-		key, ok := call.Arguments["key"].(string)
-		if !ok {
-			return "Error: Invalid tool arguments", nil
-		}
-		return tools.KVGet(key)
-
-	case "KVList":
-		return tools.KVList()
-
-	default:
-		return fmt.Sprintf("Error: Unknown tool %s", call.Name), nil
+	policy := &llm.ToolExecutorPolicy{
+		ConfirmCommand: func(cmd string) bool {
+			return !e.confirm || config.IsAllowedCommand(config.GetCommandName(cmd), e.allowed)
+		},
+		ConfirmWriteFile: func(path string) bool {
+			return !e.confirm
+		},
 	}
+	return policy.ExecuteTool(call)
 }
 
 func (e *ServiceExecutor) IsAllowedCommand(cmd string) bool {
-	return config.IsAllowedCommand(getCommandName(cmd), e.allowed)
+	return config.IsAllowedCommand(config.GetCommandName(cmd), e.allowed)
 }
 
 func (e *ServiceExecutor) AskConfirmation(cmd string) bool {
@@ -219,12 +170,4 @@ func (e *ServiceExecutor) AskConfirmation(cmd string) bool {
 		return true
 	}
 	return e.IsAllowedCommand(cmd)
-}
-
-func getCommandName(cmd string) string {
-	parts := strings.Fields(cmd)
-	if len(parts) > 0 {
-		return parts[0]
-	}
-	return cmd
 }

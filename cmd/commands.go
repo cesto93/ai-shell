@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -13,8 +12,6 @@ import (
 
 	"ai-shell/config"
 	"ai-shell/llm"
-	"ai-shell/service"
-	"ai-shell/tools"
 
 	"github.com/spf13/cobra"
 )
@@ -76,67 +73,8 @@ func runCommands(args []string) error {
 	return nil
 }
 
-type cliExecutor struct{}
-
-func (cliExecutor) ExecuteTool(call llm.ToolCall) (string, error) {
-	switch call.Name {
-	case "RunCommand":
-		cmd, ok := call.Arguments["command"].(string)
-		if !ok {
-			return "Error: Invalid tool arguments", nil
-		}
-		output, err := tools.RunCommand(cmd)
-		if err != nil {
-			return fmt.Sprintf("Error: %v\nOutput: %s", err, output), nil
-		}
-		return output, nil
-
-	case "WriteFile":
-		path, ok1 := call.Arguments["path"].(string)
-		content, ok2 := call.Arguments["content"].(string)
-		if !ok1 || !ok2 {
-			return "Error: Invalid tool arguments", nil
-		}
-		return tools.WriteFile(strings.TrimPrefix(path, "@"), content)
-
-	case "ReadFile":
-		path, ok := call.Arguments["path"].(string)
-		if !ok {
-			return "Error: Invalid tool arguments", nil
-		}
-		return tools.ReadFile(strings.TrimPrefix(path, "@"))
-
-	case "KVSet":
-		key, ok1 := call.Arguments["key"].(string)
-		value, ok2 := call.Arguments["value"].(string)
-		if !ok1 || !ok2 {
-			return "Error: Invalid tool arguments", nil
-		}
-		return tools.KVSet(key, value)
-
-	case "KVGet":
-		key, ok := call.Arguments["key"].(string)
-		if !ok {
-			return "Error: Invalid tool arguments", nil
-		}
-		return tools.KVGet(key)
-
-	case "KVList":
-		return tools.KVList()
-
-	default:
-		return fmt.Sprintf("Error: Unknown tool %s", call.Name), nil
-	}
-}
-
-func (cliExecutor) IsAllowedCommand(cmd string) bool {
-	return true
-}
-
-func (cliExecutor) AskConfirmation(cmd string) bool {
-	return true
-}
-
+// runCustomCommand runs a custom command through the running service when
+// available, falling back to a local LLM call otherwise.
 func runCustomCommand(cfg *config.Config, name string, extraArgs []string) error {
 	cmds := config.LoadCommands(cfg)
 	var found *config.CommandInfo
@@ -188,35 +126,12 @@ func runCustomCommand(cfg *config.Config, name string, extraArgs []string) error
 // customCommandCallLLM runs the custom command through the running service
 // when available, falling back to a local LLM call otherwise.
 func customCommandCallLLM(cfg *config.Config, messages []llm.Message) ([]llm.Message, error) {
-	if service.IsActive() {
-		req := service.ChatRequest{
-			Messages:        messages,
-			Agent:           cfg.Agent,
-			Model:           cfg.LLM.Model,
-			Provider:        cfg.LLM.Provider,
-			Tools:           cfg.Tools,
-			Backend:         cfg.LitertLM.Backend,
-			AgentFiles:      cfg.AgentFiles,
-			Confirm:         cfg.Shell.Confirm,
-			AllowedCommands: cfg.Shell.AllowedCommands,
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		result, err := service.Chat(ctx, req)
-		if err == nil {
-			return result, nil
-		}
-		if !errors.Is(err, service.ErrUnavailable) {
-			return nil, fmt.Errorf("LLM call failed: %w", err)
-		}
-		slog.Debug("service unavailable, falling back to local execution", "err", err)
-	}
-
-	agent := llm.NewAgentFor(cfg.Agent, cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools)
-	agent.Backend = cfg.LitertLM.Backend
-	agent.AgentFiles = llm.GetAgentFiles(cfg.AgentFiles)
-
-	slog.Debug("system prompt", "prompt", agent.Prompt)
-
-	return agent.CallLLM(context.Background(), cliExecutor{}, messages)
+	req := chatRequestFromConfig(cfg, messages)
+	return chatWithServiceFallback(req, func(err error) error {
+		return fmt.Errorf("LLM call failed: %w", err)
+	}, func() ([]llm.Message, error) {
+		agent := llm.NewAgentForSession(cfg.Agent, cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools, cfg.LitertLM.Backend, cfg.AgentFiles)
+		slog.Debug("system prompt", "prompt", agent.Prompt)
+		return agent.CallLLM(context.Background(), &llm.ToolExecutorPolicy{}, messages)
+	})
 }

@@ -18,18 +18,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type noopExtractExecutor struct{}
-
-func (n noopExtractExecutor) ExecuteTool(call llm.ToolCall) (string, error) {
-	return "", nil
-}
-func (n noopExtractExecutor) IsAllowedCommand(cmd string) bool {
-	return true
-}
-func (n noopExtractExecutor) AskConfirmation(cmd string) bool {
-	return true
-}
-
 var extractOutput string
 
 var extractCmd = &cobra.Command{
@@ -115,7 +103,7 @@ func runExtract(inputPath, schemaPath string) error {
 
 	slog.Debug("provider", "name", cfg.LLM.Provider, "model", cfg.LLM.Model)
 
-	caller := llm.NewProviderCallerRaw(cfg.LLM.Provider, cfg.LLM.Model, noopExtractExecutor{})
+	caller := llm.NewProviderCallerRaw(cfg.LLM.Provider, cfg.LLM.Model, llm.NoopExecutor{})
 	if lc, ok := caller.(*llm.LitertLMCaller); ok {
 		lc.Backend = cfg.LitertLM.Backend
 	}

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"text/template"
 
+	"ai-shell/config"
 	"ai-shell/tools"
 )
 
@@ -29,12 +30,10 @@ Available tools:
 {{.Tools}}`
 
 func init() {
-	home, err := os.UserHomeDir()
+	dir, err := config.AiShellDir()
 	if err != nil {
 		return
 	}
-	dir := filepath.Join(home, ".ai-shell")
-	os.MkdirAll(dir, 0o755)
 
 	writePromptFile(dir, "BUILDPROMPT.md", BuildPrompt)
 	writePromptFile(dir, "PLANPROMPT.md", PlanPrompt)

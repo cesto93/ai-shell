@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"ai-shell/config"
 )
 
 // ServiceVersion is the protocol version reported by Ping.
@@ -14,12 +16,8 @@ const ServiceVersion = "1"
 var socketPathFunc = defaultSocketPath
 
 func defaultSocketPath() (string, error) {
-	home, err := os.UserHomeDir()
+	dir, err := config.AiShellDir()
 	if err != nil {
-		return "", err
-	}
-	dir := filepath.Join(home, ".ai-shell")
-	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", err
 	}
 	return filepath.Join(dir, "service.sock"), nil

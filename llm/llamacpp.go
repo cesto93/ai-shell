@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"ai-shell/config"
 	"ai-shell/stats"
 
 	"github.com/hybridgroup/yzma/pkg/llama"
@@ -147,13 +148,16 @@ func (l *LlamacppCaller) applyChatTemplate(chatMsgs []llama.ChatMessage, addAssi
 }
 
 func (l *LlamacppCaller) initialize() error {
-	home, err := os.UserHomeDir()
+	libDir, err := config.LibDir()
 	if err != nil {
-		return fmt.Errorf("cannot get home dir: %w", err)
+		return fmt.Errorf("cannot determine lib dir: %w", err)
 	}
-
-	l.libDir = filepath.Join(home, ".ai-shell", "lib")
-	l.modelDir = filepath.Join(home, ".ai-shell", "models", "llamacpp")
+	modelDir, err := config.ModelsDir("llamacpp")
+	if err != nil {
+		return fmt.Errorf("cannot determine models dir: %w", err)
+	}
+	l.libDir = libDir
+	l.modelDir = modelDir
 
 	slog.Debug("llamacpp: loading library", "dir", l.libDir)
 	if err := llama.Load(l.libDir); err != nil {

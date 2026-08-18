@@ -15,7 +15,6 @@ import (
 	"ai-shell/config"
 	"ai-shell/llm"
 	"ai-shell/service"
-	"ai-shell/tools"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -104,104 +103,56 @@ type ShellExecutorForLLM struct {
 }
 
 func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
+	policy := &llm.ToolExecutorPolicy{
+		ConfirmCommand: func(cmd string) bool {
+			if !e.m.cfg.Shell.Confirm {
+				return true
+			}
+			if config.IsAllowedCommand(config.GetCommandName(cmd), e.m.cfg.Shell.AllowedCommands) {
+				return true
+			}
+			return e.AskConfirmation(cmd)
+		},
+		ConfirmWriteFile: func(path string) bool {
+			if !e.m.cfg.Shell.Confirm {
+				return true
+			}
+			return e.AskConfirmation(fmt.Sprintf("Write to file %s?", path))
+		},
+		OnExecute: func(call llm.ToolCall) {
+			e.m.messages = append(e.m.messages, Message{role: "assistant", content: systemStyle.Render(e.toolActionMessage(call))})
+		},
+	}
+	return policy.ExecuteTool(call)
+}
+
+// toolActionMessage renders the status line shown in the transcript before a
+// tool executes.
+func (e *ShellExecutorForLLM) toolActionMessage(call llm.ToolCall) string {
 	switch call.Name {
 	case "RunCommand":
-		cmd, ok := call.Arguments["command"].(string)
-		if !ok {
-			return "Error: Invalid tool arguments", nil
-		}
-
-		if e.m.cfg.Shell.Confirm {
-			cmdName := getCommandName(cmd)
-			skipConfirm := config.IsAllowedCommand(cmdName, e.m.cfg.Shell.AllowedCommands)
-			if !skipConfirm {
-				confirm := e.AskConfirmation(cmd)
-				if !confirm {
-					return "Error: Command execution denied by user", nil
-				}
-			}
-		}
-
-		confirmMsg := fmt.Sprintf("[Executing: %s]", cmd)
-		e.m.messages = append(e.m.messages, Message{role: "assistant", content: systemStyle.Render(confirmMsg)})
-
-		output, err := tools.RunCommand(cmd)
-		if err != nil {
-			return fmt.Sprintf("Error: %v\nOutput: %s", err, output), nil
-		}
-		return output, nil
-
+		cmd, _ := call.Arguments["command"].(string)
+		return fmt.Sprintf("[Executing: %s]", cmd)
 	case "WriteFile":
-		path, ok1 := call.Arguments["path"].(string)
-		content, ok2 := call.Arguments["content"].(string)
-		if !ok1 || !ok2 {
-			return "Error: Invalid tool arguments", nil
-		}
-
-		path = strings.TrimPrefix(path, "@")
-
-		if e.m.cfg.Shell.Confirm {
-			confirm := e.AskConfirmation(fmt.Sprintf("Write to file %s?", path))
-			if !confirm {
-				return "Error: File write denied by user", nil
-			}
-		}
-
-		confirmMsg := fmt.Sprintf("[Writing to file: %s]", path)
-		e.m.messages = append(e.m.messages, Message{role: "assistant", content: systemStyle.Render(confirmMsg)})
-
-		return tools.WriteFile(path, content)
-
+		path, _ := call.Arguments["path"].(string)
+		return fmt.Sprintf("[Writing to file: %s]", strings.TrimPrefix(path, "@"))
 	case "ReadFile":
-		path, ok := call.Arguments["path"].(string)
-		if !ok {
-			return "Error: Invalid tool arguments", nil
-		}
-
-		path = strings.TrimPrefix(path, "@")
-
-		confirmMsg := fmt.Sprintf("[Reading file: %s]", path)
-		e.m.messages = append(e.m.messages, Message{role: "assistant", content: systemStyle.Render(confirmMsg)})
-
-		return tools.ReadFile(path)
-
+		path, _ := call.Arguments["path"].(string)
+		return fmt.Sprintf("[Reading file: %s]", strings.TrimPrefix(path, "@"))
 	case "KVSet":
-		key, ok1 := call.Arguments["key"].(string)
-		value, ok2 := call.Arguments["value"].(string)
-		if !ok1 || !ok2 {
-			return "Error: Invalid tool arguments", nil
-		}
-
-		confirmMsg := fmt.Sprintf("[KV Store: Saving %s]", key)
-		e.m.messages = append(e.m.messages, Message{role: "assistant", content: systemStyle.Render(confirmMsg)})
-
-		return tools.KVSet(key, value)
-
+		key, _ := call.Arguments["key"].(string)
+		return fmt.Sprintf("[KV Store: Saving %s]", key)
 	case "KVGet":
-		key, ok := call.Arguments["key"].(string)
-		if !ok {
-			return "Error: Invalid tool arguments", nil
-		}
-
-		confirmMsg := fmt.Sprintf("[KV Store: Retrieving %s]", key)
-		e.m.messages = append(e.m.messages, Message{role: "assistant", content: systemStyle.Render(confirmMsg)})
-
-		return tools.KVGet(key)
-
+		key, _ := call.Arguments["key"].(string)
+		return fmt.Sprintf("[KV Store: Retrieving %s]", key)
 	case "KVList":
-		confirmMsg := "[KV Store: Listing keys]"
-		e.m.messages = append(e.m.messages, Message{role: "assistant", content: systemStyle.Render(confirmMsg)})
-
-		return tools.KVList()
-
-	default:
-		return fmt.Sprintf("Error: Unknown tool %s", call.Name), nil
+		return "[KV Store: Listing keys]"
 	}
+	return ""
 }
 
 func (e *ShellExecutorForLLM) IsAllowedCommand(cmd string) bool {
-	cmdName := getCommandName(cmd)
-	return config.IsAllowedCommand(cmdName, e.m.cfg.Shell.AllowedCommands)
+	return config.IsAllowedCommand(config.GetCommandName(cmd), e.m.cfg.Shell.AllowedCommands)
 }
 
 func (e *ShellExecutorForLLM) AskConfirmation(cmd string) bool {
@@ -1191,9 +1142,7 @@ func (m *ShellModel) ElaborateMessage() {
 		}
 	}
 
-	agent := llm.NewAgentFor(m.cfg.Agent, m.cfg.LLM.Model, m.cfg.LLM.Provider, m.cfg.Tools)
-	agent.Backend = m.cfg.LitertLM.Backend
-	agent.AgentFiles = llm.GetAgentFiles(m.cfg.AgentFiles)
+	agent := llm.NewAgentForSession(m.cfg.Agent, m.cfg.LLM.Model, m.cfg.LLM.Provider, m.cfg.Tools, m.cfg.LitertLM.Backend, m.cfg.AgentFiles)
 
 	executor := &ShellExecutorForLLM{m: m}
 
@@ -1228,17 +1177,7 @@ func (m *ShellModel) serviceChat(ctx context.Context, messages []llm.Message) ([
 		m.serviceClient = c
 	}
 
-	req := service.ChatRequest{
-		Messages:        messages,
-		Agent:           m.cfg.Agent,
-		Model:           m.cfg.LLM.Model,
-		Provider:        m.cfg.LLM.Provider,
-		Tools:           m.cfg.Tools,
-		Backend:         m.cfg.LitertLM.Backend,
-		AgentFiles:      m.cfg.AgentFiles,
-		Confirm:         m.cfg.Shell.Confirm,
-		AllowedCommands: m.cfg.Shell.AllowedCommands,
-	}
+	req := chatRequestFromConfig(m.cfg, messages)
 
 	result, err := m.serviceClient.Chat(ctx, req)
 	if err != nil {
@@ -1271,14 +1210,6 @@ func (m *ShellModel) appendLLMResult(resultMessages []llm.Message) {
 			m.messages = append(m.messages, Message{role: "tool", content: contentStr, toolCallID: msg.ToolCallID})
 		}
 	}
-}
-
-func getCommandName(cmd string) string {
-	parts := strings.Fields(cmd)
-	if len(parts) > 0 {
-		return parts[0]
-	}
-	return cmd
 }
 
 func isImage(path string) bool {

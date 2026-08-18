@@ -1,0 +1,121 @@
+package llm
+
+import (
+	"fmt"
+	"strings"
+
+	"ai-shell/tools"
+)
+
+// ToolExecutorPolicy implements ToolExecutor with pluggable confirmation hooks
+// and an optional OnExecute hook invoked right before a tool actually runs.
+// Nil hooks allow the operation unconditionally (and never run a hook).
+type ToolExecutorPolicy struct {
+	// ConfirmCommand decides whether a shell command may run.
+	ConfirmCommand func(cmd string) bool
+	// ConfirmWriteFile decides whether a file write may proceed.
+	ConfirmWriteFile func(path string) bool
+	// OnExecute is called immediately before a tool executes (used by the
+	// interactive shell to render its status messages).
+	OnExecute func(call ToolCall)
+}
+
+func (p *ToolExecutorPolicy) ExecuteTool(call ToolCall) (string, error) {
+	switch call.Name {
+	case "RunCommand":
+		cmd, ok := call.Arguments["command"].(string)
+		if !ok {
+			return "Error: Invalid tool arguments", nil
+		}
+		if p.ConfirmCommand != nil && !p.ConfirmCommand(cmd) {
+			return "Error: Command execution denied by user", nil
+		}
+		p.exec(call)
+		output, err := tools.RunCommand(cmd)
+		if err != nil {
+			return fmt.Sprintf("Error: %v\nOutput: %s", err, output), nil
+		}
+		return output, nil
+
+	case "WriteFile":
+		path, ok1 := call.Arguments["path"].(string)
+		content, ok2 := call.Arguments["content"].(string)
+		if !ok1 || !ok2 {
+			return "Error: Invalid tool arguments", nil
+		}
+		path = strings.TrimPrefix(path, "@")
+		if p.ConfirmWriteFile != nil && !p.ConfirmWriteFile(path) {
+			return "Error: File write denied by user", nil
+		}
+		p.exec(call)
+		return tools.WriteFile(path, content)
+
+	case "ReadFile":
+		path, ok := call.Arguments["path"].(string)
+		if !ok {
+			return "Error: Invalid tool arguments", nil
+		}
+		path = strings.TrimPrefix(path, "@")
+		p.exec(call)
+		return tools.ReadFile(path)
+
+	case "KVSet":
+		key, ok1 := call.Arguments["key"].(string)
+		value, ok2 := call.Arguments["value"].(string)
+		if !ok1 || !ok2 {
+			return "Error: Invalid tool arguments", nil
+		}
+		p.exec(call)
+		return tools.KVSet(key, value)
+
+	case "KVGet":
+		key, ok := call.Arguments["key"].(string)
+		if !ok {
+			return "Error: Invalid tool arguments", nil
+		}
+		p.exec(call)
+		return tools.KVGet(key)
+
+	case "KVList":
+		p.exec(call)
+		return tools.KVList()
+
+	default:
+		return fmt.Sprintf("Error: Unknown tool %s", call.Name), nil
+	}
+}
+
+func (p *ToolExecutorPolicy) exec(call ToolCall) {
+	if p.OnExecute != nil {
+		p.OnExecute(call)
+	}
+}
+
+func (p *ToolExecutorPolicy) IsAllowedCommand(cmd string) bool {
+	if p.ConfirmCommand == nil {
+		return true
+	}
+	return p.ConfirmCommand(cmd)
+}
+
+func (p *ToolExecutorPolicy) AskConfirmation(cmd string) bool {
+	if p.ConfirmCommand == nil {
+		return true
+	}
+	return p.ConfirmCommand(cmd)
+}
+
+// NoopExecutor is a ToolExecutor that runs nothing and allows everything.
+type NoopExecutor struct{}
+
+func (NoopExecutor) ExecuteTool(call ToolCall) (string, error) {
+	return "", nil
+}
+
+func (NoopExecutor) IsAllowedCommand(cmd string) bool {
+	return true
+}
+
+func (NoopExecutor) AskConfirmation(cmd string) bool {
+	return true
+}

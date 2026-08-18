@@ -55,6 +55,17 @@ var userConfigDirFunc = os.UserConfigDir
 
 var loadEnvFunc = loadEnv
 
+// defaultTools is the default set of enabled tools, used when a config has no
+// tools map.
+var defaultTools = map[string]bool{
+	"RunCommand": true,
+	"WriteFile":  true,
+	"ReadFile":   true,
+	"KVSet":      true,
+	"KVGet":      true,
+	"KVList":     true,
+}
+
 func loadEnv() error {
 	// Load from user config directory first (global defaults)
 	userConfigDir, err := userConfigDirFunc()
@@ -112,14 +123,7 @@ func LoadConfig() (*Config, error) {
 	v.SetDefault("agent", "build")
 	v.SetDefault("agent_files", true)
 	v.SetDefault("litertlm.backend", "cpu")
-	v.SetDefault("tools", map[string]bool{
-		"RunCommand": true,
-		"WriteFile":  true,
-		"ReadFile":   true,
-		"KVSet":      true,
-		"KVGet":      true,
-		"KVList":     true,
-	})
+	v.SetDefault("tools", defaultTools)
 
 	for _, path := range configPaths {
 		v.AddConfigPath(path)
@@ -160,14 +164,7 @@ func LoadConfig() (*Config, error) {
 				}{
 					Backend: "cpu",
 				},
-				Tools: map[string]bool{
-					"RunCommand": true,
-					"WriteFile":  true,
-					"ReadFile":   true,
-					"KVSet":      true,
-					"KVGet":      true,
-					"KVList":     true,
-				},
+				Tools: defaultTools,
 			}
 
 			if configPath != "" {
@@ -194,14 +191,7 @@ func LoadConfig() (*Config, error) {
 	config.ConfigFile = v.ConfigFileUsed()
 
 	if config.Tools == nil {
-		config.Tools = map[string]bool{
-			"RunCommand": true,
-			"WriteFile":  true,
-			"ReadFile":   true,
-			"KVSet":      true,
-			"KVGet":      true,
-			"KVList":     true,
-		}
+		config.Tools = defaultTools
 	}
 
 	if info := lookupModelInfo(config.LLM.Model); info != nil && len(info.InputTypes) > 0 {
@@ -223,6 +213,38 @@ func getConfigPath() (string, error) {
 		return "", err
 	}
 	return configPath, nil
+}
+
+// AiShellDir returns ~/.ai-shell, creating it if necessary.
+func AiShellDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(home, ".ai-shell")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+// LibDir returns ~/.ai-shell/lib, the directory holding the in-process
+// inference shared libraries (llama.cpp / LiteRT-LM).
+func LibDir() (string, error) {
+	dir, err := AiShellDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "lib"), nil
+}
+
+// ModelsDir returns ~/.ai-shell/models/<provider> for the given provider.
+func ModelsDir(provider string) (string, error) {
+	dir, err := AiShellDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "models", provider), nil
 }
 
 func modelInList(modelName string, models []ModelInfo) bool {
@@ -363,46 +385,25 @@ var GeminiModels = []ModelInfo{
 func GetLitertLMModels() []ModelInfo {
 	dir := os.Getenv("LITERTLM_MODELS_DIR")
 	if dir == "" {
-		home, err := os.UserHomeDir()
+		var err error
+		dir, err = ModelsDir("litertlm")
 		if err != nil {
 			return nil
 		}
-		dir = filepath.Join(home, ".ai-shell", "models", "litertlm")
 	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
-	}
-	var models []ModelInfo
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if !strings.HasSuffix(strings.ToLower(name), ".litertlm") {
-			continue
-		}
-		modelName := strings.TrimSuffix(name, ".litertlm")
-		info, err := entry.Info()
-		size := ""
-		if err == nil {
-			size = formatFileSize(info.Size())
-		}
-		models = append(models, ModelInfo{
-			Name:     modelName,
-			Provider: "litertlm",
-			Size:     size,
-		})
-	}
-	return models
+	return scanModels(dir, "litertlm", ".litertlm")
 }
 
 func GetLlamacppModels() []ModelInfo {
-	home, err := os.UserHomeDir()
+	dir, err := ModelsDir("llamacpp")
 	if err != nil {
 		return nil
 	}
-	dir := filepath.Join(home, ".ai-shell", "models", "llamacpp")
+	return scanModels(dir, "llamacpp", ".gguf")
+}
+
+// scanModels lists the files with the given extension in dir as ModelInfos.
+func scanModels(dir, provider, ext string) []ModelInfo {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
@@ -413,18 +414,18 @@ func GetLlamacppModels() []ModelInfo {
 			continue
 		}
 		name := entry.Name()
-		if !strings.HasSuffix(strings.ToLower(name), ".gguf") {
+		if !strings.HasSuffix(strings.ToLower(name), ext) {
 			continue
 		}
-		modelName := strings.TrimSuffix(name, ".gguf")
+		modelName := strings.TrimSuffix(name, ext)
 		info, err := entry.Info()
 		size := ""
 		if err == nil {
-			size = formatFileSize(info.Size())
+			size = FormatFileSize(info.Size())
 		}
 		models = append(models, ModelInfo{
 			Name:     modelName,
-			Provider: "llamacpp",
+			Provider: provider,
 			Size:     size,
 		})
 	}
@@ -610,6 +611,15 @@ func IsAllowedCommand(cmd string, allowedList []string) bool {
 	return false
 }
 
+// GetCommandName returns the first word of a shell command string.
+func GetCommandName(cmd string) string {
+	parts := strings.Fields(cmd)
+	if len(parts) > 0 {
+		return parts[0]
+	}
+	return cmd
+}
+
 func GetEnvPaths() []string {
 	var paths []string
 
@@ -736,7 +746,8 @@ func EnsureCommandsDir() error {
 	return os.MkdirAll(localDir, 0755)
 }
 
-func formatFileSize(b int64) string {
+// FormatFileSize renders a byte count as a human-readable size (e.g. "1.5 MB").
+func FormatFileSize(b int64) string {
 	const unit = 1024
 	if b < unit {
 		return fmt.Sprintf("%d B", b)

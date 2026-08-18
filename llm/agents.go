@@ -335,3 +335,12 @@ func NewAgentFor(agentName, model, provider string, cfgTools map[string]bool) *A
 		Tools:    tools,
 	}
 }
+
+// NewAgentForSession creates an Agent like NewAgentFor, additionally applying
+// the session's inference backend and AGENTS.md support settings.
+func NewAgentForSession(agentName, model, provider string, cfgTools map[string]bool, backend string, agentFiles bool) *Agent {
+	a := NewAgentFor(agentName, model, provider, cfgTools)
+	a.Backend = backend
+	a.AgentFiles = GetAgentFiles(agentFiles)
+	return a
+}

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 
+	"ai-shell/config"
+
 	"github.com/vladimirvivien/litertlm-go/pkg/litertlm"
 )
 
@@ -168,22 +170,22 @@ func (l *LitertLMCaller) dispatch(ctx context.Context, chat *litertlm.Chat, repl
 func (l *LitertLMCaller) client(ctx context.Context) (*litertlm.Client, error) {
 	libDir := os.Getenv("LITERTLM_LIB")
 	if libDir == "" {
-		home, err := os.UserHomeDir()
+		var err error
+		libDir, err = config.LibDir()
 		if err != nil {
-			return nil, fmt.Errorf("cannot get home dir: %w", err)
+			return nil, fmt.Errorf("cannot determine lib dir: %w", err)
 		}
-		libDir = filepath.Join(home, ".ai-shell", "lib")
 	}
 
 	modelPath := os.Getenv("LITERTLM_MODEL")
 	if modelPath == "" {
 		modelDir := os.Getenv("LITERTLM_MODELS_DIR")
 		if modelDir == "" {
-			home, err := os.UserHomeDir()
+			var err error
+			modelDir, err = config.ModelsDir("litertlm")
 			if err != nil {
-				return nil, fmt.Errorf("cannot get home dir: %w", err)
+				return nil, fmt.Errorf("cannot determine models dir: %w", err)
 			}
-			modelDir = filepath.Join(home, ".ai-shell", "models", "litertlm")
 		}
 		modelPath = filepath.Join(modelDir, l.Model)
 		if _, err := os.Stat(modelPath); os.IsNotExist(err) {

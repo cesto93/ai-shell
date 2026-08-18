@@ -36,17 +36,16 @@ func init() {
 }
 
 func runPull(repo, filename string) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("cannot get home dir: %w", err)
-	}
-	ext := ".gguf"
 	provider := "llamacpp"
-	destDir := filepath.Join(home, ".ai-shell", "models", "llamacpp")
+	ext := ".gguf"
 	if strings.HasSuffix(strings.ToLower(filename), ".litertlm") {
 		ext = ".litertlm"
 		provider = "litertlm"
-		destDir = filepath.Join(home, ".ai-shell", "models", "litertlm")
+	}
+
+	destDir, err := config.ModelsDir(provider)
+	if err != nil {
+		return fmt.Errorf("cannot determine models directory: %w", err)
 	}
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return fmt.Errorf("failed to create models directory: %w", err)
@@ -92,9 +91,9 @@ func runPull(repo, filename string) error {
 			written += int64(n)
 			if contentLength > 0 {
 				pct := float64(written) / float64(contentLength) * 100
-				fmt.Fprintf(os.Stderr, "\rDownloading... %.1f%% (%s/%s)", pct, formatBytes(written), formatBytes(contentLength))
+				fmt.Fprintf(os.Stderr, "\rDownloading... %.1f%% (%s/%s)", pct, config.FormatFileSize(written), config.FormatFileSize(contentLength))
 			} else {
-				fmt.Fprintf(os.Stderr, "\rDownloading... %s", formatBytes(written))
+				fmt.Fprintf(os.Stderr, "\rDownloading... %s", config.FormatFileSize(written))
 			}
 		}
 		if err == io.EOF {
@@ -114,17 +113,4 @@ func runPull(repo, filename string) error {
 
 	fmt.Printf("Model saved to %s\n", destPath)
 	return nil
-}
-
-func formatBytes(b int64) string {
-	const unit = 1024
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
-	}
-	div, exp := int64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }

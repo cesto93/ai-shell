@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -19,49 +18,24 @@ import (
 
 var execCommand = exec.Command
 
-type noopExecutor struct{}
-
-func (n noopExecutor) ExecuteTool(call llm.ToolCall) (string, error) {
-	return "", nil
-}
-
-func (n noopExecutor) IsAllowedCommand(cmd string) bool {
-	return true
-}
-
-func (n noopExecutor) AskConfirmation(cmd string) bool {
-	return true
-}
-
 // commitCallLLM runs the commit prompt through the running service when
 // available, falling back to a local LLM call otherwise.
 func commitCallLLM(cfg *config.Config, systemPrompt string, messages []llm.Message) ([]llm.Message, error) {
-	if service.IsActive() {
-		req := service.ChatRequest{
-			Messages:        messages,
-			SystemPrompt:    systemPrompt,
-			Model:           cfg.LLM.Model,
-			Provider:        cfg.LLM.Provider,
-			Confirm:         cfg.Shell.Confirm,
-			AllowedCommands: cfg.Shell.AllowedCommands,
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		result, err := service.Chat(ctx, req)
-		if err == nil {
-			return result, nil
-		}
-		if !errors.Is(err, service.ErrUnavailable) {
-			return nil, err
-		}
-		slog.Debug("service unavailable, falling back to local execution", "err", err)
+	req := service.ChatRequest{
+		Messages:        messages,
+		SystemPrompt:    systemPrompt,
+		Model:           cfg.LLM.Model,
+		Provider:        cfg.LLM.Provider,
+		Confirm:         cfg.Shell.Confirm,
+		AllowedCommands: cfg.Shell.AllowedCommands,
 	}
-
-	caller := llm.NewProviderCaller(cfg.LLM.Provider, cfg.LLM.Model, noopExecutor{})
-	if lc, ok := caller.(*llm.LitertLMCaller); ok {
-		lc.Backend = cfg.LitertLM.Backend
-	}
-	return caller.Call(context.Background(), systemPrompt, messages, nil)
+	return chatWithServiceFallback(req, nil, func() ([]llm.Message, error) {
+		caller := llm.NewProviderCaller(cfg.LLM.Provider, cfg.LLM.Model, llm.NoopExecutor{})
+		if lc, ok := caller.(*llm.LitertLMCaller); ok {
+			lc.Backend = cfg.LitertLM.Backend
+		}
+		return caller.Call(context.Background(), systemPrompt, messages, nil)
+	})
 }
 
 var commitAll bool
