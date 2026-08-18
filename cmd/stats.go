@@ -42,8 +42,8 @@ var statsCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-		fmt.Fprintln(w, "\tPROVIDER\tMODEL\tCALLS\tINPUT\tOUTPUT\tCACHED\tREASONING\tTOTAL\tCOST")
-		fmt.Fprintln(w, "\t--------\t-----\t-----\t-----\t------\t------\t---------\t-----\t----")
+		fmt.Fprintln(w, "PROVIDER\tMODEL\tCALLS\tINPUT\tOUTPUT\tCACHED\tREASONING\tTOTAL\tCOST")
+		fmt.Fprintln(w, "--------\t-----\t-----\t-----\t------\t------\t---------\t-----\t----")
 		var totals stats.Entry
 		for _, e := range entries {
 			fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%g\n",
