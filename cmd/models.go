@@ -13,6 +13,7 @@ import (
 )
 
 var modelsSet string
+var modelsDelete string
 
 var modelsCmd = &cobra.Command{
 	Use:   "models",
@@ -25,6 +26,7 @@ var modelsCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(modelsCmd)
 	modelsCmd.Flags().StringVarP(&modelsSet, "set", "s", "", "Set the current model")
+	modelsCmd.Flags().StringVarP(&modelsDelete, "delete", "d", "", "Delete a locally downloaded model (llamacpp or litertlm)")
 }
 
 func runModels(cmd *cobra.Command) error {
@@ -33,6 +35,20 @@ func runModels(cmd *cobra.Command) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 	initLogger(cfg)
+
+	if cmd.Flags().Changed("delete") {
+		paths, err := config.DeleteLocalModel(modelsDelete)
+		if err != nil {
+			return err
+		}
+		for _, p := range paths {
+			fmt.Printf("Deleted %s\n", p)
+		}
+		if cfg.LLM.Model == modelsDelete {
+			fmt.Printf("Note: %q is still the configured model; run 'ai-shell config --model <model>' to pick another.\n", modelsDelete)
+		}
+		return nil
+	}
 
 	if cmd.Flags().Changed("set") {
 		info := config.LookupModelInfo(modelsSet)

@@ -545,6 +545,88 @@ func IsLlamacppModel(modelName string) bool {
 	return modelInList(modelName, GetLlamacppModels())
 }
 
+// DeleteLocalModel removes a locally downloaded model file (llamacpp GGUF or
+// litertlm .litertlm) and returns the paths of the removed files. Deleting a
+// llamacpp model also deletes the vision projector (mmproj) files paired with
+// it (same vision key, e.g. mmproj-<model>-f16.gguf). Remote models
+// (ollama/gemini/openrouter) cannot be deleted.
+func DeleteLocalModel(modelName string) ([]string, error) {
+	if IsLitertLMModel(modelName) {
+		dir := os.Getenv("LITERTLM_MODELS_DIR")
+		if dir == "" {
+			var err error
+			dir, err = ModelsDir("litertlm")
+			if err != nil {
+				return nil, err
+			}
+		}
+		path, err := removeModelFile(filepath.Join(dir, modelName+".litertlm"))
+		if err != nil {
+			return nil, err
+		}
+		return []string{path}, nil
+	}
+	if IsLlamacppModel(modelName) {
+		dir, err := ModelsDir("llamacpp")
+		if err != nil {
+			return nil, err
+		}
+		path, err := removeModelFile(filepath.Join(dir, modelName+".gguf"))
+		if err != nil {
+			return nil, err
+		}
+		removed := []string{path}
+		for _, proj := range llamacppMMProjsForModel(dir, modelName) {
+			projPath := filepath.Join(dir, proj+".gguf")
+			if _, err := removeModelFile(projPath); err != nil {
+				if !os.IsNotExist(err) {
+					slog.Warn("failed to delete vision projector", "path", projPath, "error", err)
+				}
+				continue
+			}
+			removed = append(removed, projPath)
+		}
+		return removed, nil
+	}
+	return nil, fmt.Errorf("model %q is not a locally downloaded model", modelName)
+}
+
+// llamacppMMProjsForModel lists the vision projector base names in dir whose
+// vision key matches the given model's, so deleting the model also removes its
+// paired mmproj files.
+func llamacppMMProjsForModel(dir, modelName string) []string {
+	key := llamacppVisionKey(modelName)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var projs []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		lower := strings.ToLower(name)
+		if !strings.HasSuffix(lower, ".gguf") || !strings.Contains(lower, "mmproj") {
+			continue
+		}
+		if llamacppVisionKey(strings.TrimSuffix(name, ".gguf")) == key {
+			projs = append(projs, strings.TrimSuffix(name, ".gguf"))
+		}
+	}
+	return projs
+}
+
+func removeModelFile(path string) (string, error) {
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("model file not found at %s", path)
+		}
+		return "", fmt.Errorf("failed to delete model file: %w", err)
+	}
+	return path, nil
+}
+
 // openRouterModelsURL is the OpenRouter API endpoint listing all models.
 var openRouterModelsURL = "https://openrouter.ai/api/v1/models"
 

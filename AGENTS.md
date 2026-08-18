@@ -125,6 +125,8 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 - Usable as `ai-shell models`
 - Lists all available models from all providers in a table: Model, Provider, Size, Input Types
 - Sorted by provider then model name
+- Flag `-s` / `--set <model>` sets the current model (auto-detects provider via `config.LookupModelInfo`)
+- Flag `-d` / `--delete <model>` deletes a locally downloaded model file via `config.DeleteLocalModel` (llamacpp GGUF / litertlm `.litertlm` only; returns `[]string` of removed paths); deleting a llamacpp model also removes its paired vision projector (`mmproj-*` files with a matching `llamacppVisionKey`, best-effort with a warn log on failure); errors on remote models and prints a note when the deleted model is still the configured model
 - For llamacpp models, shows the GGUF file size (from `config.GetLlamacppModels()`, now populates `Size` via `entry.Info()`)
 - Input types: gemini models hardcode `InputTypes` in `GeminiModels`; openrouter models parse `architecture.input_modalities` from the API (`fetchOpenRouterFreeModels`); llamacpp models get `text, image` only when an `mmproj-*` file matching their base name is present (quantization-insensitive matching via `llamacppVisionKey`); ollama/litertlm show `-` (the Ollama list API exposes no capabilities)
 - Uses `text/tabwriter` for aligned output
