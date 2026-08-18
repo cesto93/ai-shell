@@ -35,7 +35,9 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 
 `.env.example` documents the recognized env vars (`GEMINI_API_KEY`, `OPEN_ROUTE_KEY`, `OLLAMA_HOST`, `LITERTLM_LIB`, `LITERTLM_MODEL`, `LITERTLM_MODELS_DIR`, `LITERTLM_BACKEND`).
 
-Defaults: provider=ollama, model=granite4:3b-h, log_level=info, confirm=true, allowed_commands=ls,pwd, agent=build. litertlm backend defaults to `cpu`. All 6 tools enabled by default. Custom commands stored in config.
+Defaults: provider=ollama, model=granite4:3b-h, log_level=info, confirm=true, allowed_commands=ls,pwd, agent=build, agent_files=true. litertlm backend defaults to `cpu`. All 6 tools enabled by default. Custom commands stored in config.
+
+`agent_files` toggles AGENTS.md support: when enabled, `llm.GetAgentFiles(true)` loads the global `~/.config/ai-shell/AGENTS.md` and the repo-level `./AGENTS.md`, appending both as additional instructions to the agent's system prompt in `Agent.CallLLM`. Toggle via `ai-shell config --agent-files=false`.
 
 Log level values: `debug`, `info`, `warn`, `error`. Uses `log/slog` throughout (no `log` package). Call `config.InitLogger(cfg.LogLevel)` after `LoadConfig()` to configure the global slog level. Debug messages use `slog.Debug`, warnings use `slog.Warn`. Debug logging in `cmd/commit.go` (provider/model/prompt) and `cmd/shell.go` (LLM timing: total/llm/other duration and message count).
 
@@ -68,7 +70,7 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 ## Config command (cmd/config.go)
 
 - Usable as `ai-shell config` (shows current config via `PrintConfig`) or `ai-shell config --flag value`
-- Flags: `--provider`, `--model`, `--agent`, `--log-level`, `--confirm`, `--allowed-commands`, `--backend`, `--enable-tool`, `--disable-tool`, `--add-cmd`, `--rm-cmd`
+- Flags: `--provider`, `--model`, `--agent`, `--agent-files`, `--log-level`, `--confirm`, `--allowed-commands`, `--backend`, `--enable-tool`, `--disable-tool`, `--add-cmd`, `--rm-cmd`
 - Loads config via `config.LoadConfig()`, modifies specified fields, calls `config.SaveConfig()`
 - When run without any flags, calls `PrintConfig()` (replaces the removed `get-config` command)
 - When `--model` is set without `--provider`, auto-detects provider via `config.LookupModelInfo`

@@ -917,6 +917,7 @@ func (m *ShellModel) showHelp() {
 func (m *ShellModel) showConfig() {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Agent: %s\n", m.cfg.Agent))
+	sb.WriteString(fmt.Sprintf("Agent Files: %v\n", m.cfg.AgentFiles))
 	sb.WriteString(fmt.Sprintf("Provider: %s\n", m.cfg.LLM.Provider))
 	sb.WriteString(fmt.Sprintf("Model: %s\n", m.cfg.LLM.Model))
 	sb.WriteString(fmt.Sprintf("Confirm Commands: %v\n", m.cfg.Shell.Confirm))
@@ -1145,6 +1146,7 @@ func (m *ShellModel) ElaborateMessage() {
 
 	agent := llm.NewAgentFor(m.cfg.Agent, m.cfg.LLM.Model, m.cfg.LLM.Provider, m.cfg.Tools)
 	agent.Backend = m.cfg.LitertLM.Backend
+	agent.AgentFiles = llm.GetAgentFiles(m.cfg.AgentFiles)
 
 	executor := &ShellExecutorForLLM{m: m}
 

@@ -29,6 +29,7 @@ func PrintConfig() {
 	fmt.Printf("%sCurrent Configuration:%s\n", ColorBold+ColorCyan, ColorReset)
 	fmt.Printf("Log Level: %s%s%s\n", ColorGreen, cfg.LogLevel, ColorReset)
 	fmt.Printf("Agent: %s%s%s\n", ColorGreen, cfg.Agent, ColorReset)
+	fmt.Printf("Agent Files: %s%v%s\n", ColorGreen, cfg.AgentFiles, ColorReset)
 	fmt.Printf("Provider: %s%s%s\n", ColorGreen, cfg.LLM.Provider, ColorReset)
 	fmt.Printf("Model: %s%s%s\n", ColorGreen, cfg.LLM.Model, ColorReset)
 	fmt.Printf("Confirm Commands: %s%v%s\n", ColorGreen, cfg.Shell.Confirm, ColorReset)

@@ -155,6 +155,7 @@ func runCustomCommand(cfg *config.Config, name string, extraArgs []string) error
 
 	agent := llm.NewAgentFor(cfg.Agent, cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools)
 	agent.Backend = cfg.LitertLM.Backend
+	agent.AgentFiles = llm.GetAgentFiles(cfg.AgentFiles)
 
 	messages := []llm.Message{
 		{Role: "user", Content: fullPrompt},

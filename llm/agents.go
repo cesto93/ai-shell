@@ -9,11 +9,12 @@ import (
 
 // Agent represents an AI agent with its prompt, model, provider, and tools.
 type Agent struct {
-	Prompt   string
-	Model    string
-	Provider string
-	Tools    []any
-	Backend  string
+	Prompt     string
+	AgentFiles string
+	Model      string
+	Provider   string
+	Tools      []any
+	Backend    string
 }
 
 // GetAllTools returns the full list of tools for the agent.

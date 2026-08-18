@@ -60,5 +60,9 @@ func (a *Agent) CallLLM(ctx context.Context, executor ToolExecutor, messages []M
 	if lc, ok := caller.(*LitertLMCaller); ok {
 		lc.Backend = a.Backend
 	}
-	return caller.Call(ctx, a.Prompt, messages, a.Tools)
+	prompt := a.Prompt
+	if a.AgentFiles != "" {
+		prompt = prompt + "\n\n" + a.AgentFiles
+	}
+	return caller.Call(ctx, prompt, messages, a.Tools)
 }
