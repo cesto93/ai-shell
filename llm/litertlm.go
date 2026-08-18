@@ -31,7 +31,7 @@ var (
 // LitertLMCaller runs LiteRT-LM natively in-process through the
 // litertlm-go binding. It expects the LiteRT-LM shared libraries
 // (LITERTLM_LIB, else ~/.ai-shell/lib) and a .litertlm model file
-// (LITERTLM_MODEL, else ~/.ai-shell/models/litertlm/).
+// (default ~/.ai-shell/models/litertlm/).
 type LitertLMCaller struct {
 	Model    string
 	Executor ToolExecutor
@@ -177,23 +177,20 @@ func (l *LitertLMCaller) client(ctx context.Context) (*litertlm.Client, error) {
 		}
 	}
 
-	modelPath := os.Getenv("LITERTLM_MODEL")
-	if modelPath == "" {
-		modelDir := os.Getenv("LITERTLM_MODELS_DIR")
-		if modelDir == "" {
-			var err error
-			modelDir, err = config.ModelsDir("litertlm")
-			if err != nil {
-				return nil, fmt.Errorf("cannot determine models dir: %w", err)
-			}
+	modelDir := os.Getenv("LITERTLM_MODELS_DIR")
+	if modelDir == "" {
+		var err error
+		modelDir, err = config.ModelsDir("litertlm")
+		if err != nil {
+			return nil, fmt.Errorf("cannot determine models dir: %w", err)
 		}
-		modelPath = filepath.Join(modelDir, l.Model)
+	}
+	modelPath := filepath.Join(modelDir, l.Model)
+	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+		modelPath = filepath.Join(modelDir, l.Model+".litertlm")
 		if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-			modelPath = filepath.Join(modelDir, l.Model+".litertlm")
-			if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-				return nil, fmt.Errorf("model file not found: tried %s and %s",
-					filepath.Join(modelDir, l.Model), modelPath)
-			}
+			return nil, fmt.Errorf("model file not found: tried %s and %s",
+				filepath.Join(modelDir, l.Model), modelPath)
 		}
 	}
 
