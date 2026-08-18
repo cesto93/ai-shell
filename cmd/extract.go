@@ -22,13 +22,14 @@ var extractOutput string
 
 var extractCmd = &cobra.Command{
 	Use:   "extract <input> <schema>",
-	Short: "Extract structured data from a document using a JSON schema",
-	Long: `Extract structured data from a document (.txt, .md, .pdf) using a JSON schema.
-The document text is sent to the LLM which returns data conforming to the schema.
+	Short: "Extract structured data from a document or image using a JSON schema",
+	Long: `Extract structured data from a document (.txt, .md, .pdf) or an image (.png, .jpg, .jpeg, .gif, .webp) using a JSON schema.
+The document text (or image) is sent to the LLM which returns data conforming to the schema.
 
 Example:
   ai-shell extract invoice.pdf schema.json
-  ai-shell extract notes.txt schema.json --output result.json`,
+  ai-shell extract notes.txt schema.json --output result.json
+  ai-shell extract receipt.png schema.json`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runExtract(args[0], args[1])
@@ -64,9 +65,19 @@ func readPDF(path string) (string, error) {
 }
 
 func runExtract(inputPath, schemaPath string) error {
-	text, err := readInputFile(inputPath)
-	if err != nil {
-		return err
+	var inputContent, imageURL string
+	var err error
+	if isImage(inputPath) {
+		imageURL, err = encodeImage(inputPath)
+		if err != nil {
+			return fmt.Errorf("failed to read image %s: %w", inputPath, err)
+		}
+	} else {
+		text, err := readInputFile(inputPath)
+		if err != nil {
+			return err
+		}
+		inputContent = text
 	}
 
 	schemaData, err := os.ReadFile(schemaPath)
@@ -94,11 +105,20 @@ func runExtract(inputPath, schemaPath string) error {
 		},
 	}
 
-	systemPrompt := "You extract structured data from documents. Return only valid JSON matching the provided schema."
-	userPrompt := fmt.Sprintf("Extract structured data from the following document text according to the schema:\n\n%s", text)
+	systemPrompt := "You extract structured data from documents and images. Return only valid JSON matching the provided schema."
+
+	var msgContent any
+	if imageURL != "" {
+		msgContent = []llm.ContentPart{
+			{Type: "text", Text: "Extract structured data from the provided image according to the schema."},
+			{Type: "image_url", ImageURL: &llm.ContentImage{URL: imageURL}},
+		}
+	} else {
+		msgContent = fmt.Sprintf("Extract structured data from the following document text according to the schema:\n\n%s", inputContent)
+	}
 
 	messages := []llm.Message{
-		{Role: "user", Content: userPrompt},
+		{Role: "user", Content: msgContent},
 	}
 
 	slog.Debug("provider", "name", cfg.LLM.Provider, "model", cfg.LLM.Model)

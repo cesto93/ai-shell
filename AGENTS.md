@@ -98,9 +98,9 @@ Test conventions: table-driven tests, `t.Run()` subtests, function variable mock
 ## Extract command (cmd/extract.go)
 
 - Usable as `ai-shell extract <input> <schema>`
-- Two positional args: input file (.txt/.md/.pdf) and JSON schema file
+- Two positional args: input file (.txt/.md/.pdf/.png/.jpg/.jpeg/.gif/.webp) and JSON schema file
 - Flag `-o` / `--output` writes result to a file (default: stdout)
-- Reads text from input (uses `pdftotext` for PDF)
+- Reads text from input (uses `pdftotext` for PDF); image inputs are encoded via `encodeImage` and sent as a multimodal `[]ContentPart` message (reusing the shell's `isImage`/`encodeImage` helpers in `cmd/shell.go`)
 - Calls LLM with `response_format: json_schema` for structured output
 - Uses `llm.NewProviderCallerRaw` to get `RawCaller` and calls `CallStructured`
 
