@@ -79,7 +79,7 @@ func (l *LlamacppCaller) CallStructured(ctx context.Context, systemPrompt string
 func (l *LlamacppCaller) chat(ctx context.Context, systemPrompt string, messages []Message, smplr llama.Sampler) ([]Message, error) {
 	if imagesPresent(messages) {
 		if l.mtmdCtx == 0 || !l.hasVision {
-			return nil, fmt.Errorf("llamacpp: image input requires a vision projector. Place a *mmproj*.gguf matching your model in %s, or set `llamacpp.mmproj` in config", l.modelDir)
+			return nil, fmt.Errorf("llamacpp: image input requires a vision projector. Place a *mmproj*.gguf matching your model in %s", l.modelDir)
 		}
 		inp, err := l.buildVisionPrompt(systemPrompt, messages)
 		if err != nil {

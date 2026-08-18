@@ -209,62 +209,6 @@ func TestSaveModelCreatesNewFile(t *testing.T) {
 	}
 }
 
-func TestSaveMMProj(t *testing.T) {
-	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "ai-shell")
-	if err := os.MkdirAll(configPath, 0755); err != nil {
-		t.Fatalf("Failed to create temp config dir: %v", err)
-	}
-
-	origGetConfigPath := getConfigPathFunc
-	getConfigPathFunc = func() (string, error) {
-		return configPath, nil
-	}
-	defer func() { getConfigPathFunc = origGetConfigPath }()
-
-	origUserConfigDirFunc := userConfigDirFunc
-	userConfigDirFunc = func() (string, error) {
-		return tmpDir, nil
-	}
-	defer func() { userConfigDirFunc = origUserConfigDirFunc }()
-
-	origConfigPaths := configPaths
-	defer func() { configPaths = origConfigPaths }()
-	configPaths = []string{configPath}
-
-	configFile := filepath.Join(configPath, "config.yaml")
-	initialConfig := `llm:
-  model: "initial-model"
-llamacpp:
-  mmproj: ""
-`
-	if err := os.WriteFile(configFile, []byte(initialConfig), 0644); err != nil {
-		t.Fatalf("Failed to write initial config: %v", err)
-	}
-
-	mmproj := "mmproj-Qwen2.5-VL-3B-Instruct-Q8_0"
-	if err := SaveMMProj(mmproj); err != nil {
-		t.Fatalf("SaveMMProj() error = %v", err)
-	}
-
-	data, err := os.ReadFile(configFile)
-	if err != nil {
-		t.Fatalf("Failed to read config file: %v", err)
-	}
-
-	if !bytes.Contains(data, []byte(`mmproj: mmproj-Qwen2.5-VL-3B-Instruct-Q8_0`)) {
-		t.Errorf("config file does not contain new mmproj, got: %s", string(data))
-	}
-
-	cfg, err := LoadConfig()
-	if err != nil {
-		t.Fatalf("LoadConfig() error = %v", err)
-	}
-	if cfg.Llamacpp.MMProj != mmproj {
-		t.Errorf("LoadConfig().Llamacpp.MMProj = %q, want %q", cfg.Llamacpp.MMProj, mmproj)
-	}
-}
-
 func TestSelectModelNoModels(t *testing.T) {
 	origModels := getAvailableModelsFunc
 	getAvailableModelsFunc = func() ([]ModelInfo, error) {
@@ -1005,16 +949,6 @@ func TestFindLlamacppMMProj(t *testing.T) {
 	getOpenRouterModelsFunc = func() []ModelInfo { return nil }
 	defer func() { getOpenRouterModelsFunc = origOpenRouter }()
 
-	origEnv := os.Getenv("LLAMACPP_MMPROJ")
-	defer func() {
-		if origEnv == "" {
-			os.Unsetenv("LLAMACPP_MMPROJ")
-		} else {
-			os.Setenv("LLAMACPP_MMPROJ", origEnv)
-		}
-	}()
-	os.Unsetenv("LLAMACPP_MMPROJ")
-
 	modelsDir := filepath.Join(home, ".ai-shell", "models", "llamacpp")
 	if err := os.MkdirAll(modelsDir, 0755); err != nil {
 		t.Fatalf("Failed to create models dir: %v", err)
@@ -1031,23 +965,6 @@ func TestFindLlamacppMMProj(t *testing.T) {
 		}
 		if got != projFile {
 			t.Errorf("FindLlamacppMMProj() = %q, want %q", got, projFile)
-		}
-	})
-
-	t.Run("env var path wins", func(t *testing.T) {
-		other := filepath.Join(t.TempDir(), "custom-mmproj.gguf")
-		if err := os.WriteFile(other, []byte("m"), 0644); err != nil {
-			t.Fatalf("Failed to write custom mmproj: %v", err)
-		}
-		os.Setenv("LLAMACPP_MMPROJ", other)
-		defer os.Unsetenv("LLAMACPP_MMPROJ")
-
-		got, err := FindLlamacppMMProj()
-		if err != nil {
-			t.Fatalf("FindLlamacppMMProj() error = %v", err)
-		}
-		if got != other {
-			t.Errorf("FindLlamacppMMProj() = %q, want %q", got, other)
 		}
 	})
 

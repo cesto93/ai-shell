@@ -21,7 +21,6 @@ var configCmd = &cobra.Command{
   ai-shell config --confirm=false
   ai-shell config --allowed-commands "ls,pwd,git,curl"
   ai-shell config --backend gpu
-  ai-shell config --mmproj "mmproj-Qwen2.5-VL-3B-Instruct-Q8_0"
   ai-shell config --add-cmd "hello=say hello world"
   ai-shell config --rm-cmd "hello"
   ai-shell config --enable-tool WriteFile
@@ -89,12 +88,6 @@ var configCmd = &cobra.Command{
 			changed = true
 		}
 
-		if fl.Changed("mmproj") {
-			v, _ := fl.GetString("mmproj")
-			cfg.Llamacpp.MMProj = v
-			changed = true
-		}
-
 		if fl.Changed("enable-tool") {
 			v, _ := fl.GetString("enable-tool")
 			if cfg.Tools == nil {
@@ -155,7 +148,6 @@ func init() {
 	configCmd.Flags().Bool("confirm", false, "Require confirmation for tool execution")
 	configCmd.Flags().StringSlice("allowed-commands", nil, "Comma-separated list of commands that skip confirmation")
 	configCmd.Flags().String("backend", "", "LiteRT-LM inference backend (cpu, gpu)")
-	configCmd.Flags().String("mmproj", "", "llamacpp vision projector GGUF filename or path (mmproj)")
 	configCmd.Flags().String("enable-tool", "", "Enable a tool by name")
 	configCmd.Flags().String("disable-tool", "", "Disable a tool by name")
 	configCmd.Flags().String("add-cmd", "", "Add a custom command (format: name=prompt)")

@@ -46,9 +46,6 @@ type Config struct {
 	LitertLM struct {
 		Backend string `mapstructure:"backend"`
 	} `mapstructure:"litertlm"`
-	Llamacpp struct {
-		MMProj string `mapstructure:"mmproj"`
-	} `mapstructure:"llamacpp"`
 	Tools    map[string]bool   `mapstructure:"tools"`
 	Commands map[string]string `mapstructure:"commands"`
 }
@@ -292,9 +289,6 @@ func SaveConfig(cfg *Config) error {
 		LitertLM struct {
 			Backend string `yaml:"backend"`
 		} `yaml:"litertlm"`
-		Llamacpp struct {
-			MMProj string `yaml:"mmproj,omitempty"`
-		} `yaml:"llamacpp"`
 		Tools    map[string]bool   `yaml:"tools,omitempty"`
 		Commands map[string]string `yaml:"commands,omitempty"`
 	}{
@@ -310,7 +304,6 @@ func SaveConfig(cfg *Config) error {
 	out.Shell.Confirm = cfg.Shell.Confirm
 	out.Shell.AllowedCommands = cfg.Shell.AllowedCommands
 	out.LitertLM.Backend = cfg.LitertLM.Backend
-	out.Llamacpp.MMProj = cfg.Llamacpp.MMProj
 
 	data, err := yaml.Marshal(out)
 	if err != nil {
@@ -371,17 +364,6 @@ func SaveModelWithProvider(modelName, provider string) error {
 		cfg.LLM.InputTypes = []string{"text"}
 	}
 
-	return SaveConfig(cfg)
-}
-
-// SaveMMProj sets the llamacpp vision projector (mmproj) GGUF file in config.
-// The name may be a bare filename or an absolute path.
-func SaveMMProj(name string) error {
-	cfg, err := LoadConfig()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-	cfg.Llamacpp.MMProj = name
 	return SaveConfig(cfg)
 }
 
@@ -458,41 +440,12 @@ func llamacppVisionKey(name string) string {
 }
 
 // FindLlamacppMMProj resolves the vision projector (mmproj) GGUF file used for
-// image input. It honors, in order: $LLAMACPP_MMPROJ (path or filename in the
-// llamacpp models dir), the `llamacpp.mmproj` config field, and finally scans
-// the llamacpp models dir for a file whose name contains "mmproj". Returns ""
-// when no projector is configured or present.
+// image input by scanning the llamacpp models dir for a file whose name
+// contains "mmproj". Returns "" when no projector is present.
 func FindLlamacppMMProj() (string, error) {
 	dir, err := ModelsDir("llamacpp")
 	if err != nil {
 		return "", err
-	}
-
-	cfg, err := LoadConfig()
-	if err != nil {
-		return "", fmt.Errorf("failed to load config: %w", err)
-	}
-
-	name := os.Getenv("LLAMACPP_MMPROJ")
-	if name == "" {
-		name = cfg.Llamacpp.MMProj
-	}
-	if name != "" {
-		if filepath.IsAbs(name) {
-			if _, err := os.Stat(name); err == nil {
-				return name, nil
-			}
-			return "", nil
-		}
-		candidate := filepath.Join(dir, name)
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate, nil
-		}
-		candidate = filepath.Join(dir, name+".gguf")
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate, nil
-		}
-		return "", nil
 	}
 
 	entries, err := os.ReadDir(dir)

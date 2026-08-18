@@ -27,8 +27,8 @@ else is saved to ~/.ai-shell/models/llamacpp/ as a GGUF model.
 
 Up to two files may be downloaded per repo: when a single file is pulled the
 config is updated to use this model; when two files are pulled the first is
-treated as the model and the second as its vision projector (mmproj), and the
-config is updated with both.`,
+treated as the model and the second as its vision projector (mmproj), which is
+auto-detected by scanning the models dir.`,
 	Args: cobra.RangeArgs(2, 3),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runPull(args[0], args[1:])
@@ -56,10 +56,11 @@ func runPull(repo string, filenames []string) error {
 
 // updateConfig records the downloaded file in the config. With a single file
 // the model itself is saved; with two files the first is saved as the model
-// and the second as its vision projector (mmproj).
+// and the second is only downloaded — it is auto-detected as the vision
+// projector (mmproj) by scanning the models dir.
 func updateConfig(filename string, index, total int) error {
 	if total == 2 && index == 1 {
-		return config.SaveMMProj(strings.TrimSuffix(filename, filepath.Ext(filename)))
+		return nil
 	}
 	provider := providerForFilename(filename)
 	modelName := strings.TrimSuffix(filename, filepath.Ext(filename))
