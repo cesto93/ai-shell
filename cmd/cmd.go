@@ -31,7 +31,6 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug logging (temporarily overrides the configured log level)")
-	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(commitCmd)
 	rootCmd.AddCommand(extractCmd)
 }
