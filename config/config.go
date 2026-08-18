@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -461,11 +462,15 @@ type openRouterModelsResponse struct {
 			Prompt     string `json:"prompt"`
 			Completion string `json:"completion"`
 		} `json:"pricing"`
+		Architecture struct {
+			OutputModalities []string `json:"output_modalities"`
+		} `json:"architecture"`
 	} `json:"data"`
 }
 
 // fetchOpenRouterFreeModels GETs openRouterModelsURL and keeps only the models
-// whose prompt and completion pricing is zero.
+// whose prompt and completion pricing is zero and whose output modalities do
+// not include audio (excludes music/sound generation models like Lyria).
 func fetchOpenRouterFreeModels() []ModelInfo {
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Get(openRouterModelsURL)
@@ -491,6 +496,9 @@ func fetchOpenRouterFreeModels() []ModelInfo {
 	var models []ModelInfo
 	for _, m := range payload.Data {
 		if !isZeroPrice(m.Pricing.Prompt) || !isZeroPrice(m.Pricing.Completion) {
+			continue
+		}
+		if slices.Contains(m.Architecture.OutputModalities, "audio") {
 			continue
 		}
 		models = append(models, ModelInfo{Name: m.ID, Provider: "openrouter"})

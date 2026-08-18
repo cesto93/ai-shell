@@ -49,9 +49,11 @@ func TestGetOpenRouterModels(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		io.WriteString(w, `{"data":[
-			{"id":"org/free-1","pricing":{"prompt":"0","completion":"0"}},
-			{"id":"org/free-2","pricing":{"prompt":"0.00","completion":"0"}},
-			{"id":"org/paid-1","pricing":{"prompt":"0.0000001","completion":"0.00000025"}}
+			{"id":"org/free-1","pricing":{"prompt":"0","completion":"0"},"architecture":{"output_modalities":["text"]}},
+			{"id":"org/free-2","pricing":{"prompt":"0.00","completion":"0"},"architecture":{"output_modalities":["text","image"]}},
+			{"id":"org/paid-1","pricing":{"prompt":"0.0000001","completion":"0.00000025"},"architecture":{"output_modalities":["text"]}},
+			{"id":"google/lyria-3-pro-preview","pricing":{"prompt":"0","completion":"0"},"architecture":{"output_modalities":["text","audio"]}},
+			{"id":"org/no-modalities","pricing":{"prompt":"0","completion":"0"}}
 		]}`)
 	}))
 	defer server.Close()
@@ -61,8 +63,8 @@ func TestGetOpenRouterModels(t *testing.T) {
 
 	models := GetOpenRouterModels()
 
-	if len(models) != 2 {
-		t.Fatalf("GetOpenRouterModels() = %d models, want 2", len(models))
+	if len(models) != 3 {
+		t.Fatalf("GetOpenRouterModels() = %d models, want 3", len(models))
 	}
 	names := map[string]bool{}
 	for _, m := range models {
@@ -71,11 +73,14 @@ func TestGetOpenRouterModels(t *testing.T) {
 		}
 		names[m.Name] = true
 	}
-	if !names["org/free-1"] || !names["org/free-2"] {
-		t.Errorf("GetOpenRouterModels() = %v, want free models org/free-1 and org/free-2", names)
+	if !names["org/free-1"] || !names["org/free-2"] || !names["org/no-modalities"] {
+		t.Errorf("GetOpenRouterModels() = %v, want free models org/free-1, org/free-2 and org/no-modalities", names)
 	}
 	if names["org/paid-1"] {
 		t.Errorf("GetOpenRouterModels() includes paid model org/paid-1")
+	}
+	if names["google/lyria-3-pro-preview"] {
+		t.Errorf("GetOpenRouterModels() includes audio model google/lyria-3-pro-preview")
 	}
 }
 
