@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -855,6 +856,20 @@ func TestGetLlamacppModelsExcludesMMProj(t *testing.T) {
 	userHomeDirFunc = func() (string, error) { return home, nil }
 	defer func() { userHomeDirFunc = origHome }()
 
+	// Isolate from the real ~/.config/ai-shell config and avoid network
+	// lookups inside LoadConfig.
+	origUserConfigDirFunc := userConfigDirFunc
+	userConfigDirFunc = func() (string, error) { return t.TempDir(), nil }
+	defer func() { userConfigDirFunc = origUserConfigDirFunc }()
+
+	origConfigPaths := configPaths
+	defer func() { configPaths = origConfigPaths }()
+	configPaths = []string{t.TempDir()}
+
+	origOpenRouter := getOpenRouterModelsFunc
+	getOpenRouterModelsFunc = func() []ModelInfo { return nil }
+	defer func() { getOpenRouterModelsFunc = origOpenRouter }()
+
 	modelsDir := filepath.Join(home, ".ai-shell", "models", "llamacpp")
 	if err := os.MkdirAll(modelsDir, 0755); err != nil {
 		t.Fatalf("Failed to create models dir: %v", err)
@@ -878,6 +893,95 @@ func TestGetLlamacppModelsExcludesMMProj(t *testing.T) {
 		if strings.Contains(strings.ToLower(m.Name), "mmproj") {
 			t.Errorf("GetLlamacppModels() listed mmproj model %q", m.Name)
 		}
+		want := []string(nil)
+		if m.Name == "Qwen2.5-VL-3B-Instruct-Q8_0" {
+			want = []string{"text", "image"}
+		}
+		if !slices.Equal(m.InputTypes, want) {
+			t.Errorf("GetLlamacppModels() %q InputTypes = %v, want %v", m.Name, m.InputTypes, want)
+		}
+	}
+}
+
+func TestGetLlamacppModelsMatchesMMProjWithDifferentQuant(t *testing.T) {
+	home := t.TempDir()
+	origHome := userHomeDirFunc
+	userHomeDirFunc = func() (string, error) { return home, nil }
+	defer func() { userHomeDirFunc = origHome }()
+
+	origUserConfigDirFunc := userConfigDirFunc
+	userConfigDirFunc = func() (string, error) { return t.TempDir(), nil }
+	defer func() { userConfigDirFunc = origUserConfigDirFunc }()
+
+	origConfigPaths := configPaths
+	defer func() { configPaths = origConfigPaths }()
+	configPaths = []string{t.TempDir()}
+
+	origOpenRouter := getOpenRouterModelsFunc
+	getOpenRouterModelsFunc = func() []ModelInfo { return nil }
+	defer func() { getOpenRouterModelsFunc = origOpenRouter }()
+
+	modelsDir := filepath.Join(home, ".ai-shell", "models", "llamacpp")
+	if err := os.MkdirAll(modelsDir, 0755); err != nil {
+		t.Fatalf("Failed to create models dir: %v", err)
+	}
+	for _, name := range []string{
+		"Qwen2.5-VL-3B-Instruct-Q8_0.gguf",
+		"mmproj-Qwen2.5-VL-3B-Instruct-f16.gguf",
+		"granite4-3b-h.Q4_K_M.gguf",
+	} {
+		if err := os.WriteFile(filepath.Join(modelsDir, name), []byte("m"), 0644); err != nil {
+			t.Fatalf("Failed to write file %s: %v", name, err)
+		}
+	}
+
+	models := GetLlamacppModels()
+	if len(models) != 2 {
+		t.Fatalf("GetLlamacppModels() returned %d models, want 2: %+v", len(models), models)
+	}
+	for _, m := range models {
+		want := []string(nil)
+		if m.Name == "Qwen2.5-VL-3B-Instruct-Q8_0" {
+			want = []string{"text", "image"}
+		}
+		if !slices.Equal(m.InputTypes, want) {
+			t.Errorf("GetLlamacppModels() %q InputTypes = %v, want %v", m.Name, m.InputTypes, want)
+		}
+	}
+}
+
+func TestGetLlamacppModelsNoMMProjNoImage(t *testing.T) {
+	home := t.TempDir()
+	origHome := userHomeDirFunc
+	userHomeDirFunc = func() (string, error) { return home, nil }
+	defer func() { userHomeDirFunc = origHome }()
+
+	origUserConfigDirFunc := userConfigDirFunc
+	userConfigDirFunc = func() (string, error) { return t.TempDir(), nil }
+	defer func() { userConfigDirFunc = origUserConfigDirFunc }()
+
+	origConfigPaths := configPaths
+	defer func() { configPaths = origConfigPaths }()
+	configPaths = []string{t.TempDir()}
+
+	origOpenRouter := getOpenRouterModelsFunc
+	getOpenRouterModelsFunc = func() []ModelInfo { return nil }
+	defer func() { getOpenRouterModelsFunc = origOpenRouter }()
+
+	modelsDir := filepath.Join(home, ".ai-shell", "models", "llamacpp")
+	if err := os.MkdirAll(modelsDir, 0755); err != nil {
+		t.Fatalf("Failed to create models dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(modelsDir, "granite4-3b-h.Q4_K_M.gguf"), []byte("m"), 0644); err != nil {
+		t.Fatalf("Failed to write model file: %v", err)
+	}
+
+	models := GetLlamacppModels()
+	if len(models) != 1 {
+		t.Fatalf("GetLlamacppModels() returned %d models, want 1: %+v", len(models), models)
+	}
+	if len(models[0].InputTypes) != 0 {
+		t.Errorf("GetLlamacppModels() InputTypes = %v, want none (no mmproj present)", models[0].InputTypes)
 	}
 }
 

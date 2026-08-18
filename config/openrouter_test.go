@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -49,10 +50,10 @@ func TestGetOpenRouterModels(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		io.WriteString(w, `{"data":[
-			{"id":"org/free-1","pricing":{"prompt":"0","completion":"0"},"architecture":{"output_modalities":["text"]}},
-			{"id":"org/free-2","pricing":{"prompt":"0.00","completion":"0"},"architecture":{"output_modalities":["text","image"]}},
-			{"id":"org/paid-1","pricing":{"prompt":"0.0000001","completion":"0.00000025"},"architecture":{"output_modalities":["text"]}},
-			{"id":"google/lyria-3-pro-preview","pricing":{"prompt":"0","completion":"0"},"architecture":{"output_modalities":["text","audio"]}},
+			{"id":"org/free-1","pricing":{"prompt":"0","completion":"0"},"architecture":{"input_modalities":["text"],"output_modalities":["text"]}},
+			{"id":"org/free-2","pricing":{"prompt":"0.00","completion":"0"},"architecture":{"input_modalities":["text","image"],"output_modalities":["text","image"]}},
+			{"id":"org/paid-1","pricing":{"prompt":"0.0000001","completion":"0.00000025"},"architecture":{"input_modalities":["text"],"output_modalities":["text"]}},
+			{"id":"google/lyria-3-pro-preview","pricing":{"prompt":"0","completion":"0"},"architecture":{"input_modalities":["text","audio"],"output_modalities":["text","audio"]}},
 			{"id":"org/no-modalities","pricing":{"prompt":"0","completion":"0"}}
 		]}`)
 	}))
@@ -81,6 +82,20 @@ func TestGetOpenRouterModels(t *testing.T) {
 	}
 	if names["google/lyria-3-pro-preview"] {
 		t.Errorf("GetOpenRouterModels() includes audio model google/lyria-3-pro-preview")
+	}
+
+	byName := map[string]ModelInfo{}
+	for _, m := range models {
+		byName[m.Name] = m
+	}
+	if got := byName["org/free-2"].InputTypes; !slices.Equal(got, []string{"text", "image"}) {
+		t.Errorf("org/free-2 InputTypes = %v, want [text image]", got)
+	}
+	if got := byName["org/free-1"].InputTypes; !slices.Equal(got, []string{"text"}) {
+		t.Errorf("org/free-1 InputTypes = %v, want [text]", got)
+	}
+	if got := byName["org/no-modalities"].InputTypes; !slices.Equal(got, []string{"text"}) {
+		t.Errorf("org/no-modalities InputTypes = %v, want [text] (default)", got)
 	}
 }
 

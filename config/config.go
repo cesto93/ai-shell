@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -393,10 +394,10 @@ type ModelInfo struct {
 }
 
 var GeminiModels = []ModelInfo{
-	{Name: "gemini-3.7-flash", Provider: "gemini"},
-	{Name: "gemini-3.5-flash-lite", Provider: "gemini"},
-	{Name: "gemma-4-31b-it", Provider: "gemini"},
-	{Name: "gemma-4-26b-a4b-it", Provider: "gemini"},
+	{Name: "gemini-3.7-flash", Provider: "gemini", InputTypes: []string{"text", "image", "audio"}},
+	{Name: "gemini-3.5-flash-lite", Provider: "gemini", InputTypes: []string{"text", "image", "audio"}},
+	{Name: "gemma-4-31b-it", Provider: "gemini", InputTypes: []string{"text", "image"}},
+	{Name: "gemma-4-26b-a4b-it", Provider: "gemini", InputTypes: []string{"text", "image"}},
 }
 
 // GetLitertLMModels lists the native LiteRT-LM models available on disk
@@ -414,19 +415,46 @@ func GetLitertLMModels() []ModelInfo {
 	return scanModels(dir, "litertlm", ".litertlm")
 }
 
+// GetLlamacppModels lists the GGUF models on disk (excluding vision projector
+// files). Models whose base name matches an available mmproj file get the
+// image input type.
 func GetLlamacppModels() []ModelInfo {
 	dir, err := ModelsDir("llamacpp")
 	if err != nil {
 		return nil
 	}
+	all := scanModels(dir, "llamacpp", ".gguf")
+	visionKeys := map[string]bool{}
 	var models []ModelInfo
-	for _, m := range scanModels(dir, "llamacpp", ".gguf") {
+	for _, m := range all {
+		if strings.Contains(strings.ToLower(m.Name), "mmproj") {
+			visionKeys[llamacppVisionKey(m.Name)] = true
+		}
+	}
+	for _, m := range all {
 		if strings.Contains(strings.ToLower(m.Name), "mmproj") {
 			continue
+		}
+		if visionKeys[llamacppVisionKey(m.Name)] {
+			m.InputTypes = []string{"text", "image"}
 		}
 		models = append(models, m)
 	}
 	return models
+}
+
+// llamacppQuantRe matches the quantization suffix of a GGUF base name (e.g.
+// -Q8_0, -Q4_K_M, -f16) so a model can be matched to its vision projector
+// even when their quantizations differ.
+var llamacppQuantRe = regexp.MustCompile(`-[Qq][0-9][A-Za-z0-9._]*$|-(?:f16|F16|bf16|BF16)$`)
+
+// llamacppVisionKey normalizes a GGUF base name (mmproj or model) to an
+// identity used to pair a model with its vision projector: it strips the
+// mmproj marker prefix/suffix and any quantization suffix.
+func llamacppVisionKey(name string) string {
+	s := strings.TrimPrefix(name, "mmproj-")
+	s = strings.TrimSuffix(s, "-mmproj")
+	return llamacppQuantRe.ReplaceAllString(s, "")
 }
 
 // FindLlamacppMMProj resolves the vision projector (mmproj) GGUF file used for
@@ -550,6 +578,7 @@ type openRouterModelsResponse struct {
 			Completion string `json:"completion"`
 		} `json:"pricing"`
 		Architecture struct {
+			InputModalities  []string `json:"input_modalities"`
 			OutputModalities []string `json:"output_modalities"`
 		} `json:"architecture"`
 	} `json:"data"`
@@ -588,7 +617,11 @@ func fetchOpenRouterFreeModels() []ModelInfo {
 		if slices.Contains(m.Architecture.OutputModalities, "audio") {
 			continue
 		}
-		models = append(models, ModelInfo{Name: m.ID, Provider: "openrouter"})
+		inputTypes := m.Architecture.InputModalities
+		if len(inputTypes) == 0 {
+			inputTypes = []string{"text"}
+		}
+		models = append(models, ModelInfo{Name: m.ID, Provider: "openrouter", InputTypes: inputTypes})
 	}
 	return models
 }
