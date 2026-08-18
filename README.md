@@ -171,7 +171,7 @@ The `llamacpp` provider runs llama.cpp inference **in-process** using the [yzma]
 
 ### Limitations
 
-- **Structured output** (`ai-shell extract`) is not supported.
+- **Structured output** (`ai-shell extract`) is supported via a GBNF grammar derived from the JSON schema.
 - **Image/audio input** is not supported.
 - **No API key or base URL** needed — purely local.
 

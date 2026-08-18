@@ -41,19 +41,52 @@ func NewLlamacppCaller(model string, executor ToolExecutor) *LlamacppCaller {
 }
 
 func (l *LlamacppCaller) Call(ctx context.Context, systemPrompt string, messages []Message, tools []any) ([]Message, error) {
+	if err := l.ensureInit(); err != nil {
+		return nil, fmt.Errorf("llamacpp: %w", err)
+	}
+	prompt, err := l.buildPrompt(systemPrompt, messages)
+	if err != nil {
+		return nil, err
+	}
+	return l.generate(ctx, prompt, l.smplr)
+}
+
+// CallStructured generates output constrained by a GBNF grammar derived from
+// the JSON schema in the OpenAI-style response_format. The grammar sampler is
+// added after the greedy sampler so it filters candidate tokens.
+func (l *LlamacppCaller) CallStructured(ctx context.Context, systemPrompt string, messages []Message, tools []any, responseFormat any) ([]Message, error) {
+	if err := l.ensureInit(); err != nil {
+		return nil, fmt.Errorf("llamacpp: %w", err)
+	}
+	grammar, err := grammarFromResponseFormat(responseFormat)
+	if err != nil {
+		return nil, fmt.Errorf("llamacpp: %w", err)
+	}
+	slog.Debug("llamacpp: structured output grammar", "grammar", grammar)
+
+	chain := llama.SamplerChainInit(llama.SamplerChainDefaultParams())
+	llama.SamplerChainAdd(chain, llama.SamplerInitGreedy())
+	grammarSampler := llama.SamplerInitGrammar(l.vocab, grammar, "root")
+	if grammarSampler == 0 {
+		return nil, fmt.Errorf("llamacpp: grammar sampler failed to initialize (unsupported or invalid grammar)")
+	}
+	llama.SamplerChainAdd(chain, grammarSampler)
+
+	prompt, err := l.buildPrompt(systemPrompt, messages)
+	if err != nil {
+		return nil, err
+	}
+	return l.generate(ctx, prompt, chain)
+}
+
+func (l *LlamacppCaller) ensureInit() error {
 	l.once.Do(func() {
 		l.initErr = l.initialize()
 	})
-	if l.initErr != nil {
-		return nil, fmt.Errorf("llamacpp: %w", l.initErr)
-	}
+	return l.initErr
+}
 
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
+func (l *LlamacppCaller) buildPrompt(systemPrompt string, messages []Message) (string, error) {
 	chatMsgs := make([]llama.ChatMessage, 0, 1+len(messages))
 	if systemPrompt != "" {
 		chatMsgs = append(chatMsgs, llama.NewChatMessage("system", systemPrompt))
@@ -68,9 +101,12 @@ func (l *LlamacppCaller) Call(ctx context.Context, systemPrompt string, messages
 
 	prompt := l.applyChatTemplate(chatMsgs, true)
 	if prompt == "" {
-		return nil, fmt.Errorf("chat template returned empty prompt")
+		return "", fmt.Errorf("chat template returned empty prompt")
 	}
+	return prompt, nil
+}
 
+func (l *LlamacppCaller) generate(ctx context.Context, prompt string, smplr llama.Sampler) ([]Message, error) {
 	tokens := llama.Tokenize(l.vocab, prompt, true, true)
 	if len(tokens) == 0 {
 		return nil, fmt.Errorf("tokenization failed")
@@ -92,7 +128,7 @@ func (l *LlamacppCaller) Call(ctx context.Context, systemPrompt string, messages
 			return nil, fmt.Errorf("llamacpp decode: %w", err)
 		}
 
-		token := llama.SamplerSample(l.smplr, l.lctx, -1)
+		token := llama.SamplerSample(smplr, l.lctx, -1)
 		if llama.VocabIsEOG(l.vocab, token) {
 			break
 		}
@@ -125,10 +161,6 @@ func formatContent(content any) string {
 	default:
 		return fmt.Sprintf("%v", v)
 	}
-}
-
-func (l *LlamacppCaller) CallStructured(ctx context.Context, systemPrompt string, messages []Message, tools []any, responseFormat any) ([]Message, error) {
-	return nil, fmt.Errorf("llamacpp: structured output not supported")
 }
 
 func (l *LlamacppCaller) applyChatTemplate(chatMsgs []llama.ChatMessage, addAssistant bool) string {
