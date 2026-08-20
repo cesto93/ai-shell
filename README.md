@@ -69,15 +69,27 @@ Within the `ai-shell >` prompt, you can use the following commands (with or with
 
 ### Extract Structured Data
 
-`ai-shell extract` sends a document or image to the LLM and gets back only the data you asked for, shaped by a JSON schema. The schema file is a standard [JSON Schema](https://json-schema.org/) document.
+Structured extraction is now a **structured command**: a custom command whose frontmatter has a `schema:` field pointing to a JSON schema. It sends a document or image to the LLM and gets back only the data you asked for, shaped by that schema. The schema file is a standard [JSON Schema](https://json-schema.org/) document.
 
-```bash
-ai-shell extract invoice.pdf schema.json
-ai-shell extract notes.txt schema.json --output result.json
-ai-shell extract receipt.png schema.json
+Create a command file, e.g. `.ai-shell/commands/invoice.md`:
+
+```markdown
+---
+description: Extract invoice data
+schema: invoice_schema.json
+---
+Extract the invoice from the provided file.
 ```
 
-For example, to pull the key fields out of an invoice, save this schema as `schema.json`:
+The `schema:` path is resolved relative to the command file's directory. Then run it, passing input files as arguments:
+
+```bash
+ai-shell commands --run invoice invoice.pdf
+ai-shell commands --run invoice notes.txt --output result.json
+ai-shell commands --run invoice receipt.png
+```
+
+For example, to pull the key fields out of an invoice, save this schema as `invoice_schema.json` next to the command:
 
 ```json
 {
@@ -95,7 +107,7 @@ For example, to pull the key fields out of an invoice, save this schema as `sche
 Then run:
 
 ```bash
-ai-shell extract invoice.pdf schema.json
+ai-shell commands --run invoice invoice.pdf
 ```
 
 Which returns something like:
@@ -109,7 +121,7 @@ Which returns something like:
 }
 ```
 
-Supported inputs: `.txt`, `.md`, `.pdf` (extracted via `pdftotext`), and images `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp` (requires a vision-capable model). Use `-o result.json` to write the output to a file instead of stdout.
+Supported inputs: `.txt`, `.md`, `.pdf` (extracted via `pdftotext`), and images `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp` (requires a vision-capable model). File arguments may be used by any command, structured or not. Use `-o result.json` to write the output to a file instead of stdout.
 
 ## Configuration
 
@@ -176,7 +188,7 @@ The `litertlm` provider runs LiteRT-LM inference **in-process** using the [liter
 
 ### Limitations
 
-- **Structured output** (`ai-shell extract`) uses schema prompting, not the binding's native structured-output path.
+- **Structured output** (structured commands) uses schema prompting, not the binding's native structured-output path.
 - **No API key or base URL** needed — purely local.
 
 ## Llamacpp Provider
@@ -217,7 +229,7 @@ Vision models with matching GGUFs include moondream2 and Qwen2.5-VL. Without a p
 
 ### Limitations
 
-- **Structured output** (`ai-shell extract`) is supported via a GBNF grammar derived from the JSON schema.
+- **Structured output** (structured commands) is supported via a GBNF grammar derived from the JSON schema.
 - **Image input** is supported for vision models with an `mmproj` (see above).
 - **Audio input** is not supported.
 - **No API key or base URL** needed — purely local.

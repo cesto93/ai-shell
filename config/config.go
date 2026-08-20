@@ -27,6 +27,7 @@ type CommandInfo struct {
 	Name        string
 	Description string
 	Prompt      string
+	Schema      string
 }
 
 type Config struct {
@@ -864,9 +865,13 @@ func parseCommandFile(path string) (CommandInfo, error) {
 			frontmatter := strings.TrimSpace(parts[1])
 			var meta struct {
 				Description string `yaml:"description"`
+				Schema      string `yaml:"schema"`
 			}
 			if err := yaml.Unmarshal([]byte(frontmatter), &meta); err == nil {
 				cmd.Description = meta.Description
+				if meta.Schema != "" {
+					cmd.Schema = filepath.Join(filepath.Dir(path), meta.Schema)
+				}
 			}
 			cmd.Prompt = strings.TrimSpace(parts[2])
 			return cmd, nil

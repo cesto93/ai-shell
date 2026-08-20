@@ -1,8 +1,9 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
-	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -183,6 +184,7 @@ type Message struct {
 	role       string
 	content    string
 	images     []string // Base64 encoded images or paths
+	schema     string   // JSON schema path for structured commands
 	toolCallID string
 	toolCalls  []llm.OpenAIToolCall
 }
@@ -633,7 +635,6 @@ func (m *ShellModel) handleCommand(input string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	cmd := parts[0]
-	args := strings.Join(parts[1:], " ")
 
 	if handled, model, cmd2 := m.handleBuiltinCommand(cmd); handled {
 		return model, cmd2
@@ -641,11 +642,12 @@ func (m *ShellModel) handleCommand(input string) (tea.Model, tea.Cmd) {
 
 	for _, c := range m.commands {
 		if c.Name == cmd {
-			fullPrompt := c.Prompt
-			if args != "" {
-				fullPrompt = c.Prompt + " " + args
+			text, images, err := buildCommandTextAndImages(c.Prompt, parts[1:])
+			if err != nil {
+				m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})
+				return m, nil
 			}
-			m.messages = append(m.messages, Message{role: "user", content: fullPrompt})
+			m.messages = append(m.messages, Message{role: "user", content: text, images: images, schema: c.Schema})
 			m.loading = true
 			m.cancelChan = make(chan struct{})
 			go m.ElaborateMessage()
@@ -1100,8 +1102,12 @@ func (m *ShellModel) ElaborateMessage() {
 	}()
 
 	var commonMessages []llm.Message
+	var structuredSchema string
 	for _, msg := range m.messages {
 		if msg.role == "user" || msg.role == "assistant" || msg.role == "tool" {
+			if msg.schema != "" && msg.role == "user" {
+				structuredSchema = msg.schema
+			}
 			var content any = msg.content
 			if len(msg.images) > 0 {
 				parts := []llm.ContentPart{
@@ -1117,6 +1123,11 @@ func (m *ShellModel) ElaborateMessage() {
 			}
 			commonMessages = append(commonMessages, llm.Message{Role: msg.role, Content: content, ToolCallID: msg.toolCallID, ToolCalls: msg.toolCalls})
 		}
+	}
+
+	if structuredSchema != "" {
+		m.runStructuredMessage(ctx, commonMessages, structuredSchema)
+		return
 	}
 
 	if m.serviceClient != nil || service.IsActive() {
@@ -1190,6 +1201,88 @@ func (m *ShellModel) serviceChat(ctx context.Context, messages []llm.Message) ([
 	return result, nil
 }
 
+// runStructuredMessage executes a structured command (a command carrying a
+// JSON schema in its frontmatter) through CallStructured, bypassing the
+// service like extract did, and renders the JSON result.
+func (m *ShellModel) runStructuredMessage(ctx context.Context, messages []llm.Message, schemaPath string) {
+	schemaData, err := os.ReadFile(schemaPath)
+	if err != nil {
+		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: failed to read schema: %v", err)})
+		m.loading = false
+		if m.teaProgram != nil {
+			m.teaProgram.Send(responseReadyMsg{})
+		}
+		return
+	}
+
+	var schemaRaw any
+	if err := json.Unmarshal(schemaData, &schemaRaw); err != nil {
+		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: invalid JSON schema: %v", err)})
+		m.loading = false
+		if m.teaProgram != nil {
+			m.teaProgram.Send(responseReadyMsg{})
+		}
+		return
+	}
+
+	responseFormat := map[string]any{
+		"type": "json_schema",
+		"json_schema": map[string]any{
+			"name":   "extracted_data",
+			"strict": true,
+			"schema": schemaRaw,
+		},
+	}
+
+	systemPrompt := "You extract structured data from documents and images. Return only valid JSON matching the provided schema."
+
+	caller := llm.NewProviderCallerRaw(m.cfg.LLM.Provider, m.cfg.LLM.Model, llm.NoopExecutor{})
+	if lc, ok := caller.(*llm.LitertLMCaller); ok {
+		lc.Backend = m.cfg.LitertLM.Backend
+	}
+	resultMessages, err := caller.CallStructured(ctx, systemPrompt, messages, nil, responseFormat)
+	if err != nil {
+		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: LLM call failed: %v", err)})
+		m.loading = false
+		if m.teaProgram != nil {
+			m.teaProgram.Send(responseReadyMsg{})
+		}
+		return
+	}
+
+	if len(resultMessages) == 0 {
+		m.messages = append(m.messages, Message{role: "error", content: "Error: no response from LLM"})
+		m.loading = false
+		if m.teaProgram != nil {
+			m.teaProgram.Send(responseReadyMsg{})
+		}
+		return
+	}
+
+	lastMsg := resultMessages[len(resultMessages)-1]
+	contentStr, ok := lastMsg.Content.(string)
+	if !ok || strings.TrimSpace(contentStr) == "" {
+		m.messages = append(m.messages, Message{role: "error", content: "Error: empty response from LLM"})
+		m.loading = false
+		if m.teaProgram != nil {
+			m.teaProgram.Send(responseReadyMsg{})
+		}
+		return
+	}
+
+	result := strings.TrimSpace(contentStr)
+	var prettyJSON bytes.Buffer
+	if err := json.Indent(&prettyJSON, []byte(result), "", "  "); err == nil {
+		result = prettyJSON.String()
+	}
+
+	m.messages = append(m.messages, Message{role: "assistant", content: result})
+	m.loading = false
+	if m.teaProgram != nil {
+		m.teaProgram.Send(responseReadyMsg{})
+	}
+}
+
 // appendLLMResult renders the messages returned by the LLM (locally or via
 // the service) into the shell transcript.
 func (m *ShellModel) appendLLMResult(resultMessages []llm.Message) {
@@ -1210,31 +1303,6 @@ func (m *ShellModel) appendLLMResult(resultMessages []llm.Message) {
 			m.messages = append(m.messages, Message{role: "tool", content: contentStr, toolCallID: msg.ToolCallID})
 		}
 	}
-}
-
-func isImage(path string) bool {
-	ext := strings.ToLower(filepath.Ext(path))
-	return ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".gif" || ext == ".webp"
-}
-
-func encodeImage(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-
-	mimeType := "image/jpeg"
-	ext := strings.ToLower(filepath.Ext(path))
-	switch ext {
-	case ".png":
-		mimeType = "image/png"
-	case ".gif":
-		mimeType = "image/gif"
-	case ".webp":
-		mimeType = "image/webp"
-	}
-
-	return fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(data)), nil
 }
 
 func loadHistory(path string) []string {

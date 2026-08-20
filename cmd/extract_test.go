@@ -7,9 +7,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"ai-shell/config"
 )
 
-func TestRunExtractWithRealLLM(t *testing.T) {
+func TestRunStructuredCommandWithRealLLM(t *testing.T) {
 	tests := []struct {
 		name       string
 		provider   string
@@ -66,8 +68,7 @@ Total: $1,234.56`
 			os.Setenv(tt.envVar, baseURL)
 			defer os.Unsetenv(tt.envVar)
 
-			inputPath := filepath.Join(tmpDir, "invoice.txt")
-			if err := os.WriteFile(inputPath, []byte(input), 0644); err != nil {
+			if err := os.WriteFile(filepath.Join(tmpDir, "invoice.txt"), []byte(input), 0644); err != nil {
 				t.Fatal(err)
 			}
 
@@ -76,14 +77,27 @@ Total: $1,234.56`
 				t.Fatal(err)
 			}
 
+			commandsDir := filepath.Join(tmpDir, ".ai-shell", "commands")
+			if err := os.MkdirAll(commandsDir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			cmdContent := fmt.Sprintf("---\ndescription: Extract invoice data\nschema: %s\n---\nExtract structured data from the invoice.\n", schemaPath)
+			if err := os.WriteFile(filepath.Join(commandsDir, "invoice.md"), []byte(cmdContent), 0644); err != nil {
+				t.Fatal(err)
+			}
+
 			configYAML := fmt.Sprintf("llm:\n  provider: %s\n  model: %s\n", tt.provider, model)
 			if err := os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte(configYAML), 0644); err != nil {
 				t.Fatal(err)
 			}
 
-			extractOutput = ""
-			if err := runExtract(inputPath, schemaPath); err != nil {
-				t.Fatalf("runExtract() error = %v", err)
+			cfg, err := config.LoadConfig()
+			if err != nil {
+				t.Fatalf("failed to load config: %v", err)
+			}
+			commandOutput = ""
+			if err := runCustomCommand(cfg, "invoice", []string{"invoice.txt"}); err != nil {
+				t.Fatalf("runCustomCommand() error = %v", err)
 			}
 		})
 	}

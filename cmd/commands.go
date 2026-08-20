@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -17,6 +19,7 @@ import (
 )
 
 var runCommandName string
+var commandOutput string
 
 var commandsCmd = &cobra.Command{
 	Use:   "commands",
@@ -28,6 +31,7 @@ var commandsCmd = &cobra.Command{
 
 func init() {
 	commandsCmd.Flags().StringVar(&runCommandName, "run", "", "run a custom command by name")
+	commandsCmd.Flags().StringVarP(&commandOutput, "output", "o", "", "output file for structured commands (default: stdout)")
 	rootCmd.AddCommand(commandsCmd)
 }
 
@@ -88,17 +92,21 @@ func runCustomCommand(cfg *config.Config, name string, extraArgs []string) error
 		return fmt.Errorf("command not found: %s", name)
 	}
 
-	fullPrompt := found.Prompt
-	if args := strings.TrimSpace(strings.Join(extraArgs, " ")); args != "" {
-		fullPrompt = found.Prompt + " " + args
+	if found.Schema != "" {
+		return runStructuredCommand(cfg, found, extraArgs)
+	}
+
+	content, err := buildCommandContent(found.Prompt, extraArgs)
+	if err != nil {
+		return err
 	}
 
 	messages := []llm.Message{
-		{Role: "user", Content: fullPrompt},
+		{Role: "user", Content: content},
 	}
 
 	slog.Debug("provider", "name", cfg.LLM.Provider, "model", cfg.LLM.Model)
-	slog.Debug("user prompt", "prompt", fullPrompt)
+	slog.Debug("user prompt", "prompt", found.Prompt)
 
 	llmStart := time.Now()
 	resultMessages, err := customCommandCallLLM(cfg, messages)
@@ -114,12 +122,91 @@ func runCustomCommand(cfg *config.Config, name string, extraArgs []string) error
 	}
 
 	lastMsg := resultMessages[len(resultMessages)-1]
-	content, ok := lastMsg.Content.(string)
-	if !ok || strings.TrimSpace(content) == "" {
+	responseStr, ok := lastMsg.Content.(string)
+	if !ok || strings.TrimSpace(responseStr) == "" {
 		return fmt.Errorf("empty response from LLM")
 	}
 
-	fmt.Println(strings.TrimSpace(content))
+	fmt.Println(strings.TrimSpace(responseStr))
+	return nil
+}
+
+// runStructuredCommand runs a command that carries a JSON schema in its
+// frontmatter. The schema is loaded and the LLM is called with a structured
+// output response_format; the JSON result is printed (or written to
+// commandOutput). Structured commands bypass the service, like extract did.
+func runStructuredCommand(cfg *config.Config, cmd *config.CommandInfo, args []string) error {
+	schemaData, err := os.ReadFile(cmd.Schema)
+	if err != nil {
+		return fmt.Errorf("failed to read schema: %w", err)
+	}
+
+	var schemaRaw any
+	if err := json.Unmarshal(schemaData, &schemaRaw); err != nil {
+		return fmt.Errorf("invalid JSON schema: %w", err)
+	}
+
+	content, err := buildCommandContent(cmd.Prompt, args)
+	if err != nil {
+		return err
+	}
+
+	responseFormat := map[string]any{
+		"type": "json_schema",
+		"json_schema": map[string]any{
+			"name":   "extracted_data",
+			"strict": true,
+			"schema": schemaRaw,
+		},
+	}
+
+	systemPrompt := "You extract structured data from documents and images. Return only valid JSON matching the provided schema."
+
+	messages := []llm.Message{
+		{Role: "user", Content: content},
+	}
+
+	slog.Debug("provider", "name", cfg.LLM.Provider, "model", cfg.LLM.Model)
+	slog.Debug("schema", "path", cmd.Schema)
+
+	caller := llm.NewProviderCallerRaw(cfg.LLM.Provider, cfg.LLM.Model, llm.NoopExecutor{})
+	if lc, ok := caller.(*llm.LitertLMCaller); ok {
+		lc.Backend = cfg.LitertLM.Backend
+	}
+	llmStart := time.Now()
+	resultMessages, err := caller.CallStructured(context.Background(), systemPrompt, messages, nil, responseFormat)
+	llmDuration := time.Since(llmStart)
+	if err != nil {
+		return fmt.Errorf("LLM call failed: %w", err)
+	}
+
+	slog.Debug("timing", "llm", llmDuration)
+
+	if len(resultMessages) == 0 {
+		return fmt.Errorf("no response from LLM")
+	}
+
+	lastMsg := resultMessages[len(resultMessages)-1]
+	contentStr, ok := lastMsg.Content.(string)
+	if !ok || strings.TrimSpace(contentStr) == "" {
+		return fmt.Errorf("empty response from LLM")
+	}
+
+	result := strings.TrimSpace(contentStr)
+
+	var prettyJSON bytes.Buffer
+	if err := json.Indent(&prettyJSON, []byte(result), "", "  "); err == nil {
+		result = prettyJSON.String()
+	}
+
+	if commandOutput != "" {
+		if err := os.WriteFile(commandOutput, []byte(result+"\n"), 0644); err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+	} else {
+		fmt.Println(result)
+	}
+
 	return nil
 }
 

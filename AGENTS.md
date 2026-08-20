@@ -22,7 +22,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 
 | Directory | Contents |
 |-----------|----------|
-| `cmd/` | Cobra commands: default (TUI shell), `config`, `commit`, `extract`, `pull`, `models`, `commands`, `agents`, `stats`, `context`, `service` |
+| `cmd/` | Cobra commands: default (TUI shell), `config`, `commit`, `pull`, `models`, `commands`, `agents`, `stats`, `context`, `service` |
 | `config/` | Viper YAML config, model lists (OpenRouter free models fetched live, 10 min cache), `.env` loading via `gotenv`. Free OpenRouter models filtered by zero pricing and `architecture.output_modalities` (audio-only excluded); `InputTypes` from `input_modalities` |
 | `llm/` | `Agent`, `Caller`, `RawCaller` (adds `CallStructured`), `ToolExecutor`, 6 tool definitions, `NewProviderCaller`/`NewProviderCallerRaw` factory, `ProviderConfig`, system prompts, `LlamacppCaller`, `LitertLMCaller`. Tool dispatch via `ToolExecutorPolicy` (`llm/executor.go`, pluggable confirm/execute hooks) shared by shell/CLI/service; `NoopExecutor` runs nothing. Agents: `GetAgentDefs`/`GetAgentDef`; `NewAgentFor` intersects agent allowed tools with user toggles; `NewAgentForSession` adds backend + AGENTS.md. `OpenAICaller` persists `usage` via `stats.RecordUsage` (provider from `BaseURL`) |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
@@ -71,9 +71,11 @@ Persistent `--debug` flag on the root command. `cmd.initLogger(cfg)` temporarily
 
 ## Commands command (cmd/commands.go)
 
-- Usable as `ai-shell commands` (lists custom commands) or `ai-shell commands --run <name> [args...]`
-- `--run` looks up via `config.LoadCommands` (merges `.ai-shell/commands/*.md` files and config `commands` map); extra args are appended to the prompt
-- Uses `llm.NewAgentFor` with `llm.ToolExecutorPolicy{}` (no confirmation); prints final assistant text to stdout
+- Usable as `ai-shell commands` (lists custom commands) or `ai-shell commands --run <name> [args...]`; `-o` / `--output` writes structured output to a file
+- `--run` looks up via `config.LoadCommands` (merges `.ai-shell/commands/*.md` files and config `commands` map)
+- Command args that are existing files are read into the prompt (`cmd/input.go`): images become multimodal `[]ContentPart`, `.txt`/`.md`/`.pdf` appended as text
+- **Structured commands**: a command file whose frontmatter has a `schema: <path>` field (resolved relative to the command file dir) runs via `CallStructured` with a `response_format: json_schema` envelope, bypassing the service. This replaces the removed `extract` command.
+- Regular commands use `llm.NewAgentForSession` with `llm.ToolExecutorPolicy{}` (no confirmation); prints final assistant text to stdout
 
 ## Commit command (cmd/commit.go)
 
@@ -84,10 +86,7 @@ Persistent `--debug` flag on the root command. `cmd.initLogger(cfg)` temporarily
 
 ## Extract command (cmd/extract.go)
 
-- Usable as `ai-shell extract <input> <schema>`
-- Input file (.txt/.md/.pdf/.png/.jpg/.jpeg/.gif/.webp) and JSON schema file; `-o` / `--output` writes to a file (default stdout)
-- Uses `pdftotext` for PDFs; images sent as multimodal `[]ContentPart` (via shell helpers)
-- Calls `llm.NewProviderCallerRaw(...).CallStructured` with `response_format: json_schema`
+> Removed. Structured extraction is now a structured command (frontmatter `schema:` field). See `cmd/commands.go` and `cmd/shell.go`. File reading helpers live in `cmd/input.go` (`readInputFile`, `readPDF`, `isImage`, `encodeImage`, `buildCommandContent`, `buildCommandTextAndImages`).
 
 ## Pull command (cmd/pull.go)
 
@@ -140,5 +139,5 @@ Persistent `--debug` flag on the root command. `cmd.initLogger(cfg)` temporarily
 - Llamacpp: `model` config is the GGUF filename without extension (`.gguf` appended as fallback). Run `make install-yzma` for libs; place GGUFs in `~/.ai-shell/models/llamacpp/`. Structured output uses a GBNF grammar (`jsonSchemaToGBNF`, `llm/gbnf.go`) with `llama.SamplerInitGrammar`. Image input uses yzma's `pkg/mtmd` (`setupVision`, `buildVisionPrompt`/`generateVision`) when a vision projector (`config.FindLlamacppMMProj()`) is present; init failures degrade to text-only. mmproj files are excluded from `config.GetLlamacppModels()`. Audio input is not supported.
 - LitertLM: loads libs from `$LITERTLM_LIB` (default `~/.ai-shell/lib`) and `.litertlm` models from `~/.ai-shell/models/litertlm/`. Binding dlopens fixed filenames: `libGemmaModelConstraintProvider.so` + `liblitertlm_c_cpu.so` (cpu) / `liblitertlm_c.so` (gpu) — NOT `liblitert-lm.so`. Run `make install-litertlm` to fetch them. Backend from config `litertlm.backend` (default `cpu`), overridable via `$LITERTLM_BACKEND`. A single client is cached per (lib dir, model path, backend). Tools are manual-dispatch `RawTool`s (max 5 hops); multimodal uses `SendMulti`; `CallStructured` prompt-engines the schema.
 - `/models` menu scans `config.GetLlamacppModels()` / `config.GetLitertLMModels()`; `config.IsLlamacppModel()` / `IsLitertLMModel()` used by `SaveModelWithProvider` for provider auto-detection.
-- Service: `service.IsActive()` pings the socket; `ServiceExecutor` denies non-allowed `RunCommand`s and all `WriteFile` when `confirm` is true; `extract` never routes through the service. Wire types regenerate via `make proto` (not needed to build).
+- Service: `service.IsActive()` pings the socket; `ServiceExecutor` denies non-allowed `RunCommand`s and all `WriteFile` when `confirm` is true; structured commands never route through the service. Wire types regenerate via `make proto` (not needed to build).
 - Shared `~/.ai-shell` dirs resolved via `config.AiShellDir()`, `config.LibDir()`, `config.ModelsDir(provider)`. Helpers: `config.GetCommandName(cmd)`, `config.FormatFileSize(b)`.

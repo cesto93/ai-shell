@@ -617,6 +617,31 @@ Do something useful`
 	}
 }
 
+func TestParseCommandFileWithSchema(t *testing.T) {
+	tmpDir := t.TempDir()
+	content := `---
+description: Extract invoice data
+schema: invoice_schema.json
+---
+Extract the invoice`
+	path := filepath.Join(tmpDir, "invoice.md")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write file: %v", err)
+	}
+
+	cmd, err := parseCommandFile(path)
+	if err != nil {
+		t.Fatalf("parseCommandFile() error = %v", err)
+	}
+	wantSchema := filepath.Join(tmpDir, "invoice_schema.json")
+	if cmd.Schema != wantSchema {
+		t.Errorf("Schema = %q, want %q (resolved relative to command dir)", cmd.Schema, wantSchema)
+	}
+	if cmd.Description != "Extract invoice data" {
+		t.Errorf("Description = %q, want %q", cmd.Description, "Extract invoice data")
+	}
+}
+
 func TestParseCommandFileWithoutFrontmatter(t *testing.T) {
 	tmpDir := t.TempDir()
 	content := `Just a simple prompt without frontmatter`

@@ -19,7 +19,7 @@ var rootCmd = &cobra.Command{
   ai-shell config
   ai-shell commit
   ai-shell models
-  ai-shell extract notes.txt schema.json`,
+  ai-shell commands --run extract invoice.pdf`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := RunShell(); err != nil {
 			fmt.Println(err)
@@ -31,7 +31,6 @@ var rootCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "enable debug logging (temporarily overrides the configured log level)")
 	rootCmd.AddCommand(commitCmd)
-	rootCmd.AddCommand(extractCmd)
 }
 
 // initLogger configures the global slog level, temporarily forcing debug mode
