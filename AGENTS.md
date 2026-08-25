@@ -96,6 +96,12 @@ Persistent `--debug` flag on the root command. `cmd.initLogger(cfg)` temporarily
 - Downloads from HuggingFace; `.litertlm` → `~/.ai-shell/models/litertlm/`, else `.gguf` → `~/.ai-shell/models/llamacpp/`
 - Progress bar; auto-updates config via `config.SaveModelWithProvider` (second file auto-detected as vision projector); cleans up partial files on failure
 
+## Skills command (cmd/skills.go)
+
+- Usable as `ai-shell skills`
+- Lists `llm.GetSkills(cfg.Skills)` in a table (NAME, DESCRIPTION, PATH)
+- Warns when `skills` is disabled in config
+
 ## Agents command (cmd/agents.go)
 
 - Usable as `ai-shell agents`
