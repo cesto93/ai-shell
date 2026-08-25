@@ -101,6 +101,7 @@ Persistent `--debug` flag on the root command. `cmd.initLogger(cfg)` temporarily
 - Usable as `ai-shell skills`
 - Lists `llm.GetSkills(cfg.Skills)` in a table (NAME, DESCRIPTION, PATH)
 - Warns when `skills` is disabled in config
+- `--pull <git-url>` shallow-clones the repo (`git clone --depth 1`, via the shared `execCommand` mock) and installs every directory containing a `SKILL.md` into `~/.agents/skills/`; existing skills with the same dir name are replaced (reported as Updated), then the list prints. Handles both `skills/<name>/SKILL.md` repos (e.g. run-llama/llamaparse-agent-skills) and root-level skill dirs
 
 ## Agents command (cmd/agents.go)
 
