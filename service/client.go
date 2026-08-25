@@ -31,6 +31,7 @@ type ChatRequest struct {
 	Tools           map[string]bool
 	Backend         string
 	AgentFiles      bool
+	Skills          bool
 	Confirm         bool
 	AllowedCommands []string
 }
@@ -60,6 +61,7 @@ func toProtoRequest(req ChatRequest) *proto.ChatRequest {
 		Tools:           req.Tools,
 		Backend:         req.Backend,
 		AgentFiles:      req.AgentFiles,
+		Skills:          req.Skills,
 		Confirm:         req.Confirm,
 		AllowedCommands: req.AllowedCommands,
 	}

@@ -71,6 +71,7 @@ message ChatRequest {
   bool agent_files = 8;
   bool confirm = 9;
   repeated string allowed_commands = 10;
+  bool skills = 11;
 }
 
 message ChatResponse {

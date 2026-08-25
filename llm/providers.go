@@ -64,5 +64,8 @@ func (a *Agent) CallLLM(ctx context.Context, executor ToolExecutor, messages []M
 	if a.AgentFiles != "" {
 		prompt = prompt + "\n\n" + a.AgentFiles
 	}
+	if a.Skills != "" {
+		prompt = prompt + "\n\n" + a.Skills
+	}
 	return caller.Call(ctx, prompt, messages, a.Tools)
 }

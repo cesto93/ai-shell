@@ -455,6 +455,7 @@ type ChatRequest struct {
 	AgentFiles      bool            `protobuf:"varint,8,opt,name=agent_files,json=agentFiles,proto3" json:"agent_files,omitempty"`
 	Confirm         bool            `protobuf:"varint,9,opt,name=confirm,proto3" json:"confirm,omitempty"`
 	AllowedCommands []string        `protobuf:"bytes,10,rep,name=allowed_commands,json=allowedCommands,proto3" json:"allowed_commands,omitempty"`
+	Skills          bool            `protobuf:"varint,11,opt,name=skills,proto3" json:"skills,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -557,6 +558,13 @@ func (x *ChatRequest) GetAllowedCommands() []string {
 		return x.AllowedCommands
 	}
 	return nil
+}
+
+func (x *ChatRequest) GetSkills() bool {
+	if x != nil {
+		return x.Skills
+	}
+	return false
 }
 
 type ChatResponse struct {
@@ -716,7 +724,7 @@ const file_service_proto_service_proto_rawDesc = "" +
 	"\ftool_call_id\x18\x03 \x01(\tR\n" +
 	"toolCallId\x12<\n" +
 	"\n" +
-	"tool_calls\x18\x04 \x03(\v2\x1d.aishield.service.RPCToolCallR\ttoolCalls\"\xae\x03\n" +
+	"tool_calls\x18\x04 \x03(\v2\x1d.aishield.service.RPCToolCallR\ttoolCalls\"\xc6\x03\n" +
 	"\vChatRequest\x128\n" +
 	"\bmessages\x18\x01 \x03(\v2\x1c.aishield.service.RPCMessageR\bmessages\x12#\n" +
 	"\rsystem_prompt\x18\x02 \x01(\tR\fsystemPrompt\x12\x14\n" +
@@ -729,7 +737,8 @@ const file_service_proto_service_proto_rawDesc = "" +
 	"agentFiles\x12\x18\n" +
 	"\aconfirm\x18\t \x01(\bR\aconfirm\x12)\n" +
 	"\x10allowed_commands\x18\n" +
-	" \x03(\tR\x0fallowedCommands\x1a8\n" +
+	" \x03(\tR\x0fallowedCommands\x12\x16\n" +
+	"\x06skills\x18\v \x01(\bR\x06skills\x1a8\n" +
 	"\n" +
 	"ToolsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +

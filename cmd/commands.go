@@ -217,7 +217,7 @@ func customCommandCallLLM(cfg *config.Config, messages []llm.Message) ([]llm.Mes
 	return chatWithServiceFallback(req, func(err error) error {
 		return fmt.Errorf("LLM call failed: %w", err)
 	}, func() ([]llm.Message, error) {
-		agent := llm.NewAgentForSession(cfg.Agent, cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools, cfg.LitertLM.Backend, cfg.AgentFiles)
+		agent := llm.NewAgentForSession(cfg.Agent, cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools, cfg.LitertLM.Backend, cfg.AgentFiles, cfg.Skills)
 		slog.Debug("system prompt", "prompt", agent.Prompt)
 		return agent.CallLLM(context.Background(), &llm.ToolExecutorPolicy{}, messages)
 	})

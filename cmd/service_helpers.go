@@ -12,8 +12,8 @@ import (
 )
 
 // chatRequestFromConfig builds a service.ChatRequest carrying the session
-// configuration (agent, model, provider, tools, backend, AGENTS.md support,
-// and confirmation policy) from a loaded config.
+// configuration (agent, model, provider, tools, backend, AGENTS.md and
+// skills support, and confirmation policy) from a loaded config.
 func chatRequestFromConfig(cfg *config.Config, messages []llm.Message) service.ChatRequest {
 	return service.ChatRequest{
 		Messages:        messages,
@@ -23,6 +23,7 @@ func chatRequestFromConfig(cfg *config.Config, messages []llm.Message) service.C
 		Tools:           cfg.Tools,
 		Backend:         cfg.LitertLM.Backend,
 		AgentFiles:      cfg.AgentFiles,
+		Skills:          cfg.Skills,
 		Confirm:         cfg.Shell.Confirm,
 		AllowedCommands: cfg.Shell.AllowedCommands,
 	}

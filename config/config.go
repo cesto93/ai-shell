@@ -35,6 +35,7 @@ type Config struct {
 	LogLevel   string `mapstructure:"log_level"`
 	Agent      string `mapstructure:"agent"`
 	AgentFiles bool   `mapstructure:"agent_files"`
+	Skills     bool   `mapstructure:"skills"`
 	LLM        struct {
 		Provider   string   `mapstructure:"provider"`
 		Model      string   `mapstructure:"model"`
@@ -126,6 +127,7 @@ func LoadConfig() (*Config, error) {
 	v.SetDefault("log_level", "info")
 	v.SetDefault("agent", "build")
 	v.SetDefault("agent_files", true)
+	v.SetDefault("skills", true)
 	v.SetDefault("litertlm.backend", "cpu")
 	v.SetDefault("tools", defaultTools)
 
@@ -147,6 +149,7 @@ func LoadConfig() (*Config, error) {
 				LogLevel:   "info",
 				Agent:      "build",
 				AgentFiles: true,
+				Skills:     true,
 				LLM: struct {
 					Provider   string   `mapstructure:"provider"`
 					Model      string   `mapstructure:"model"`
@@ -176,7 +179,7 @@ func LoadConfig() (*Config, error) {
 				if err == nil {
 					defaultConfigFile := filepath.Join(configPath, "config.yaml")
 					if _, err := os.Stat(defaultConfigFile); os.IsNotExist(err) {
-						content := "log_level: \"info\"\nagent: \"build\"\nagent_files: true\nllm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\n  input_types:\n    - \"text\"\nshell:\n  confirm: true\n  allowed_commands:\n    - \"ls\"\n    - \"pwd\"\n    - \"git\"\nlitertlm:\n  backend: \"cpu\"\ntools:\n  RunCommand: true\n  WriteFile: true\n  ReadFile: true\n  KVSet: true\n  KVGet: true\n  KVList: true\n"
+						content := "log_level: \"info\"\nagent: \"build\"\nagent_files: true\nskills: true\nllm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\n  input_types:\n    - \"text\"\nshell:\n  confirm: true\n  allowed_commands:\n    - \"ls\"\n    - \"pwd\"\n    - \"git\"\nlitertlm:\n  backend: \"cpu\"\ntools:\n  RunCommand: true\n  WriteFile: true\n  ReadFile: true\n  KVSet: true\n  KVGet: true\n  KVList: true\n"
 						_ = os.WriteFile(defaultConfigFile, []byte(content), 0644)
 						defaultConfig.ConfigFile = defaultConfigFile
 					}
@@ -278,6 +281,7 @@ func SaveConfig(cfg *Config) error {
 		LogLevel   string `yaml:"log_level"`
 		Agent      string `yaml:"agent,omitempty"`
 		AgentFiles bool   `yaml:"agent_files"`
+		Skills     bool   `yaml:"skills"`
 		LLM        struct {
 			Provider   string   `yaml:"provider"`
 			Model      string   `yaml:"model"`
@@ -296,6 +300,7 @@ func SaveConfig(cfg *Config) error {
 		LogLevel:   cfg.LogLevel,
 		Agent:      cfg.Agent,
 		AgentFiles: cfg.AgentFiles,
+		Skills:     cfg.Skills,
 		Tools:      cfg.Tools,
 		Commands:   cfg.Commands,
 	}

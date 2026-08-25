@@ -24,7 +24,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 |-----------|----------|
 | `cmd/` | Cobra commands: default (TUI shell), `config`, `commit`, `pull`, `models`, `commands`, `agents`, `stats`, `context`, `service` |
 | `config/` | Viper YAML config, model lists (OpenRouter free models fetched live, 10 min cache), `.env` loading via `gotenv`. Free OpenRouter models filtered by zero pricing and `architecture.output_modalities` (audio-only excluded); `InputTypes` from `input_modalities` |
-| `llm/` | `Agent`, `Caller`, `RawCaller` (adds `CallStructured`), `ToolExecutor`, 6 tool definitions, `NewProviderCaller`/`NewProviderCallerRaw` factory, `ProviderConfig`, system prompts, `LlamacppCaller`, `LitertLMCaller`. Tool dispatch via `ToolExecutorPolicy` (`llm/executor.go`, pluggable confirm/execute hooks) shared by shell/CLI/service; `NoopExecutor` runs nothing. Agents: `GetAgentDefs`/`GetAgentDef`; `NewAgentFor` intersects agent allowed tools with user toggles; `NewAgentForSession` adds backend + AGENTS.md. `OpenAICaller` persists `usage` via `stats.RecordUsage` (provider from `BaseURL`) |
+| `llm/` | `Agent`, `Caller`, `RawCaller` (adds `CallStructured`), `ToolExecutor`, 6 tool definitions, `NewProviderCaller`/`NewProviderCallerRaw` factory, `ProviderConfig`, system prompts, `LlamacppCaller`, `LitertLMCaller`. Tool dispatch via `ToolExecutorPolicy` (`llm/executor.go`, pluggable confirm/execute hooks) shared by shell/CLI/service; `NoopExecutor` runs nothing. Agents: `GetAgentDefs`/`GetAgentDef`; `NewAgentFor` intersects agent allowed tools with user toggles; `NewAgentForSession` adds backend + AGENTS.md + skills. `OpenAICaller` persists `usage` via `stats.RecordUsage` (provider from `BaseURL`) |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
 | `stats/` | Persistent token usage store (bbolt at `~/.config/ai-shell/usage.db`): `RecordUsage`, `GetStats`, `Reset` |
 | `service/` | gRPC service over a unix socket at `~/.ai-shell/service.sock`. `server.go` (`Server`, swappable `callLLM`) builds the agent via `llm.NewAgentForSession` and runs tools via `ServiceExecutor`; `client.go` (`Client`, `IsActive`, `Chat`, `Stop`, `ErrUnavailable`); `convert.go` maps `llm.Message` ↔ proto. Wire types in `service/proto/` (committed; `make proto` to regenerate) |
@@ -35,9 +35,11 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 2. `./.env` (local overrides)
 3. `config.yaml` from `./` or `~/.config/ai-shell/`
 
-`.env.example` documents the recognized env vars. Defaults: provider=ollama, model=granite4:3b-h, log_level=info, confirm=true, allowed_commands=ls,pwd, agent=build, agent_files=true. litertlm backend defaults to `cpu`. All 6 tools enabled by default.
+`.env.example` documents the recognized env vars. Defaults: provider=ollama, model=granite4:3b-h, log_level=info, confirm=true, allowed_commands=ls,pwd, agent=build, agent_files=true, skills=true. litertlm backend defaults to `cpu`. All 6 tools enabled by default.
 
 `agent_files` toggles AGENTS.md support: `llm.GetAgentFiles(true)` loads `~/.config/ai-shell/AGENTS.md` and `./AGENTS.md` as extra system-prompt instructions. Toggle via `ai-shell config --agent-files=false`.
+
+`skills` toggles skills support: `llm.GetSkills(true)` scans `~/.agents/skills/*/SKILL.md` and `./skills/*/SKILL.md` (standard agent-skills layout with YAML frontmatter `name`/`description`). Only a compact index (`llm.GetSkillsPrompt`) is injected into the system prompt; the model reads full SKILL.md contents on demand via `ReadFile`. Toggle via `ai-shell config --skills=false`.
 
 Logging uses `log/slog`; call `config.InitLogger(cfg.LogLevel)` after `LoadConfig()`.
 
@@ -66,7 +68,7 @@ Persistent `--debug` flag on the root command. `cmd.initLogger(cfg)` temporarily
 ## Config command (cmd/config.go)
 
 - Usable as `ai-shell config` (shows current config via `PrintConfig`) or `ai-shell config --flag value`
-- Flags: `--provider`, `--model`, `--agent`, `--agent-files`, `--log-level`, `--confirm`, `--allowed-commands`, `--backend`, `--enable-tool`, `--disable-tool`, `--add-cmd`, `--rm-cmd`
+- Flags: `--provider`, `--model`, `--agent`, `--agent-files`, `--skills`, `--log-level`, `--confirm`, `--allowed-commands`, `--backend`, `--enable-tool`, `--disable-tool`, `--add-cmd`, `--rm-cmd`
 - `--model` without `--provider` auto-detects provider via `config.LookupModelInfo`; `--add-cmd` uses `name=prompt` format
 
 ## Commands command (cmd/commands.go)
@@ -116,8 +118,8 @@ Persistent `--debug` flag on the root command. `cmd.initLogger(cfg)` temporarily
 
 - Usable as `ai-shell context`
 - Shows AGENTS.md files read into context (path, word count, token estimate) plus the active agent's system prompt size
-- `--prompt` prints the system prompt; `--agents` prints the AGENTS.md texts
-- Uses `llm.GetAgentFileInfo(cfg.AgentFiles)`; warns when `agent_files` is disabled
+- `--prompt` prints the system prompt; `--agents` prints the AGENTS.md texts; `--skills` prints the skills index sent to the agent (with per-skill descriptions)
+- Uses `llm.GetAgentFileInfo(cfg.AgentFiles)`; warns when `agent_files` is disabled. Also lists skills via `llm.GetSkills(cfg.Skills)` and their index token cost; warns when `skills` is disabled
 
 ## Service command (cmd/service.go)
 

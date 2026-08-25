@@ -61,7 +61,7 @@ func (s *Server) Chat(ctx context.Context, req *proto.ChatRequest) (*proto.ChatR
 			Backend:  req.Backend,
 		}
 	} else {
-		agent = llm.NewAgentForSession(req.Agent, req.Model, req.Provider, req.Tools, req.Backend, req.AgentFiles)
+		agent = llm.NewAgentForSession(req.Agent, req.Model, req.Provider, req.Tools, req.Backend, req.AgentFiles, req.Skills)
 	}
 
 	executor := &ServiceExecutor{

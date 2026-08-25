@@ -155,6 +155,9 @@ func TestServerChatSystemPromptOverride(t *testing.T) {
 	if gotAgent.AgentFiles != "" {
 		t.Errorf("agent files should be empty for system prompt override, got %q", gotAgent.AgentFiles)
 	}
+	if gotAgent.Skills != "" {
+		t.Errorf("skills should be empty for system prompt override, got %q", gotAgent.Skills)
+	}
 	if len(gotAgent.Tools) != 0 {
 		t.Errorf("tools should be empty for system prompt override, got %d", len(gotAgent.Tools))
 	}

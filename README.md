@@ -237,7 +237,7 @@ Vision models with matching GGUFs include moondream2 and Qwen2.5-VL. Without a p
 ## Service Modality
 
 `ai-shell service` runs a lightweight gRPC server that exposes the full
-ai-shell logic (prompts, AGENTS.md files, tools, and LLM calls) over a unix
+ai-shell logic (prompts, AGENTS.md files, skills, tools, and LLM calls) over a unix
 socket at `~/.ai-shell/service.sock`. When the service is running, other
 ai-shell sessions detect it and route their requests through it instead of
 calling the LLM locally.
@@ -253,7 +253,7 @@ configuration needed. The interactive shell, `ai-shell commands --run`, and
 `ai-shell commit` all use it when available and fall back to local execution
 if the service becomes unreachable. The session's own model/provider/agent
 settings are honored (e.g. switching models with `/models` still works), while
-the service supplies the prompts, AGENTS.md context, tool execution, and the
+the service supplies the prompts, AGENTS.md context, skills index, tool execution, and the
 LLM calls from its working directory.
 
 Tool confirmation is honored inside the service: with the default

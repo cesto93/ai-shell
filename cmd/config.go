@@ -64,6 +64,12 @@ var configCmd = &cobra.Command{
 			changed = true
 		}
 
+		if fl.Changed("skills") {
+			v, _ := fl.GetBool("skills")
+			cfg.Skills = v
+			changed = true
+		}
+
 		if fl.Changed("log-level") {
 			v, _ := fl.GetString("log-level")
 			cfg.LogLevel = v
@@ -144,6 +150,7 @@ func init() {
 	configCmd.Flags().String("model", "", "Set LLM model name")
 	configCmd.Flags().String("agent", "", "Set active agent (build, plan)")
 	configCmd.Flags().Bool("agent-files", false, "Enable or disable AGENTS.md support")
+	configCmd.Flags().Bool("skills", false, "Enable or disable skills (~/.agents/skills, ./skills) support")
 	configCmd.Flags().String("log-level", "", "Set log level (debug, info, warn, error)")
 	configCmd.Flags().Bool("confirm", false, "Require confirmation for tool execution")
 	configCmd.Flags().StringSlice("allowed-commands", nil, "Comma-separated list of commands that skip confirmation")

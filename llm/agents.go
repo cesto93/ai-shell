@@ -11,6 +11,7 @@ import (
 type Agent struct {
 	Prompt     string
 	AgentFiles string
+	Skills     string
 	Model      string
 	Provider   string
 	Tools      []any
@@ -337,10 +338,12 @@ func NewAgentFor(agentName, model, provider string, cfgTools map[string]bool) *A
 }
 
 // NewAgentForSession creates an Agent like NewAgentFor, additionally applying
-// the session's inference backend and AGENTS.md support settings.
-func NewAgentForSession(agentName, model, provider string, cfgTools map[string]bool, backend string, agentFiles bool) *Agent {
+// the session's inference backend, AGENTS.md support, and skills support
+// settings.
+func NewAgentForSession(agentName, model, provider string, cfgTools map[string]bool, backend string, agentFiles, skills bool) *Agent {
 	a := NewAgentFor(agentName, model, provider, cfgTools)
 	a.Backend = backend
 	a.AgentFiles = GetAgentFiles(agentFiles)
+	a.Skills = GetSkillsPrompt(skills)
 	return a
 }
