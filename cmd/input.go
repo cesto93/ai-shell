@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -30,7 +29,7 @@ func readInputFile(path string) (string, error) {
 }
 
 func readPDF(path string) (string, error) {
-	out, err := exec.Command("pdftotext", path, "-").Output()
+	out, err := execCommand("pdftotext", path, "-").Output()
 	if err != nil {
 		return "", fmt.Errorf("pdftotext failed (is poppler-utils installed?): %w", err)
 	}

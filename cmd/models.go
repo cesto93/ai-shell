@@ -37,6 +37,9 @@ func runModels(cmd *cobra.Command) error {
 	initLogger(cfg)
 
 	if cmd.Flags().Changed("delete") {
+		if strings.TrimSpace(modelsDelete) == "" {
+			return fmt.Errorf("--delete requires a non-empty model name")
+		}
 		paths, err := config.DeleteLocalModel(modelsDelete)
 		if err != nil {
 			return err
@@ -51,6 +54,9 @@ func runModels(cmd *cobra.Command) error {
 	}
 
 	if cmd.Flags().Changed("set") {
+		if strings.TrimSpace(modelsSet) == "" {
+			return fmt.Errorf("--set requires a non-empty model name")
+		}
 		info := config.LookupModelInfo(modelsSet)
 		if info == nil {
 			return fmt.Errorf("model %q not found", modelsSet)
@@ -93,7 +99,9 @@ func runModels(cmd *cobra.Command) error {
 		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", marker, m.Name, m.Provider, size, inputTypes)
 	}
-	w.Flush()
+	if err := w.Flush(); err != nil {
+		return fmt.Errorf("flush: %w", err)
+	}
 
 	return nil
 }

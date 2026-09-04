@@ -131,7 +131,11 @@ func LoadConfig() (*Config, error) {
 	v.SetDefault("agent_files", true)
 	v.SetDefault("skills", true)
 	v.SetDefault("litertlm.backend", "cpu")
-	v.SetDefault("tools", defaultTools)
+	toolsCopy := make(map[string]bool, len(defaultTools))
+	for k, v := range defaultTools {
+		toolsCopy[k] = v
+	}
+	v.SetDefault("tools", toolsCopy)
 
 	for _, path := range configPaths {
 		v.AddConfigPath(path)
@@ -147,6 +151,10 @@ func LoadConfig() (*Config, error) {
 	if err := v.ReadInConfig(); err != nil {
 		var notFound viper.ConfigFileNotFoundError
 		if errors.As(err, &notFound) {
+			toolsClone := make(map[string]bool, len(defaultTools))
+			for k, v := range defaultTools {
+				toolsClone[k] = v
+			}
 			defaultConfig := &Config{
 				ConfigFile: "",
 				LogLevel:   "info",
@@ -174,7 +182,7 @@ func LoadConfig() (*Config, error) {
 				}{
 					Backend: "cpu",
 				},
-				Tools: defaultTools,
+				Tools: toolsClone,
 			}
 
 			if configPath != "" {
@@ -205,11 +213,17 @@ func LoadConfig() (*Config, error) {
 	config.ConfigFile = v.ConfigFileUsed()
 
 	if config.Tools == nil {
-		config.Tools = defaultTools
+		clone := make(map[string]bool, len(defaultTools))
+		for k, v := range defaultTools {
+			clone[k] = v
+		}
+		config.Tools = clone
 	}
 
-	if info := lookupModelInfo(config.LLM.Model); info != nil && len(info.InputTypes) > 0 {
-		config.LLM.InputTypes = info.InputTypes
+	if len(config.LLM.InputTypes) == 0 {
+		if info := lookupModelInfo(config.LLM.Model); info != nil && len(info.InputTypes) > 0 {
+			config.LLM.InputTypes = info.InputTypes
+		}
 	}
 
 	return &config, nil
@@ -371,7 +385,7 @@ func SaveModelWithProvider(modelName, provider string) error {
 		cfg.LLM.Provider = "ollama"
 	}
 
-	if info := lookupModelInfo(modelName); info != nil && len(info.InputTypes) > 0 {
+	if info := LookupModelInfo(modelName); info != nil && len(info.InputTypes) > 0 {
 		cfg.LLM.InputTypes = info.InputTypes
 	} else {
 		cfg.LLM.InputTypes = []string{"text"}
@@ -615,13 +629,21 @@ var getOpenRouterModelsFunc = GetOpenRouterModels
 // from the OpenRouter API and cached briefly.
 func GetOpenRouterModels() []ModelInfo {
 	openRouterModelsMu.Lock()
-	defer openRouterModelsMu.Unlock()
 	if openRouterModelsCache != nil && time.Since(openRouterModelsCached) < openRouterModelsCacheTTL {
-		return openRouterModelsCache
+		cached := openRouterModelsCache
+		openRouterModelsMu.Unlock()
+		return cached
 	}
-	openRouterModelsCache = fetchOpenRouterFreeModels()
+	openRouterModelsMu.Unlock()
+
+	fetched := fetchOpenRouterFreeModels()
+
+	openRouterModelsMu.Lock()
+	openRouterModelsCache = fetched
 	openRouterModelsCached = time.Now()
-	return openRouterModelsCache
+	cached := openRouterModelsCache
+	openRouterModelsMu.Unlock()
+	return cached
 }
 
 type openRouterModelsResponse struct {

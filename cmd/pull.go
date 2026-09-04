@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -65,12 +66,13 @@ func runPull(repo string, filenames []string) error {
 	return lastErr
 }
 
+var repoRe = regexp.MustCompile(`^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$`)
+
 func validateRepo(repo string) error {
-	if strings.Contains(repo, "..") || strings.Contains(repo, "\\") || strings.TrimSpace(repo) == "" {
+	if strings.TrimSpace(repo) == "" || strings.Contains(repo, "..") || strings.Contains(repo, "\\") || strings.Contains(repo, " ") {
 		return fmt.Errorf("invalid repo %q", repo)
 	}
-	parts := strings.Split(repo, "/")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+	if !repoRe.MatchString(repo) {
 		return fmt.Errorf("invalid repo %q: expected owner/name", repo)
 	}
 	return nil
@@ -126,8 +128,11 @@ func downloadFile(repo, filename string) error {
 	url := fmt.Sprintf("https://huggingface.co/%s/resolve/main/%s", repo, filename)
 	fmt.Printf("Downloading %s ...\n", url)
 
-	out, err := os.Create(destPath)
+	out, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o644)
 	if err != nil {
+		if os.IsExist(err) {
+			return fmt.Errorf("model file already exists at %s", destPath)
+		}
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
 	cleanup := func() {
@@ -153,7 +158,11 @@ func downloadFile(repo, filename string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
 		cleanup()
+		if len(body) > 0 {
+			return fmt.Errorf("download failed: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		}
 		return fmt.Errorf("download failed: %s", resp.Status)
 	}
 

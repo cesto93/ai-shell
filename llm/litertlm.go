@@ -60,12 +60,12 @@ func (l *LitertLMCaller) CallStructured(ctx context.Context, systemPrompt string
 }
 
 func (l *LitertLMCaller) call(ctx context.Context, systemPrompt string, messages []Message, tools []any) ([]Message, error) {
+	if len(messages) == 0 {
+		return nil, fmt.Errorf("litertlm: no messages to send")
+	}
 	client, err := l.client(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("litertlm: %w", err)
-	}
-	if len(messages) == 0 {
-		return nil, fmt.Errorf("litertlm: no messages to send")
 	}
 
 	chatOpts := []litertlm.ChatOption{litertlm.WithSystemPrompt(systemPrompt)}
@@ -147,20 +147,34 @@ func (l *LitertLMCaller) sendUserTurn(ctx context.Context, chat *litertlm.Chat, 
 // until the model answers with text only.
 func (l *LitertLMCaller) dispatch(ctx context.Context, chat *litertlm.Chat, reply *litertlm.Reply) (string, error) {
 	for hops := 0; reply.HasToolCalls() && hops < litertlmMaxToolHops; hops++ {
-		for _, call := range reply.ToolCalls() {
-			result, err := l.Executor.ExecuteTool(ToolCall{
+		calls := reply.ToolCalls()
+		for _, call := range calls {
+			result, toolErr := l.Executor.ExecuteTool(ToolCall{
 				Name:      call.Function.Name,
 				Arguments: call.Function.Arguments,
 			})
-			if err != nil {
-				result = fmt.Sprintf("Error: %v", err)
+			if toolErr != nil {
+				result = fmt.Sprintf("Error: %v", toolErr)
+				if result == "" {
+					result = toolErr.Error()
+				} else if output := strings.TrimSpace(result); output != "" {
+					// keep combined error+output already
+				}
 			}
 			slog.Debug("litertlm: tool result", "tool", call.Function.Name)
-			reply, err = chat.SendToolResult(ctx, call.Function.Name, map[string]any{"result": result})
-			if err != nil {
-				return "", fmt.Errorf("litertlm: send tool result: %w", err)
+			var execErr error
+			reply, execErr = chat.SendToolResult(ctx, call.Function.Name, map[string]any{"result": result})
+			if execErr != nil {
+				return "", fmt.Errorf("litertlm: send tool result: %w", execErr)
+			}
+			if reply.HasToolCalls() {
+				// New tool calls arrived; break inner loop to handle next hop correctly
+				break
 			}
 		}
+	}
+	if reply.HasToolCalls() {
+		return "", fmt.Errorf("tool call hop limit exceeded (%d)", litertlmMaxToolHops)
 	}
 	return strings.TrimSpace(reply.Text()), nil
 }
@@ -198,17 +212,19 @@ func (l *LitertLMCaller) client(ctx context.Context) (*litertlm.Client, error) {
 		backend = litertlmDefaultBackend
 	}
 
-	key := libDir + "|" + modelPath + "|" + backend
+	key := libDir + "\x00" + modelPath + "\x00" + backend
 
 	litertlmClientMu.Lock()
-	defer litertlmClientMu.Unlock()
 	if c, ok := litertlmClientCache[key]; ok {
+		litertlmClientMu.Unlock()
 		return c, nil
 	}
+	litertlmClientMu.Unlock()
 
 	litertlm.SetMinLogLevel(litertlm.LogQuiet)
 	slog.Debug("litertlm: initializing engine", "lib", libDir, "model", modelPath, "backend", backend)
-	c, err := litertlm.New(ctx,
+	// Use background context so cancellation of the caller doesn't tear down engine init
+	c, err := litertlm.New(context.Background(),
 		litertlm.WithLib(libDir),
 		litertlm.WithModel(modelPath),
 		litertlm.WithBackend(backend),
@@ -216,7 +232,9 @@ func (l *LitertLMCaller) client(ctx context.Context) (*litertlm.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	litertlmClientMu.Lock()
 	litertlmClientCache[key] = c
+	litertlmClientMu.Unlock()
 	slog.Debug("litertlm: engine initialized")
 	return c, nil
 }

@@ -275,16 +275,23 @@ var planAgentTools = map[string]bool{
 // GetAgentDefs returns the list of built-in agents. The first entry (build) is
 // the default agent.
 func GetAgentDefs() []AgentDef {
+	clone := func(m map[string]bool) map[string]bool {
+		c := make(map[string]bool, len(m))
+		for k, v := range m {
+			c[k] = v
+		}
+		return c
+	}
 	return []AgentDef{
 		{
 			Name:        "build",
 			Description: "Full access: all tools enabled with the default prompt",
-			Tools:       buildAgentTools,
+			Tools:       clone(buildAgentTools),
 		},
 		{
 			Name:        "plan",
 			Description: "Read-only planning: cannot write files or launch commands",
-			Tools:       planAgentTools,
+			Tools:       clone(planAgentTools),
 		},
 	}
 }

@@ -160,14 +160,7 @@ type ServiceExecutor struct {
 }
 
 func (e *ServiceExecutor) ExecuteTool(call llm.ToolCall) (string, error) {
-	policy := &llm.ToolExecutorPolicy{
-		ConfirmCommand: func(cmd string) bool {
-			return !e.confirm || config.IsAllowedCommand(config.GetCommandName(cmd), e.allowed)
-		},
-		ConfirmWriteFile: func(path string) bool {
-			return !e.confirm
-		},
-	}
+	policy := llm.NewConfirmPolicy(e.confirm, e.allowed)
 	return policy.ExecuteTool(call)
 }
 

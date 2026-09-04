@@ -116,11 +116,17 @@ func (o *OpenAICaller) call(ctx context.Context, systemPrompt string, messages [
 	originalCount := len(allMessages)
 
 	for hops := 0; hops < openAIMaxToolHops; hops++ {
+		rf := responseFormat
+		// Structured output mixes poorly with tool calls; omit after first hop
+		// or when tools are still expected.
+		if hops > 0 {
+			rf = nil
+		}
 		reqBody := OpenAIRequest{
 			Model:          o.Model,
 			Messages:       allMessages,
 			Tools:          tools,
-			ResponseFormat: responseFormat,
+			ResponseFormat: rf,
 		}
 
 		jsonBody, err := json.Marshal(reqBody)
@@ -128,7 +134,8 @@ func (o *OpenAICaller) call(ctx context.Context, systemPrompt string, messages [
 			return nil, fmt.Errorf("failed to marshal request: %w", err)
 		}
 
-		req, err := http.NewRequestWithContext(ctx, "POST", o.BaseURL+"/chat/completions", bytes.NewBuffer(jsonBody))
+		baseURL := strings.TrimSuffix(o.BaseURL, "/")
+		req, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/chat/completions", bytes.NewBuffer(jsonBody))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -143,7 +150,7 @@ func (o *OpenAICaller) call(ctx context.Context, systemPrompt string, messages [
 			return nil, fmt.Errorf("request failed: %w", err)
 		}
 
-		body, err := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 		resp.Body.Close()
 		if err != nil {
 			return nil, fmt.Errorf("failed to read response: %w", err)
@@ -192,7 +199,7 @@ func (o *OpenAICaller) call(ctx context.Context, systemPrompt string, messages [
 			return allMessages[originalCount:], nil
 		}
 
-		for _, tc := range assistantMsg.ToolCalls {
+		for i, tc := range assistantMsg.ToolCalls {
 			var result string
 			var args map[string]any
 			if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
@@ -209,11 +216,15 @@ func (o *OpenAICaller) call(ctx context.Context, systemPrompt string, messages [
 					result = output
 				}
 			}
+			toolID := tc.ID
+			if toolID == "" {
+				toolID = fmt.Sprintf("call_%d_%d", hops, i)
+			}
 
 			allMessages = append(allMessages, Message{
 				Role:       "tool",
 				Content:    result,
-				ToolCallID: tc.ID,
+				ToolCallID: toolID,
 			})
 		}
 	}

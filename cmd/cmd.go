@@ -36,10 +36,11 @@ func init() {
 // initLogger configures the global slog level, temporarily forcing debug mode
 // when the --debug flag is passed. The configured log level is not modified.
 func initLogger(cfg *config.Config) {
+	level := cfg.LogLevel
 	if debug {
-		cfg.LogLevel = "debug"
+		level = "debug"
 	}
-	config.InitLogger(cfg.LogLevel)
+	config.InitLogger(level)
 }
 
 func Execute() {

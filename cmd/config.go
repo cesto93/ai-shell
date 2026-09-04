@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"ai-shell/config"
@@ -96,6 +97,9 @@ var configCmd = &cobra.Command{
 
 		if fl.Changed("enable-tool") {
 			v, _ := fl.GetString("enable-tool")
+			if !isKnownTool(v) {
+				return fmt.Errorf("unknown tool %q", v)
+			}
 			if cfg.Tools == nil {
 				cfg.Tools = make(map[string]bool)
 			}
@@ -105,6 +109,9 @@ var configCmd = &cobra.Command{
 
 		if fl.Changed("disable-tool") {
 			v, _ := fl.GetString("disable-tool")
+			if !isKnownTool(v) {
+				return fmt.Errorf("unknown tool %q", v)
+			}
 			if cfg.Tools == nil {
 				cfg.Tools = make(map[string]bool)
 			}
@@ -161,4 +168,9 @@ func init() {
 	configCmd.Flags().String("rm-cmd", "", "Remove a custom command by name")
 
 	rootCmd.AddCommand(configCmd)
+}
+
+func isKnownTool(name string) bool {
+	known := []string{"RunCommand", "WriteFile", "ReadFile", "KVSet", "KVGet", "KVList"}
+	return slices.Contains(known, name)
 }

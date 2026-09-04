@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -128,14 +126,9 @@ func runCustomCommand(cfg *config.Config, name string, extraArgs []string) error
 // output response_format; the JSON result is printed (or written to
 // commandOutput). Structured commands bypass the service, like extract did.
 func runStructuredCommand(cfg *config.Config, cmd *config.CommandInfo, args []string) error {
-	schemaData, err := os.ReadFile(cmd.Schema)
+	schemaRaw, err := loadSchema(cmd.Schema)
 	if err != nil {
-		return fmt.Errorf("failed to read schema: %w", err)
-	}
-
-	var schemaRaw any
-	if err := json.Unmarshal(schemaData, &schemaRaw); err != nil {
-		return fmt.Errorf("invalid JSON schema: %w", err)
+		return err
 	}
 
 	content, err := buildCommandContent(cmd.Prompt, args)
@@ -143,14 +136,7 @@ func runStructuredCommand(cfg *config.Config, cmd *config.CommandInfo, args []st
 		return err
 	}
 
-	responseFormat := map[string]any{
-		"type": "json_schema",
-		"json_schema": map[string]any{
-			"name":   "extracted_data",
-			"strict": true,
-			"schema": schemaRaw,
-		},
-	}
+	responseFormat := structuredResponseFormat(schemaRaw)
 
 	systemPrompt := "You extract structured data from documents and images. Return only valid JSON matching the provided schema."
 
@@ -165,8 +151,10 @@ func runStructuredCommand(cfg *config.Config, cmd *config.CommandInfo, args []st
 	if lc, ok := caller.(*llm.LitertLMCaller); ok {
 		lc.Backend = cfg.LitertLM.Backend
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 	llmStart := time.Now()
-	resultMessages, err := caller.CallStructured(context.Background(), systemPrompt, messages, nil, responseFormat)
+	resultMessages, err := caller.CallStructured(ctx, systemPrompt, messages, nil, responseFormat)
 	llmDuration := time.Since(llmStart)
 	if err != nil {
 		return fmt.Errorf("LLM call failed: %w", err)
@@ -184,12 +172,7 @@ func runStructuredCommand(cfg *config.Config, cmd *config.CommandInfo, args []st
 		return fmt.Errorf("empty response from LLM")
 	}
 
-	result := strings.TrimSpace(contentStr)
-
-	var prettyJSON bytes.Buffer
-	if err := json.Indent(&prettyJSON, []byte(result), "", "  "); err == nil {
-		result = prettyJSON.String()
-	}
+	result := prettyJSONOrRaw(strings.TrimSpace(contentStr))
 
 	if commandOutput != "" {
 		if err := os.WriteFile(commandOutput, []byte(result+"\n"), 0644); err != nil {

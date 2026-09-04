@@ -43,7 +43,7 @@ func (p *ToolExecutorPolicy) ExecuteTool(call ToolCall) (string, error) {
 		if !ok1 || !ok2 {
 			return "Error: Invalid tool arguments", nil
 		}
-		path = strings.TrimPrefix(path, "@")
+		path = strings.TrimLeft(path, "@")
 		if p.ConfirmWriteFile != nil && !p.ConfirmWriteFile(path) {
 			return "Error: File write denied by user", nil
 		}
@@ -55,7 +55,7 @@ func (p *ToolExecutorPolicy) ExecuteTool(call ToolCall) (string, error) {
 		if !ok {
 			return "Error: Invalid tool arguments", nil
 		}
-		path = strings.TrimPrefix(path, "@")
+		path = strings.TrimLeft(path, "@")
 		p.exec(call)
 		return tools.ReadFile(path)
 
@@ -99,10 +99,7 @@ func (p *ToolExecutorPolicy) IsAllowedCommand(cmd string) bool {
 }
 
 func (p *ToolExecutorPolicy) AskConfirmation(cmd string) bool {
-	if p.ConfirmCommand == nil {
-		return true
-	}
-	return p.ConfirmCommand(cmd)
+	return p.IsAllowedCommand(cmd)
 }
 
 // NewConfirmPolicy returns a ToolExecutorPolicy that mirrors the service/bot
@@ -127,9 +124,10 @@ func IsAllowedCommandForPolicy(cmd string, allowed []string) bool {
 	if len(allowed) == 0 {
 		return false
 	}
-	name := cmd
-	if idx := strings.Index(strings.TrimSpace(cmd), " "); idx != -1 {
-		name = cmd[:idx]
+	trim := strings.TrimSpace(cmd)
+	name := trim
+	if idx := strings.Index(trim, " "); idx != -1 {
+		name = trim[:idx]
 	}
 	name = strings.TrimSpace(name)
 	for _, a := range allowed {

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -122,7 +121,9 @@ func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
 			return e.AskConfirmation(fmt.Sprintf("Write to file %s?", path))
 		},
 		OnExecute: func(call llm.ToolCall) {
+			e.m.mu.Lock()
 			e.m.messages = append(e.m.messages, Message{role: "assistant", content: systemStyle.Render(e.toolActionMessage(call))})
+			e.m.mu.Unlock()
 		},
 	}
 	return policy.ExecuteTool(call)
@@ -227,6 +228,7 @@ type ShellModel struct {
 	showSuggestions    bool
 	loading            bool
 	cancelChan         chan struct{}
+	cancelOnce         sync.Once
 	confirmationChan   chan bool
 	pendingCommand     string
 	waitingConfirm     bool
@@ -349,16 +351,25 @@ func (m *ShellModel) handleConfirmationKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd)
 	switch msg.Type {
 	case tea.KeyEnter, tea.KeyEscape:
 		m.waitingConfirm = false
-		m.confirmationChan <- false
+		select {
+		case m.confirmationChan <- false:
+		default:
+		}
 		return m, nil
 	}
 	switch msg.String() {
 	case "y", "Y":
 		m.waitingConfirm = false
-		m.confirmationChan <- true
+		select {
+		case m.confirmationChan <- true:
+		default:
+		}
 	case "n", "N":
 		m.waitingConfirm = false
-		m.confirmationChan <- false
+		select {
+		case m.confirmationChan <- false:
+		default:
+		}
 	}
 	return m, nil
 }
@@ -390,14 +401,12 @@ func (m *ShellModel) handleEnterKey() (tea.Model, tea.Cmd) {
 func (m *ShellModel) handleEscapeKey() (tea.Model, tea.Cmd) {
 	if m.loading {
 		if m.cancelChan != nil {
-			select {
-			case <-m.cancelChan:
-			default:
-				close(m.cancelChan)
-			}
+			m.cancelOnce.Do(func() { close(m.cancelChan) })
 		}
 		m.loading = false
+		m.mu.Lock()
 		m.messages = append(m.messages, Message{role: "system", content: "Request cancelled."})
+		m.mu.Unlock()
 		return m, nil
 	}
 	if m.menu.kind != menuNone {
@@ -571,21 +580,27 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 
 	var images []string
 	if strings.Contains(value, "@") {
-		parts := strings.Split(value, " ")
+		parts := strings.Fields(value)
 		for i, part := range parts {
 			if strings.HasPrefix(part, "@") {
-				path := strings.TrimPrefix(part, "@")
-				if path == "" {
+				raw := strings.TrimPrefix(part, "@")
+				raw = strings.Trim(raw, "\"'")
+				if raw == "" {
+					m.mu.Lock()
 					m.messages = append(m.messages, Message{role: "error", content: "Error: empty file path after @"})
+					m.mu.Unlock()
 					return m, nil
 				}
+				path := raw
 				if isImage(path) {
 					encoded, err := encodeImage(path)
 					if err != nil {
+						m.mu.Lock()
 						m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error encoding image %s: %v", path, err)})
-					} else {
-						images = append(images, encoded)
+						m.mu.Unlock()
+						return m, nil
 					}
+					images = append(images, encoded)
 				}
 				parts[i] = path
 			}
@@ -636,10 +651,13 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 		return model, cmd
 	}
 
+	m.mu.Lock()
 	m.messages = append(m.messages, Message{role: "user", content: value, images: images})
+	m.mu.Unlock()
 
 	m.loading = true
 	m.cancelChan = make(chan struct{})
+	m.cancelOnce = sync.Once{}
 
 	go m.ElaborateMessage()
 
@@ -687,14 +705,19 @@ func (m *ShellModel) handleCommand(input string) (tea.Model, tea.Cmd) {
 				m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})
 				return m, nil
 			}
+			m.mu.Lock()
 			m.messages = append(m.messages, Message{role: "user", content: text, images: images, schema: c.Schema})
+			m.mu.Unlock()
 			m.loading = true
 			m.cancelChan = make(chan struct{})
+			m.cancelOnce = sync.Once{}
 			go m.ElaborateMessage()
 			return m, nil
 		}
 	}
+	m.mu.Lock()
 	m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Unknown command: /%s", cmd)})
+	m.mu.Unlock()
 	return m, nil
 }
 
@@ -840,6 +863,9 @@ func (m *ShellModel) selectSuggestion() (tea.Model, tea.Cmd) {
 		m.showSuggestions = false
 
 		if strings.HasPrefix(suggestion, "/") && !strings.Contains(suggestion, "@") {
+			if m.loading {
+				return m, nil
+			}
 			return m.handleSubmit()
 		}
 		return m, nil
@@ -1254,7 +1280,9 @@ func (m *ShellModel) serviceChat(ctx context.Context, messages []llm.Message) ([
 	result, err := m.serviceClient.Chat(ctx, req)
 	if err != nil {
 		if errors.Is(err, service.ErrUnavailable) {
-			m.serviceClient.Close()
+			if closeErr := m.serviceClient.Close(); closeErr != nil {
+				slog.Warn("service client close failed", "err", closeErr)
+			}
 			m.serviceClient = nil
 		}
 		return nil, err
@@ -1266,34 +1294,34 @@ func (m *ShellModel) serviceChat(ctx context.Context, messages []llm.Message) ([
 // JSON schema in its frontmatter) through CallStructured, bypassing the
 // service like extract did, and renders the JSON result.
 func (m *ShellModel) runStructuredMessage(ctx context.Context, messages []llm.Message, schemaPath string) {
-	schemaData, err := os.ReadFile(schemaPath)
-	if err != nil {
-		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: failed to read schema: %v", err)})
+	safeAppendError := func(text string) {
+		m.mu.Lock()
+		m.messages = append(m.messages, Message{role: "error", content: text})
 		m.loading = false
+		m.mu.Unlock()
 		if m.teaProgram != nil {
 			m.teaProgram.Send(responseReadyMsg{})
 		}
+	}
+	cleanPath := filepath.Clean(schemaPath)
+	if !filepath.IsAbs(cleanPath) {
+		if cwd, err := os.Getwd(); err == nil {
+			cleanPath = filepath.Join(cwd, cleanPath)
+		}
+	}
+	schemaData, err := os.ReadFile(cleanPath)
+	if err != nil {
+		safeAppendError(fmt.Sprintf("Error: failed to read schema: %v", err))
 		return
 	}
 
 	var schemaRaw any
 	if err := json.Unmarshal(schemaData, &schemaRaw); err != nil {
-		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: invalid JSON schema: %v", err)})
-		m.loading = false
-		if m.teaProgram != nil {
-			m.teaProgram.Send(responseReadyMsg{})
-		}
+		safeAppendError(fmt.Sprintf("Error: invalid JSON schema: %v", err))
 		return
 	}
 
-	responseFormat := map[string]any{
-		"type": "json_schema",
-		"json_schema": map[string]any{
-			"name":   "extracted_data",
-			"strict": true,
-			"schema": schemaRaw,
-		},
-	}
+	responseFormat := structuredResponseFormat(schemaRaw)
 
 	systemPrompt := "You extract structured data from documents and images. Return only valid JSON matching the provided schema."
 
@@ -1303,42 +1331,28 @@ func (m *ShellModel) runStructuredMessage(ctx context.Context, messages []llm.Me
 	}
 	resultMessages, err := caller.CallStructured(ctx, systemPrompt, messages, nil, responseFormat)
 	if err != nil {
-		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: LLM call failed: %v", err)})
-		m.loading = false
-		if m.teaProgram != nil {
-			m.teaProgram.Send(responseReadyMsg{})
-		}
+		safeAppendError(fmt.Sprintf("Error: LLM call failed: %v", err))
 		return
 	}
 
 	if len(resultMessages) == 0 {
-		m.messages = append(m.messages, Message{role: "error", content: "Error: no response from LLM"})
-		m.loading = false
-		if m.teaProgram != nil {
-			m.teaProgram.Send(responseReadyMsg{})
-		}
+		safeAppendError("Error: no response from LLM")
 		return
 	}
 
 	lastMsg := resultMessages[len(resultMessages)-1]
 	contentStr, ok := lastMsg.Content.(string)
 	if !ok || strings.TrimSpace(contentStr) == "" {
-		m.messages = append(m.messages, Message{role: "error", content: "Error: empty response from LLM"})
-		m.loading = false
-		if m.teaProgram != nil {
-			m.teaProgram.Send(responseReadyMsg{})
-		}
+		safeAppendError("Error: empty response from LLM")
 		return
 	}
 
-	result := strings.TrimSpace(contentStr)
-	var prettyJSON bytes.Buffer
-	if err := json.Indent(&prettyJSON, []byte(result), "", "  "); err == nil {
-		result = prettyJSON.String()
-	}
+	result := prettyJSONOrRaw(strings.TrimSpace(contentStr))
 
+	m.mu.Lock()
 	m.messages = append(m.messages, Message{role: "assistant", content: result})
 	m.loading = false
+	m.mu.Unlock()
 	if m.teaProgram != nil {
 		m.teaProgram.Send(responseReadyMsg{})
 	}
@@ -1351,13 +1365,26 @@ func (m *ShellModel) appendLLMResult(resultMessages []llm.Message) {
 	defer m.mu.Unlock()
 	for _, msg := range resultMessages {
 		contentStr := ""
-		if s, ok := msg.Content.(string); ok {
-			contentStr = s
-		} else {
+		switch v := msg.Content.(type) {
+		case string:
+			contentStr = v
+		case []llm.ContentPart:
+			var sb strings.Builder
+			for _, p := range v {
+				if p.Type == "text" {
+					sb.WriteString(p.Text)
+				}
+			}
+			contentStr = sb.String()
+		case nil:
+			contentStr = ""
+		default:
 			contentStr = fmt.Sprintf("%v", msg.Content)
 		}
 
 		switch msg.Role {
+		case "system":
+			m.messages = append(m.messages, Message{role: "system", content: contentStr})
 		case "user":
 			m.messages = append(m.messages, Message{role: "user", content: contentStr})
 		case "assistant":

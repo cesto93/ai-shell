@@ -239,10 +239,13 @@ func (c *telegramClient) sendChatAction(ctx context.Context, chatID int64, actio
 		slog.Debug("sendChatAction do failed", "err", err)
 		return
 	}
+	defer resp.Body.Close()
 	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
 		slog.Debug("sendChatAction discard failed", "err", err)
 	}
-	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		slog.Debug("sendChatAction non-OK", "status", resp.Status)
+	}
 }
 
 func splitTelegramMessage(text string, limit int) []string {
@@ -257,11 +260,11 @@ func splitTelegramMessage(text string, limit int) []string {
 			break
 		}
 		cut := limit
-		// try to cut at newline within rune slice
-		prefix := string(runes[:limit])
-		if idx := strings.LastIndex(prefix, "\n"); idx > limit/2 {
-			// idx is byte index in prefix; convert to rune count
-			cut = len([]rune(prefix[:idx+1]))
+		for i := limit - 1; i > limit/2; i-- {
+			if runes[i] == '\n' {
+				cut = i + 1
+				break
+			}
 		}
 		chunks = append(chunks, string(runes[:cut]))
 		runes = runes[cut:]
@@ -279,10 +282,15 @@ func newBotSession() *botSession {
 	return &botSession{messages: make(map[int64][]llm.Message)}
 }
 
+const botMaxHistory = 50
+
 func (s *botSession) append(chatID int64, msgs ...llm.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.messages[chatID] = append(s.messages[chatID], msgs...)
+	if len(s.messages[chatID]) > botMaxHistory {
+		s.messages[chatID] = s.messages[chatID][len(s.messages[chatID])-botMaxHistory:]
+	}
 }
 
 func (s *botSession) get(chatID int64) []llm.Message {
@@ -308,19 +316,9 @@ type botExecutor struct {
 }
 
 func (e *botExecutor) ExecuteTool(call llm.ToolCall) (string, error) {
-	policy := &llm.ToolExecutorPolicy{
-		ConfirmCommand: func(cmd string) bool {
-			if !e.cfg.Shell.Confirm {
-				return true
-			}
-			return config.IsAllowedCommand(config.GetCommandName(cmd), e.cfg.Shell.AllowedCommands)
-		},
-		ConfirmWriteFile: func(path string) bool {
-			return !e.cfg.Shell.Confirm
-		},
-		OnExecute: func(call llm.ToolCall) {
-			slog.Info("bot tool execution", "tool", call.Name, "args", call.Arguments)
-		},
+	policy := llm.NewConfirmPolicy(e.cfg.Shell.Confirm, e.cfg.Shell.AllowedCommands)
+	policy.OnExecute = func(call llm.ToolCall) {
+		slog.Info("bot tool execution", "tool", call.Name, "args", call.Arguments)
 	}
 	return policy.ExecuteTool(call)
 }
@@ -507,7 +505,7 @@ func handleTelegramMessage(ctx context.Context, tg *telegramClient, cfg *config.
 		}
 		return
 	}
-	if strings.HasPrefix(text, "/reset") || strings.HasPrefix(text, "/clear") {
+	if text == "/reset" || strings.HasPrefix(text, "/reset ") || text == "/clear" || strings.HasPrefix(text, "/clear ") {
 		sessions.reset(chatID)
 		if err := tg.sendMessage(ctx, chatID, "Conversation reset."); err != nil {
 			slog.Error("telegram sendMessage failed", "err", err, "chat_id", chatID)

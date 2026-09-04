@@ -25,7 +25,7 @@ func chatRequestFromConfig(cfg *config.Config, messages []llm.Message) service.C
 		AgentFiles:      cfg.AgentFiles,
 		Skills:          cfg.Skills,
 		Confirm:         cfg.Shell.Confirm,
-		AllowedCommands: cfg.Shell.AllowedCommands,
+		AllowedCommands: append([]string(nil), cfg.Shell.AllowedCommands...),
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -26,8 +27,9 @@ func commitCallLLM(cfg *config.Config, systemPrompt string, messages []llm.Messa
 		SystemPrompt:    systemPrompt,
 		Model:           cfg.LLM.Model,
 		Provider:        cfg.LLM.Provider,
+		Backend:         cfg.LitertLM.Backend,
 		Confirm:         cfg.Shell.Confirm,
-		AllowedCommands: cfg.Shell.AllowedCommands,
+		AllowedCommands: append([]string(nil), cfg.Shell.AllowedCommands...),
 	}
 	return chatWithServiceFallback(req, nil, func() ([]llm.Message, error) {
 		caller := llm.NewProviderCaller(cfg.LLM.Provider, cfg.LLM.Model, llm.NoopExecutor{})
@@ -54,13 +56,20 @@ func init() {
 	commitCmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "print the commit message without creating a commit")
 }
 
-func runCommit() error {
+func runCommit() (rErr error) {
 	var staged bool
 	if commitAll {
 		if out, err := execCommand("git", "add", "-A").CombinedOutput(); err != nil {
 			return fmt.Errorf("git add -A failed: %w\n%s", err, out)
 		}
 		staged = true
+		defer func() {
+			if staged && (dryRun || (rErr != nil && !dryRun)) {
+				if err := execCommand("git", "reset").Run(); err != nil {
+					slog.Warn("git reset failed", "err", err)
+				}
+			}
+		}()
 	}
 
 	diffOutput, err := execCommand("git", "diff", "--cached").Output()
@@ -120,11 +129,7 @@ Only output the commit message, nothing else.`,
 	}
 
 	msg := strings.TrimSpace(content)
-	msg = strings.TrimPrefix(msg, "```")
-	msg = strings.TrimSuffix(msg, "```")
-	msg = strings.TrimPrefix(msg, "text\n")
-	msg = strings.TrimPrefix(msg, "markdown\n")
-	msg = strings.TrimSpace(msg)
+	msg = stripCodeFences(msg)
 
 	if msg == "" {
 		return fmt.Errorf("empty commit message after cleanup")
@@ -133,9 +138,6 @@ Only output the commit message, nothing else.`,
 	fmt.Printf("\n%s\n\n", msg)
 
 	if dryRun {
-		if staged {
-			execCommand("git", "reset").Run()
-		}
 		return nil
 	}
 
@@ -151,13 +153,26 @@ Only output the commit message, nothing else.`,
 	}
 	tmpFile.Close()
 
-	commitCmd := execCommand("git", "commit", "-F", tmpFile.Name())
-	commitCmd.Stdout = os.Stdout
-	commitCmd.Stderr = os.Stderr
+	gitCommit := execCommand("git", "commit", "-F", tmpFile.Name())
+	gitCommit.Stdout = os.Stdout
+	gitCommit.Stderr = os.Stderr
 
-	if err := commitCmd.Run(); err != nil {
+	if err := gitCommit.Run(); err != nil {
 		return fmt.Errorf("git commit failed: %w", err)
 	}
 
 	return nil
+}
+
+var fenceRe = regexp.MustCompile("(?m)^```[a-zA-Z]*\\s*\\n?|\\n?```\\s*$")
+
+func stripCodeFences(s string) string {
+	s = strings.TrimSpace(s)
+	// Remove leading ```<lang> and trailing ```
+	s = fenceRe.ReplaceAllString(s, "")
+	s = strings.TrimSpace(s)
+	// Handle case of single surrounding fences via simple trim
+	s = strings.TrimPrefix(s, "```")
+	s = strings.TrimSuffix(s, "```")
+	return strings.TrimSpace(s)
 }

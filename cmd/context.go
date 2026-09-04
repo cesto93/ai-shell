@@ -44,7 +44,7 @@ func runContext() error {
 		fmt.Println()
 	}
 
-	agent := llm.NewAgentFor(cfg.Agent, cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools)
+	agent := llm.NewAgentForSession(cfg.Agent, cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools, cfg.LitertLM.Backend, cfg.AgentFiles, cfg.Skills)
 	prompt := agent.Prompt
 	fmt.Printf("Agent %q system prompt (%d words, ~%d tokens)\n",
 		cfg.Agent, len(strings.Fields(prompt)), estimateTokens(prompt))
