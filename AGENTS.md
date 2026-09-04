@@ -22,7 +22,7 @@ go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 
 | Directory | Contents |
 |-----------|----------|
-| `cmd/` | Cobra commands: default (TUI shell), `config`, `commit`, `pull`, `models`, `commands`, `agents`, `stats`, `context`, `service` |
+| `cmd/` | Cobra commands: default (TUI shell), `config`, `commit`, `pull`, `models`, `commands`, `agents`, `stats`, `context`, `service`, `bot` (Telegram) |
 | `config/` | Viper YAML config, model lists (OpenRouter free models fetched live, 10 min cache), `.env` loading via `gotenv`. Free OpenRouter models filtered by zero pricing and `architecture.output_modalities` (audio-only excluded); `InputTypes` from `input_modalities` |
 | `llm/` | `Agent`, `Caller`, `RawCaller` (adds `CallStructured`), `ToolExecutor`, 6 tool definitions, `NewProviderCaller`/`NewProviderCallerRaw` factory, `ProviderConfig`, system prompts, `LlamacppCaller`, `LitertLMCaller`. Tool dispatch via `ToolExecutorPolicy` (`llm/executor.go`, pluggable confirm/execute hooks) shared by shell/CLI/service; `NoopExecutor` runs nothing. Agents: `GetAgentDefs`/`GetAgentDef`; `NewAgentFor` intersects agent allowed tools with user toggles; `NewAgentForSession` adds backend + AGENTS.md + skills. `OpenAICaller` persists `usage` via `stats.RecordUsage` (provider from `BaseURL`) |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt), `GetDistro`, `GetShell` |
@@ -133,6 +133,14 @@ Persistent `--debug` flag on the root command. `cmd.initLogger(cfg)` temporarily
 - Usable as `ai-shell service` (foreground), `service --stop`, or `service --status`
 - grpc-go server on unix socket `~/.ai-shell/service.sock`; stale socket removed when no live service answers `Ping`
 - Sessions route through the service when `service.IsActive()` (shell, custom commands, commit); `cmd/service_helpers.go` provides `chatRequestFromConfig` and `chatWithServiceFallback` (falls back to local on `service.ErrUnavailable`)
+
+## Bot command (cmd/bot.go)
+
+- Usable as `ai-shell bot` (Telegram long-polling bot)
+- Token from `--token` or `TELEGRAM_BOT_TOKEN` env (loaded via `.env`); `--allow-from` / `TELEGRAM_ALLOWED_CHAT_IDS` restricts to chat IDs or @usernames (empty = allow everyone); validates via `getMe`
+- Long polls `getUpdates` (30s), per-chat `[]llm.Message` history with `/reset` and `/help` handling; sends `typing` chat action and splits replies >4096 chars
+- Pure `net/http` Telegram client (no external deps): `telegramClient` (`getMe`, `getUpdates`, `sendMessage`, `sendChatAction`)
+- Forwards to `llm.NewAgentForSession(...).CallLLM` via `botExecutor` (mirrors `ServiceExecutor` confirm policy: `RunCommand` limited to `allowed_commands` and `WriteFile` denied when `confirm=true`); falls back to service when `service.IsActive()` via `service.Chat` + `ErrUnavailable` check
 
 ## CI workflows (.github/workflows)
 
