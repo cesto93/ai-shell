@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -143,7 +145,8 @@ func LoadConfig() (*Config, error) {
 	}
 
 	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+		var notFound viper.ConfigFileNotFoundError
+		if errors.As(err, &notFound) {
 			defaultConfig := &Config{
 				ConfigFile: "",
 				LogLevel:   "info",
@@ -175,14 +178,18 @@ func LoadConfig() (*Config, error) {
 			}
 
 			if configPath != "" {
-				err := os.MkdirAll(configPath, 0755)
-				if err == nil {
+				if mkErr := os.MkdirAll(configPath, 0o755); mkErr == nil {
 					defaultConfigFile := filepath.Join(configPath, "config.yaml")
-					if _, err := os.Stat(defaultConfigFile); os.IsNotExist(err) {
+					if _, statErr := os.Stat(defaultConfigFile); os.IsNotExist(statErr) {
 						content := "log_level: \"info\"\nagent: \"build\"\nagent_files: true\nskills: true\nllm:\n  provider: \"ollama\"\n  model: \"granite4:3b-h\"\n  input_types:\n    - \"text\"\nshell:\n  confirm: true\n  allowed_commands:\n    - \"ls\"\n    - \"pwd\"\n    - \"git\"\nlitertlm:\n  backend: \"cpu\"\ntools:\n  RunCommand: true\n  WriteFile: true\n  ReadFile: true\n  KVSet: true\n  KVGet: true\n  KVList: true\n"
-						_ = os.WriteFile(defaultConfigFile, []byte(content), 0644)
-						defaultConfig.ConfigFile = defaultConfigFile
+						if writeErr := os.WriteFile(defaultConfigFile, []byte(content), 0o644); writeErr != nil {
+							slog.Warn("failed to write default config", "err", writeErr)
+						} else {
+							defaultConfig.ConfigFile = defaultConfigFile
+						}
 					}
+				} else {
+					slog.Warn("failed to create config dir", "err", mkErr)
 				}
 			}
 
@@ -451,7 +458,10 @@ func FindLlamacppMMProj() (string, error) {
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return "", nil
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("scan mmproj: %w", err)
 	}
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -469,6 +479,9 @@ func FindLlamacppMMProj() (string, error) {
 func scanModels(dir, provider, ext string) []ModelInfo {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
+		if !os.IsNotExist(err) {
+			slog.Warn("failed to scan models", "dir", dir, "err", err)
+		}
 		return nil
 	}
 	var models []ModelInfo
@@ -477,10 +490,11 @@ func scanModels(dir, provider, ext string) []ModelInfo {
 			continue
 		}
 		name := entry.Name()
-		if !strings.HasSuffix(strings.ToLower(name), ext) {
+		if !strings.HasSuffix(strings.ToLower(name), strings.ToLower(ext)) {
 			continue
 		}
-		modelName := strings.TrimSuffix(name, ext)
+		// Trim suffix case-insensitively.
+		modelName := name[:len(name)-len(ext)]
 		info, err := entry.Info()
 		size := ""
 		if err == nil {
@@ -548,6 +562,9 @@ func llamacppMMProjsForModel(dir, modelName string) []string {
 	key := llamacppVisionKey(modelName)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
+		if !os.IsNotExist(err) {
+			slog.Warn("failed to scan mmproj list", "dir", dir, "err", err)
+		}
 		return nil
 	}
 	var projs []string
@@ -560,8 +577,10 @@ func llamacppMMProjsForModel(dir, modelName string) []string {
 		if !strings.HasSuffix(lower, ".gguf") || !strings.Contains(lower, "mmproj") {
 			continue
 		}
-		if llamacppVisionKey(strings.TrimSuffix(name, ".gguf")) == key {
-			projs = append(projs, strings.TrimSuffix(name, ".gguf"))
+		// Case-insensitive suffix trim.
+		base := name[:len(name)-len(".gguf")]
+		if llamacppVisionKey(base) == key {
+			projs = append(projs, base)
 		}
 	}
 	return projs
@@ -586,6 +605,7 @@ var (
 	openRouterModelsCache    []ModelInfo
 	openRouterModelsCached   time.Time
 	openRouterModelsCacheTTL = 10 * time.Minute
+	openRouterModelsMu       sync.Mutex
 )
 
 // getOpenRouterModelsFunc is swappable for tests.
@@ -594,6 +614,8 @@ var getOpenRouterModelsFunc = GetOpenRouterModels
 // GetOpenRouterModels returns the list of free OpenRouter models, fetched
 // from the OpenRouter API and cached briefly.
 func GetOpenRouterModels() []ModelInfo {
+	openRouterModelsMu.Lock()
+	defer openRouterModelsMu.Unlock()
 	if openRouterModelsCache != nil && time.Since(openRouterModelsCached) < openRouterModelsCacheTTL {
 		return openRouterModelsCache
 	}
@@ -786,7 +808,11 @@ func LoadCommands(cfg *Config) []CommandInfo {
 	var fileCmds []CommandInfo
 	dirs := loadCommandDirs()
 	for _, dir := range dirs {
-		cmds, _ := LoadCommandsFromDir(dir)
+		cmds, err := LoadCommandsFromDir(dir)
+		if err != nil {
+			slog.Debug("failed to load commands", "dir", dir, "err", err)
+			continue
+		}
 		fileCmds = append(fileCmds, cmds...)
 	}
 
@@ -830,6 +856,7 @@ func LoadCommandsFromDir(dir string) ([]CommandInfo, error) {
 		}
 		cmd, err := parseCommandFile(filepath.Join(dir, entry.Name()))
 		if err != nil {
+			slog.Warn("skip command file", "path", filepath.Join(dir, entry.Name()), "err", err)
 			continue
 		}
 		cmd.Name = strings.TrimSuffix(entry.Name(), ".md")
@@ -842,14 +869,14 @@ func LoadCommandsFromDir(dir string) ([]CommandInfo, error) {
 func loadCommandDirs() []string {
 	var dirs []string
 
-	cwd, err := os.Getwd()
-	if err == nil {
-		dirs = append(dirs, filepath.Join(cwd, ".ai-shell", "commands"))
-	}
-
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
 		dirs = append(dirs, filepath.Join(homeDir, ".ai-shell", "commands"))
+	}
+
+	cwd, err := os.Getwd()
+	if err == nil {
+		dirs = append(dirs, filepath.Join(cwd, ".ai-shell", "commands"))
 	}
 
 	return dirs
@@ -872,7 +899,9 @@ func parseCommandFile(path string) (CommandInfo, error) {
 				Description string `yaml:"description"`
 				Schema      string `yaml:"schema"`
 			}
-			if err := yaml.Unmarshal([]byte(frontmatter), &meta); err == nil {
+			if err := yaml.Unmarshal([]byte(frontmatter), &meta); err != nil {
+				slog.Warn("invalid command frontmatter", "path", path, "err", err)
+			} else {
 				cmd.Description = meta.Description
 				if meta.Schema != "" {
 					cmd.Schema = filepath.Join(filepath.Dir(path), meta.Schema)
@@ -899,6 +928,9 @@ func EnsureCommandsDir() error {
 // FormatFileSize renders a byte count as a human-readable size (e.g. "1.5 MB").
 func FormatFileSize(b int64) string {
 	const unit = 1024
+	if b < 0 {
+		b = 0
+	}
 	if b < unit {
 		return fmt.Sprintf("%d B", b)
 	}
@@ -906,6 +938,12 @@ func FormatFileSize(b int64) string {
 	for n := b / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
+		if exp >= len("KMGTPE")-1 {
+			break
+		}
+	}
+	if exp >= len("KMGTPE") {
+		exp = len("KMGTPE") - 1
 	}
 	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }

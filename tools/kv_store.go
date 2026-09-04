@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"go.etcd.io/bbolt"
 )
@@ -32,7 +33,7 @@ func getDB() (*bbolt.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return bbolt.Open(dbPath, 0600, nil)
+	return bbolt.Open(dbPath, 0600, &bbolt.Options{Timeout: time.Second})
 }
 
 func KVSet(key, value string) (string, error) {

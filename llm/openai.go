@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"ai-shell/stats"
 )
@@ -53,13 +54,15 @@ type OpenAIUsageCompletionDetails struct {
 	ReasoningTokens int `json:"reasoning_tokens"`
 }
 
+const openAIMaxToolHops = 10
+
 func NewOpenAICaller(baseURL, apiKey, model string, executor ToolExecutor) *OpenAICaller {
 	return &OpenAICaller{
 		BaseURL:  baseURL,
 		APIKey:   apiKey,
 		Model:    model,
 		Executor: executor,
-		Client:   &http.Client{},
+		Client:   &http.Client{Timeout: 60 * time.Second},
 	}
 }
 
@@ -69,7 +72,7 @@ func (o *OpenAICaller) isOpenRouter() bool {
 
 func (o *OpenAICaller) providerName() string {
 	switch {
-	case strings.Contains(o.BaseURL, "openrouter.ai"):
+	case o.isOpenRouter():
 		return "openrouter"
 	case strings.Contains(o.BaseURL, "generativelanguage.googleapis.com"):
 		return "gemini"
@@ -112,7 +115,7 @@ func (o *OpenAICaller) call(ctx context.Context, systemPrompt string, messages [
 
 	originalCount := len(allMessages)
 
-	for {
+	for hops := 0; hops < openAIMaxToolHops; hops++ {
 		reqBody := OpenAIRequest{
 			Model:          o.Model,
 			Messages:       allMessages,
@@ -139,15 +142,15 @@ func (o *OpenAICaller) call(ctx context.Context, systemPrompt string, messages [
 		if err != nil {
 			return nil, fmt.Errorf("request failed: %w", err)
 		}
-		defer resp.Body.Close()
 
 		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		if err != nil {
 			return nil, fmt.Errorf("failed to read response: %w", err)
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("API error: %s - %s", resp.Status, string(body))
+			return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
 		}
 
 		var openAIResp OpenAIResponse
@@ -214,4 +217,5 @@ func (o *OpenAICaller) call(ctx context.Context, systemPrompt string, messages [
 			})
 		}
 	}
+	return nil, fmt.Errorf("tool call hop limit exceeded (%d)", openAIMaxToolHops)
 }

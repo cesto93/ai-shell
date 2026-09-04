@@ -12,9 +12,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// maxMsgSize bounds gRPC message sizes in bytes (base64 images can be large).
-const maxMsgSize = 64 << 20
-
 // ErrUnavailable is returned when the service cannot be reached. Sessions use
 // it to fall back to local execution.
 var ErrUnavailable = errors.New("ai-shell service unavailable")
@@ -45,8 +42,8 @@ func dial() (*grpc.ClientConn, error) {
 		"unix://"+path,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(maxMsgSize),
-			grpc.MaxCallSendMsgSize(maxMsgSize),
+			grpc.MaxCallRecvMsgSize(MaxMsgSize),
+			grpc.MaxCallSendMsgSize(MaxMsgSize),
 		),
 	)
 }

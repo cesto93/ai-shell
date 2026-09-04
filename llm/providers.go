@@ -33,23 +33,28 @@ func getProviderConfig(provider string) ProviderConfig {
 	}
 }
 
-func NewProviderCaller(provider, model string, executor ToolExecutor) Caller {
+func newProviderCaller(provider, model string, executor ToolExecutor) (Caller, bool) {
 	switch provider {
 	case "llamacpp":
-		return NewLlamacppCaller(model, executor)
+		return NewLlamacppCaller(model, executor), true
 	case "litertlm":
-		return NewLitertLMCaller(model, executor)
+		return NewLitertLMCaller(model, executor), true
+	default:
+		return nil, false
+	}
+}
+
+func NewProviderCaller(provider, model string, executor ToolExecutor) Caller {
+	if c, ok := newProviderCaller(provider, model, executor); ok {
+		return c
 	}
 	cfg := getProviderConfig(provider)
 	return NewOpenAICaller(cfg.BaseURL, cfg.APIKey, model, executor)
 }
 
 func NewProviderCallerRaw(provider, model string, executor ToolExecutor) RawCaller {
-	switch provider {
-	case "llamacpp":
-		return NewLlamacppCaller(model, executor)
-	case "litertlm":
-		return NewLitertLMCaller(model, executor)
+	if c, ok := newProviderCaller(provider, model, executor); ok {
+		return c.(RawCaller)
 	}
 	cfg := getProviderConfig(provider)
 	return NewOpenAICaller(cfg.BaseURL, cfg.APIKey, model, executor)

@@ -12,6 +12,9 @@ import (
 // ServiceVersion is the protocol version reported by Ping.
 const ServiceVersion = "1"
 
+// MaxMsgSize bounds gRPC message sizes in bytes (base64 images can be large).
+const MaxMsgSize = 64 << 20
+
 // socketPathFunc is swappable for tests.
 var socketPathFunc = defaultSocketPath
 

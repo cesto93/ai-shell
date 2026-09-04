@@ -115,7 +115,10 @@ func (c *telegramClient) getMe(ctx context.Context) error {
 		return fmt.Errorf("getMe request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("getMe read: %w", err)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("getMe failed: %s %s", resp.Status, string(body))
 	}
@@ -132,7 +135,10 @@ func (c *telegramClient) getMe(ctx context.Context) error {
 }
 
 func (c *telegramClient) getUpdates(ctx context.Context, offset int64, timeoutSec int) ([]tgUpdate, error) {
-	u, _ := url.Parse(c.baseURL + "/getUpdates")
+	u, err := url.Parse(c.baseURL + "/getUpdates")
+	if err != nil {
+		return nil, fmt.Errorf("parse updates URL: %w", err)
+	}
 	q := u.Query()
 	q.Set("offset", strconv.FormatInt(offset, 10))
 	q.Set("timeout", strconv.Itoa(timeoutSec))
@@ -148,7 +154,10 @@ func (c *telegramClient) getUpdates(ctx context.Context, offset int64, timeoutSe
 		return nil, err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("getUpdates read: %w", err)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("getUpdates %s: %s", resp.Status, string(body))
 	}
@@ -176,7 +185,10 @@ func (c *telegramClient) sendMessageChunk(ctx context.Context, chatID int64, tex
 		"chat_id": chatID,
 		"text":    text,
 	}
-	data, _ := json.Marshal(payload)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal sendMessage: %w", err)
+	}
 	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/sendMessage", bytes.NewReader(data))
 	if err != nil {
 		return err
@@ -187,7 +199,10 @@ func (c *telegramClient) sendMessageChunk(ctx context.Context, chatID int64, tex
 		return fmt.Errorf("sendMessage failed: %w", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("sendMessage read: %w", err)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("sendMessage %s: %s", resp.Status, string(body))
 	}
@@ -208,37 +223,48 @@ func (c *telegramClient) sendChatAction(ctx context.Context, chatID int64, actio
 		"chat_id": chatID,
 		"action":  action,
 	}
-	data, _ := json.Marshal(payload)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		slog.Debug("marshal sendChatAction failed", "err", err)
+		return
+	}
 	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/sendChatAction", bytes.NewReader(data))
 	if err != nil {
+		slog.Debug("sendChatAction request failed", "err", err)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		slog.Debug("sendChatAction do failed", "err", err)
 		return
 	}
-	io.Copy(io.Discard, resp.Body)
+	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+		slog.Debug("sendChatAction discard failed", "err", err)
+	}
 	resp.Body.Close()
 }
 
 func splitTelegramMessage(text string, limit int) []string {
-	if len(text) <= limit {
+	runes := []rune(text)
+	if len(runes) <= limit {
 		return []string{text}
 	}
 	var chunks []string
-	for len(text) > 0 {
-		if len(text) <= limit {
-			chunks = append(chunks, text)
+	for len(runes) > 0 {
+		if len(runes) <= limit {
+			chunks = append(chunks, string(runes))
 			break
 		}
 		cut := limit
-		// try to cut at newline
-		if idx := strings.LastIndex(text[:limit], "\n"); idx > limit/2 {
-			cut = idx + 1
+		// try to cut at newline within rune slice
+		prefix := string(runes[:limit])
+		if idx := strings.LastIndex(prefix, "\n"); idx > limit/2 {
+			// idx is byte index in prefix; convert to rune count
+			cut = len([]rune(prefix[:idx+1]))
 		}
-		chunks = append(chunks, text[:cut])
-		text = text[cut:]
+		chunks = append(chunks, string(runes[:cut]))
+		runes = runes[cut:]
 	}
 	return chunks
 }
@@ -339,18 +365,15 @@ func parseAllowList() (map[int64]bool, map[string]bool) {
 			continue
 		}
 		if id, err := strconv.ParseInt(strings.TrimPrefix(part, "@"), 10, 64); err == nil {
-			// numeric id (with or without @ is not possible, but cover both)
-			if strings.HasPrefix(part, "@") {
-				// @123 is ambiguous: treat as numeric if parse succeeded and original had @ stripped -> but if user wrote @number, keep as id too
-				ids[id] = true
-			} else {
-				ids[id] = true
-			}
+			ids[id] = true
 			continue
 		}
 		// username
 		part = strings.TrimPrefix(part, "@")
 		users[strings.ToLower(part)] = true
+	}
+	if len(ids) == 0 && len(users) == 0 {
+		return nil, nil
 	}
 	return ids, users
 }
@@ -400,11 +423,16 @@ func runBot() error {
 	if allowIDs != nil || allowUsers != nil {
 		fmt.Printf("Allowlist active: %s\n", botAllowFrom)
 		if botAllowFrom == "" {
-			fmt.Printf("Allowlist from env: %s\n", os.Getenv("TELEGRAM_ALLOWED_CHAT_IDS"))
+			envVal := os.Getenv("TELEGRAM_ALLOWED_CHAT_IDS")
+			if envVal == "" {
+				envVal = os.Getenv("TELEGRAM_ALLOWED_USERS")
+			}
+			fmt.Printf("Allowlist from env: %s\n", envVal)
 		}
 	}
 
 	sessions := newBotSession()
+	sem := make(chan struct{}, 10)
 	var offset int64
 
 	for {
@@ -450,9 +478,12 @@ func runBot() error {
 			if text == "" {
 				continue
 			}
-			// handle per-message in goroutine to not block polling; keep history ordering per chat via session mutex
-			// process sequentially to keep offset handling simple, but handle each message concurrently
-			go handleTelegramMessage(ctx, tg, cfg, sessions, msg)
+			// handle per-message in goroutine to not block polling; limit concurrency
+			sem <- struct{}{}
+			go func(m *tgMessage) {
+				defer func() { <-sem }()
+				handleTelegramMessage(ctx, tg, cfg, sessions, m)
+			}(msg)
 		}
 	}
 }
@@ -465,16 +496,22 @@ func handleTelegramMessage(ctx context.Context, tg *telegramClient, cfg *config.
 	switch text {
 	case "/start", "/help":
 		help := "Hi! Send me any message and I'll forward it to the agent.\n\nCommands:\n/reset - clear conversation history\n/help - show this help"
-		_ = tg.sendMessage(ctx, chatID, help)
+		if err := tg.sendMessage(ctx, chatID, help); err != nil {
+			slog.Error("telegram sendMessage failed", "err", err, "chat_id", chatID)
+		}
 		return
 	case "/reset", "/clear":
 		sessions.reset(chatID)
-		_ = tg.sendMessage(ctx, chatID, "Conversation reset.")
+		if err := tg.sendMessage(ctx, chatID, "Conversation reset."); err != nil {
+			slog.Error("telegram sendMessage failed", "err", err, "chat_id", chatID)
+		}
 		return
 	}
 	if strings.HasPrefix(text, "/reset") || strings.HasPrefix(text, "/clear") {
 		sessions.reset(chatID)
-		_ = tg.sendMessage(ctx, chatID, "Conversation reset.")
+		if err := tg.sendMessage(ctx, chatID, "Conversation reset."); err != nil {
+			slog.Error("telegram sendMessage failed", "err", err, "chat_id", chatID)
+		}
 		return
 	}
 
@@ -514,11 +551,15 @@ func handleTelegramMessage(ctx context.Context, tg *telegramClient, cfg *config.
 	close(typingDone)
 	if err != nil {
 		slog.Error("telegram bot LLM call failed", "error", err, "chat_id", chatID)
-		_ = tg.sendMessage(ctx, chatID, fmt.Sprintf("Error: %v", err))
+		if sendErr := tg.sendMessage(ctx, chatID, fmt.Sprintf("Error: %v", err)); sendErr != nil {
+			slog.Error("telegram sendMessage failed", "err", sendErr, "chat_id", chatID)
+		}
 		return
 	}
 	if len(resultMessages) == 0 {
-		_ = tg.sendMessage(ctx, chatID, "No response from LLM.")
+		if sendErr := tg.sendMessage(ctx, chatID, "No response from LLM."); sendErr != nil {
+			slog.Error("telegram sendMessage failed", "err", sendErr, "chat_id", chatID)
+		}
 		return
 	}
 

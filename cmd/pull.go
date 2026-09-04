@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"ai-shell/config"
 
@@ -40,6 +43,14 @@ func init() {
 }
 
 func runPull(repo string, filenames []string) error {
+	if err := validateRepo(repo); err != nil {
+		return err
+	}
+	for _, f := range filenames {
+		if err := validateFilename(f); err != nil {
+			return err
+		}
+	}
 	var lastErr error
 	for i, filename := range filenames {
 		if err := downloadFile(repo, filename); err != nil {
@@ -52,6 +63,24 @@ func runPull(repo string, filenames []string) error {
 		}
 	}
 	return lastErr
+}
+
+func validateRepo(repo string) error {
+	if strings.Contains(repo, "..") || strings.Contains(repo, "\\") || strings.TrimSpace(repo) == "" {
+		return fmt.Errorf("invalid repo %q", repo)
+	}
+	parts := strings.Split(repo, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return fmt.Errorf("invalid repo %q: expected owner/name", repo)
+	}
+	return nil
+}
+
+func validateFilename(filename string) error {
+	if filename == "" || filename == "." || strings.Contains(filename, "/") || strings.Contains(filename, "\\") || strings.Contains(filename, "..") {
+		return fmt.Errorf("invalid filename %q", filename)
+	}
+	return nil
 }
 
 // updateConfig records the downloaded file in the config. With a single file
@@ -87,7 +116,10 @@ func downloadFile(repo, filename string) error {
 
 	destPath := filepath.Join(destDir, filename)
 
-	if _, err := os.Stat(destPath); err == nil {
+	if info, err := os.Stat(destPath); err == nil {
+		if info.IsDir() {
+			return fmt.Errorf("destination is a directory: %s", destPath)
+		}
 		return fmt.Errorf("model file already exists at %s", destPath)
 	}
 
@@ -98,17 +130,30 @@ func downloadFile(repo, filename string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
-	defer out.Close()
+	cleanup := func() {
+		out.Close()
+		if rmErr := os.Remove(destPath); rmErr != nil && !os.IsNotExist(rmErr) {
+			slog.Warn("failed to remove partial file", "path", destPath, "err", rmErr)
+		}
+	}
 
-	resp, err := http.Get(url)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		os.Remove(destPath)
+		cleanup()
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	client := &http.Client{Timeout: 10 * time.Minute}
+	resp, err := client.Do(req)
+	if err != nil {
+		cleanup()
 		return fmt.Errorf("download failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		os.Remove(destPath)
+		cleanup()
 		return fmt.Errorf("download failed: %s", resp.Status)
 	}
 
@@ -119,7 +164,7 @@ func downloadFile(repo, filename string) error {
 		n, err := resp.Body.Read(buf)
 		if n > 0 {
 			if _, werr := out.Write(buf[:n]); werr != nil {
-				os.Remove(destPath)
+				cleanup()
 				return fmt.Errorf("write error: %w", werr)
 			}
 			written += int64(n)
@@ -134,9 +179,13 @@ func downloadFile(repo, filename string) error {
 			break
 		}
 		if err != nil {
-			os.Remove(destPath)
+			cleanup()
 			return fmt.Errorf("download error: %w", err)
 		}
+	}
+	if err := out.Close(); err != nil {
+		cleanup()
+		return fmt.Errorf("failed to close file: %w", err)
 	}
 	fmt.Fprintf(os.Stderr, "\n")
 

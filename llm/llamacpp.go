@@ -70,6 +70,7 @@ func (l *LlamacppCaller) CallStructured(ctx context.Context, systemPrompt string
 		return nil, fmt.Errorf("llamacpp: grammar sampler failed to initialize (unsupported or invalid grammar)")
 	}
 	llama.SamplerChainAdd(chain, grammarSampler)
+	defer llama.SamplerFree(chain)
 
 	return l.chat(ctx, systemPrompt, messages, chain)
 }
@@ -272,7 +273,9 @@ func (l *LlamacppCaller) generateVision(ctx context.Context, inp *visionInput, s
 		return nil, fmt.Errorf("llamacpp: mtmd eval chunks failed: %d", res)
 	}
 
-	return l.sample(ctx, smplr, len(inp.prompt))
+	// Use token count for usage stats, consistent with text path.
+	promptTokens := len(llama.Tokenize(l.vocab, inp.prompt, true, true))
+	return l.sample(ctx, smplr, promptTokens)
 }
 
 // sample runs the token generation loop from the current context state (the

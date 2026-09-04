@@ -105,6 +105,41 @@ func (p *ToolExecutorPolicy) AskConfirmation(cmd string) bool {
 	return p.ConfirmCommand(cmd)
 }
 
+// NewConfirmPolicy returns a ToolExecutorPolicy that mirrors the service/bot
+// confirm logic: when confirm is false everything passes; otherwise RunCommand
+// is limited to allowedCommands and WriteFile is denied.
+func NewConfirmPolicy(confirm bool, allowedCommands []string) *ToolExecutorPolicy {
+	return &ToolExecutorPolicy{
+		ConfirmCommand: func(cmd string) bool {
+			if !confirm {
+				return true
+			}
+			return IsAllowedCommandForPolicy(cmd, allowedCommands)
+		},
+		ConfirmWriteFile: func(path string) bool {
+			return !confirm
+		},
+	}
+}
+
+// IsAllowedCommandForPolicy is a helper for NewConfirmPolicy.
+func IsAllowedCommandForPolicy(cmd string, allowed []string) bool {
+	if len(allowed) == 0 {
+		return false
+	}
+	name := cmd
+	if idx := strings.Index(strings.TrimSpace(cmd), " "); idx != -1 {
+		name = cmd[:idx]
+	}
+	name = strings.TrimSpace(name)
+	for _, a := range allowed {
+		if strings.TrimSpace(a) == name {
+			return true
+		}
+	}
+	return false
+}
+
 // NoopExecutor is a ToolExecutor that runs nothing and allows everything.
 type NoopExecutor struct{}
 

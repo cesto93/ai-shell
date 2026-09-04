@@ -104,18 +104,22 @@ func Serve(ctx context.Context, s *Server) error {
 		if IsActive() {
 			return fmt.Errorf("service already running at %s", path)
 		}
-		if rmErr := os.Remove(path); rmErr == nil {
+		if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {
+			slog.Warn("failed to remove stale socket", "path", path, "err", rmErr)
+		} else if rmErr == nil {
 			lis, err = net.Listen("unix", path)
 		}
 		if err != nil {
 			return fmt.Errorf("failed to listen on %s: %w", path, err)
 		}
 	}
-	os.Chmod(path, 0600)
+	if err := os.Chmod(path, 0o600); err != nil {
+		slog.Warn("chmod socket failed", "path", path, "err", err)
+	}
 
 	grpcServer := grpc.NewServer(
-		grpc.MaxRecvMsgSize(maxMsgSize),
-		grpc.MaxSendMsgSize(maxMsgSize),
+		grpc.MaxRecvMsgSize(MaxMsgSize),
+		grpc.MaxSendMsgSize(MaxMsgSize),
 	)
 	proto.RegisterAIServiceServer(grpcServer, s)
 
@@ -131,14 +135,18 @@ func Serve(ctx context.Context, s *Server) error {
 	select {
 	case err := <-errCh:
 		grpcServer.Stop()
-		os.Remove(path)
+		if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {
+			slog.Warn("failed to remove socket", "path", path, "err", rmErr)
+		}
 		return err
 	case <-ctx.Done():
 	case <-s.StopCh():
 	}
 
 	grpcServer.GracefulStop()
-	os.Remove(path)
+	if rmErr := os.Remove(path); rmErr != nil && !os.IsNotExist(rmErr) {
+		slog.Warn("failed to remove socket", "path", path, "err", rmErr)
+	}
 	return nil
 }
 

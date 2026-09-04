@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -46,16 +45,7 @@ func runCommands(args []string) error {
 		return runCustomCommand(cfg, runCommandName, args)
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get home directory: %w", err)
-	}
-
-	dir := filepath.Join(home, ".ai-shell", "commands")
-	cmds, err := config.LoadCommandsFromDir(dir)
-	if err != nil {
-		return fmt.Errorf("failed to load commands: %w", err)
-	}
+	cmds := config.LoadCommands(cfg)
 
 	if len(cmds) == 0 {
 		fmt.Println("No commands found.")
@@ -72,7 +62,9 @@ func runCommands(args []string) error {
 		}
 		fmt.Fprintf(w, "%s\t%s\n", c.Name, desc)
 	}
-	w.Flush()
+	if err := w.Flush(); err != nil {
+		return fmt.Errorf("flush: %w", err)
+	}
 
 	return nil
 }

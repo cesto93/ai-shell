@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"ai-shell/config"
 	"ai-shell/llm"
@@ -132,19 +133,34 @@ func (e *ShellExecutorForLLM) ExecuteTool(call llm.ToolCall) (string, error) {
 func (e *ShellExecutorForLLM) toolActionMessage(call llm.ToolCall) string {
 	switch call.Name {
 	case "RunCommand":
-		cmd, _ := call.Arguments["command"].(string)
+		cmd, ok := call.Arguments["command"].(string)
+		if !ok {
+			return "[Executing: <invalid args>]"
+		}
 		return fmt.Sprintf("[Executing: %s]", cmd)
 	case "WriteFile":
-		path, _ := call.Arguments["path"].(string)
+		path, ok := call.Arguments["path"].(string)
+		if !ok {
+			return "[Writing to file: <invalid args>]"
+		}
 		return fmt.Sprintf("[Writing to file: %s]", strings.TrimPrefix(path, "@"))
 	case "ReadFile":
-		path, _ := call.Arguments["path"].(string)
+		path, ok := call.Arguments["path"].(string)
+		if !ok {
+			return "[Reading file: <invalid args>]"
+		}
 		return fmt.Sprintf("[Reading file: %s]", strings.TrimPrefix(path, "@"))
 	case "KVSet":
-		key, _ := call.Arguments["key"].(string)
+		key, ok := call.Arguments["key"].(string)
+		if !ok {
+			return "[KV Store: Saving <invalid args>]"
+		}
 		return fmt.Sprintf("[KV Store: Saving %s]", key)
 	case "KVGet":
-		key, _ := call.Arguments["key"].(string)
+		key, ok := call.Arguments["key"].(string)
+		if !ok {
+			return "[KV Store: Retrieving <invalid args>]"
+		}
 		return fmt.Sprintf("[KV Store: Retrieving %s]", key)
 	case "KVList":
 		return "[KV Store: Listing keys]"
@@ -195,6 +211,7 @@ type confirmationMsg struct {
 }
 
 type ShellModel struct {
+	mu                 sync.Mutex
 	teaProgram         *tea.Program
 	input              textinput.Model
 	messages           []Message
@@ -293,7 +310,7 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.showSuggestions && len(m.suggestions) > 0 {
 				return m.navigateSuggestions(-1)
 			}
-			return m.navigateHistory(-1)
+			return m.navigateHistory(1)
 
 		case tea.KeyDown:
 			if m.menu.kind != menuNone {
@@ -302,7 +319,7 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.showSuggestions && len(m.suggestions) > 0 {
 				return m.navigateSuggestions(1)
 			}
-			return m.navigateHistory(1)
+			return m.navigateHistory(-1)
 
 		case tea.KeyTab:
 			return m.handleAutocomplete()
@@ -372,7 +389,13 @@ func (m *ShellModel) handleEnterKey() (tea.Model, tea.Cmd) {
 
 func (m *ShellModel) handleEscapeKey() (tea.Model, tea.Cmd) {
 	if m.loading {
-		close(m.cancelChan)
+		if m.cancelChan != nil {
+			select {
+			case <-m.cancelChan:
+			default:
+				close(m.cancelChan)
+			}
+		}
 		m.loading = false
 		m.messages = append(m.messages, Message{role: "system", content: "Request cancelled."})
 		return m, nil
@@ -552,8 +575,15 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 		for i, part := range parts {
 			if strings.HasPrefix(part, "@") {
 				path := strings.TrimPrefix(part, "@")
+				if path == "" {
+					m.messages = append(m.messages, Message{role: "error", content: "Error: empty file path after @"})
+					return m, nil
+				}
 				if isImage(path) {
-					if encoded, err := encodeImage(path); err == nil {
+					encoded, err := encodeImage(path)
+					if err != nil {
+						m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error encoding image %s: %v", path, err)})
+					} else {
 						images = append(images, encoded)
 					}
 				}
@@ -568,7 +598,15 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 	}
 
 	if m.allowedCmdMode.active {
-		m.cfg.Shell.AllowedCommands = strings.Split(value, ",")
+		parts := strings.Split(value, ",")
+		var cleaned []string
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				cleaned = append(cleaned, p)
+			}
+		}
+		m.cfg.Shell.AllowedCommands = cleaned
 		if err := config.SaveConfig(m.cfg); err != nil {
 			m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error saving config: %v", err)})
 		} else {
@@ -582,7 +620,9 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 
 	if len(m.history) == 0 || m.history[len(m.history)-1] != value {
 		m.history = append(m.history, value)
-		saveHistory(m.commandHistoryPath, m.history)
+		if err := saveHistory(m.commandHistoryPath, m.history); err != nil {
+			slog.Warn("save history failed", "err", err)
+		}
 	}
 	m.historyIndex = -1
 
@@ -701,7 +741,11 @@ func (m *ShellModel) completeFiles(dir, prefix string) []string {
 
 	absDir := dir
 	if !filepath.IsAbs(dir) {
-		cwd, _ := os.Getwd()
+		cwd, err := os.Getwd()
+		if err != nil {
+			cwd = "."
+			slog.Warn("getwd failed", "err", err)
+		}
 		absDir = filepath.Join(cwd, dir)
 	}
 	absDir = filepath.Clean(absDir)
@@ -1087,6 +1131,8 @@ func (m *ShellModel) selectModel() {
 		m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Switched to model: %s", selectedModel)})
 		if newCfg, err := config.LoadConfig(); err == nil {
 			m.cfg = newCfg
+		} else {
+			slog.Warn("reload config failed", "err", err)
 		}
 	}
 
@@ -1097,14 +1143,24 @@ func (m *ShellModel) ElaborateMessage() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go func() {
-		<-m.cancelChan
-		cancel()
-	}()
+	cancelChan := m.cancelChan
+	if cancelChan != nil {
+		go func() {
+			select {
+			case <-cancelChan:
+				cancel()
+			case <-ctx.Done():
+			}
+		}()
+	}
 
 	var commonMessages []llm.Message
 	var structuredSchema string
-	for _, msg := range m.messages {
+	// Copy messages under lock to avoid race with Update goroutine.
+	m.mu.Lock()
+	msgsCopy := append([]Message(nil), m.messages...)
+	m.mu.Unlock()
+	for _, msg := range msgsCopy {
 		if msg.role == "user" || msg.role == "assistant" || msg.role == "tool" {
 			if msg.schema != "" && msg.role == "user" {
 				structuredSchema = msg.schema
@@ -1137,19 +1193,12 @@ func (m *ShellModel) ElaborateMessage() {
 			if errors.Is(err, service.ErrUnavailable) {
 				slog.Debug("service unavailable, falling back to local execution", "err", err)
 			} else {
-				m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})
-				m.loading = false
-				if m.teaProgram != nil {
-					m.teaProgram.Send(responseReadyMsg{})
-				}
+				m.failWithError(fmt.Sprintf("Error: %v", err))
 				return
 			}
 		} else {
 			m.appendLLMResult(resultMessages)
-			m.loading = false
-			if m.teaProgram != nil {
-				m.teaProgram.Send(responseReadyMsg{})
-			}
+			m.finishSuccess()
 			return
 		}
 	}
@@ -1161,17 +1210,28 @@ func (m *ShellModel) ElaborateMessage() {
 	resultMessages, err := agent.CallLLM(ctx, executor, commonMessages)
 
 	if err != nil {
-		m.messages = append(m.messages, Message{role: "error", content: fmt.Sprintf("Error: %v", err)})
-		m.loading = false
-		if m.teaProgram != nil {
-			m.teaProgram.Send(responseReadyMsg{})
-		}
+		m.failWithError(fmt.Sprintf("Error: %v", err))
 		return
 	}
 
 	m.appendLLMResult(resultMessages)
+	m.finishSuccess()
+}
 
+func (m *ShellModel) failWithError(content string) {
+	m.mu.Lock()
+	m.messages = append(m.messages, Message{role: "error", content: content})
 	m.loading = false
+	m.mu.Unlock()
+	if m.teaProgram != nil {
+		m.teaProgram.Send(responseReadyMsg{})
+	}
+}
+
+func (m *ShellModel) finishSuccess() {
+	m.mu.Lock()
+	m.loading = false
+	m.mu.Unlock()
 	if m.teaProgram != nil {
 		m.teaProgram.Send(responseReadyMsg{})
 	}
@@ -1287,6 +1347,8 @@ func (m *ShellModel) runStructuredMessage(ctx context.Context, messages []llm.Me
 // appendLLMResult renders the messages returned by the LLM (locally or via
 // the service) into the shell transcript.
 func (m *ShellModel) appendLLMResult(resultMessages []llm.Message) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	for _, msg := range resultMessages {
 		contentStr := ""
 		if s, ok := msg.Content.(string); ok {
@@ -1315,8 +1377,11 @@ func loadHistory(path string) []string {
 	if err != nil {
 		return []string{}
 	}
-
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "" {
+		return []string{}
+	}
+	lines := strings.Split(trimmed, "\n")
 	result := make([]string, 0, len(lines))
 	for _, line := range lines {
 		if line = strings.TrimSpace(line); line != "" {
@@ -1326,13 +1391,23 @@ func loadHistory(path string) []string {
 	return result
 }
 
-func saveHistory(path string, history []string) {
-	if path == "" || len(history) == 0 {
-		return
+func saveHistory(path string, history []string) error {
+	if path == "" {
+		return nil
+	}
+	if len(history) == 0 {
+		// Truncate stale file.
+		if err := os.WriteFile(path, []byte{}, 0o644); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
 	}
 
-	content := strings.Join(history, "\n")
-	os.WriteFile(path, []byte(content), 0644)
+	content := strings.Join(history, "\n") + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("save history: %w", err)
+	}
+	return nil
 }
 
 func RunShell() error {
