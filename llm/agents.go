@@ -272,6 +272,15 @@ var planAgentTools = map[string]bool{
 	"KVList":     true,
 }
 
+var botAgentTools = map[string]bool{
+	"RunCommand": false,
+	"WriteFile":  false,
+	"ReadFile":   true,
+	"KVSet":      true,
+	"KVGet":      true,
+	"KVList":     true,
+}
+
 // GetAgentDefs returns the list of built-in agents. The first entry (build) is
 // the default agent.
 func GetAgentDefs() []AgentDef {
@@ -292,6 +301,11 @@ func GetAgentDefs() []AgentDef {
 			Name:        "plan",
 			Description: "Read-only planning: cannot write files or launch commands",
 			Tools:       clone(planAgentTools),
+		},
+		{
+			Name:        "bot",
+			Description: "Telegram bot: read-only with KV store (ReadFile, KVGet, KVList, KVSet)",
+			Tools:       clone(botAgentTools),
 		},
 	}
 }

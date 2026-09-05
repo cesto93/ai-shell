@@ -600,6 +600,7 @@ func botCallLLM(ctx context.Context, cfg *config.Config, messages []llm.Message)
 	// Prefer the gRPC service when active (honors the session's agent/tools/backend).
 	if service.IsActive() {
 		req := chatRequestFromConfig(cfg, messages)
+		req.Agent = "bot"
 		// use a 2-minute timeout like the shell helper
 		cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()
@@ -613,7 +614,7 @@ func botCallLLM(ctx context.Context, cfg *config.Config, messages []llm.Message)
 		slog.Debug("service unavailable, falling back to local bot execution", "err", err)
 	}
 
-	agent := llm.NewAgentForSession(cfg.Agent, cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools, cfg.LitertLM.Backend, cfg.AgentFiles, cfg.Skills)
+	agent := llm.NewAgentForSession("bot", cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools, cfg.LitertLM.Backend, cfg.AgentFiles, cfg.Skills)
 	executor := &botExecutor{cfg: cfg}
 	return agent.CallLLM(ctx, executor, messages)
 }

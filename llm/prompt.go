@@ -2,6 +2,7 @@ package llm
 
 import (
 	"bytes"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"text/template"
@@ -29,6 +30,17 @@ Current working directory: {{.Cwd}}.
 Available tools:
 {{.Tools}}`
 
+const BotPrompt = `You are a Telegram bot assistant operating on the user machine.
+You help users via Telegram chat by reading files and using the persistent KV store.
+You cannot execute shell commands or write files — you can only read files (ReadFile) and interact with the KV store (KVGet, KVList, KVSet) to recall and persist information.
+Keep replies concise and suitable for Telegram (plain text, avoid heavy markdown, messages are split at 4096 characters).
+
+The user machine OS is {{.Distro}} and uses the {{.Shell}} shell.
+Current working directory: {{.Cwd}}.
+
+Available tools:
+{{.Tools}}`
+
 func init() {
 	dir, err := config.AiShellDir()
 	if err != nil {
@@ -37,6 +49,7 @@ func init() {
 
 	writePromptFile(dir, "BUILDPROMPT.md", BuildPrompt)
 	writePromptFile(dir, "PLANPROMPT.md", PlanPrompt)
+	writePromptFile(dir, "BOTPROMPT.md", BotPrompt)
 }
 
 // writePromptFile writes the prompt to ~/.ai-shell/<name> if it does not exist.
@@ -48,6 +61,24 @@ func writePromptFile(dir, name, prompt string) {
 	os.WriteFile(dest, []byte(prompt), 0o644)
 }
 
+// readBotPromptFile reads BOTPROMPT.md from ~/.ai-shell/BOTPROMPT.md.
+// Falls back to the embedded bot prompt if the file cannot be read.
+func readBotPromptFile() []byte {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		slog.Warn("Cannot determine home directory, using embedded prompt", "err", err)
+		return []byte(BotPrompt)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(home, ".ai-shell", "BOTPROMPT.md"))
+	if err != nil {
+		slog.Warn("Cannot read ~/.ai-shell/BOTPROMPT.md, using embedded prompt", "err", err)
+		return []byte(BotPrompt)
+	}
+
+	return raw
+}
+
 func GetDefaultPromptBytes() []byte {
 	return []byte(BuildPrompt)
 }
@@ -56,9 +87,12 @@ func GetDefaultPromptBytes() []byte {
 // with the given tool list. Falls back to the default prompt for unknown names.
 func GetAgentSystemPrompt(agentName string, toolList []any) string {
 	raw := []byte(BuildPrompt)
-	if agentName == "plan" {
+	switch agentName {
+	case "plan":
 		raw = readPlanPromptFile()
-	} else if agentName == "" || agentName == "build" {
+	case "bot":
+		raw = readBotPromptFile()
+	case "", "build":
 		raw = readPromptFile()
 	}
 	return renderPromptTemplate(raw, toolList)
