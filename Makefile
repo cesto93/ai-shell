@@ -47,3 +47,9 @@ coverage:
 	go tool cover -html=coverage.out -o coverage.html
 integration:
 	go test -tags=integration -v ./cmd/
+docker-build:
+	docker build -t ai-shell:latest .
+docker-up:
+	docker compose up -d
+docker-down:
+	docker compose down

@@ -15,8 +15,13 @@ make install-yzma       # install yzma CLI + llama.cpp libs to ~/.ai-shell/lib
 make install-litertlm   # download LiteRT-LM C-API lib + aux/GPU libs to ~/.ai-shell/lib
 make proto              # regenerate service/proto/*.pb.go (needs protoc + plugins)
 make coverage           # test + HTML report
+make docker-build       # build ai-shell:latest image (docker build -t ai-shell:latest .)
+make docker-up          # start ai-shell via docker compose (docker compose up -d)
+make docker-down        # stop ai-shell compose stack (docker compose down)
 go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 ```
+
+Docker: `Dockerfile` (multi-stage `golang:1.26-bookworm` → `debian:bookworm-slim`, `CGO_ENABLED=0`, `ENTRYPOINT ["ai-shell"]`) and `docker-compose.yml` (builds `Dockerfile` as `ai-shell:latest`, `stdin_open`/`tty` for the TUI, mounts `./:/workspace` plus named volumes `ai-shell-config`/`ai-shell-data` for `~/.config/ai-shell` and `~/.ai-shell`, `env_file: .env`, `OLLAMA_HOST` → `host.docker.internal` via `extra_hosts: host-gateway`).
 
 ## Packages
 

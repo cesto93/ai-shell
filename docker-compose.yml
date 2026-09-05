@@ -1,0 +1,29 @@
+services:
+  ai-shell:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-shell:latest
+    container_name: ai-shell
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+    volumes:
+      # Mount the project/workspace into the container for live iteration.
+      # Change to a different host path if you want an isolated workspace.
+      - .:/workspace
+      # Persist config, usage stats, KV store and model/lib caches
+      - ai-shell-config:/root/.config/ai-shell
+      - ai-shell-data:/root/.ai-shell
+    env_file:
+      - .env
+    environment:
+      # When Ollama runs on the host, point the container at host.docker.internal.
+      # Override with OLLAMA_HOST in your .env if needed.
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  ai-shell-config:
+  ai-shell-data:
