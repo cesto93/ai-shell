@@ -241,7 +241,7 @@ func (l *LlamacppCaller) generateVision(ctx context.Context, inp *visionInput, s
 		if len(data) == 0 {
 			continue
 		}
-		b := mtmd.BitmapInitFromBuf(l.mtmdCtx, &data[0], uint64(len(data)), false)
+		b := mtmd.BitmapInitFromBuf(l.mtmdCtx, &data[0], uint64(len(data)), false, mtmd.InitOptDefault())
 		if b.Bitmap == 0 {
 			return nil, fmt.Errorf("llamacpp: failed to decode image")
 		}
