@@ -41,6 +41,12 @@ Current working directory: {{.Cwd}}.
 Available tools:
 {{.Tools}}`
 
+const ChatPrompt = `You are a helpful conversational assistant.
+Answer questions directly in plain conversation. You have no tools available — do not attempt to read files, execute commands, or access any external state. Just respond with helpful text.
+
+The user machine OS is {{.Distro}} and uses the {{.Shell}} shell.
+Current working directory: {{.Cwd}}.`
+
 func init() {
 	dir, err := config.AiShellDir()
 	if err != nil {
@@ -50,6 +56,7 @@ func init() {
 	writePromptFile(dir, "BUILDPROMPT.md", BuildPrompt)
 	writePromptFile(dir, "PLANPROMPT.md", PlanPrompt)
 	writePromptFile(dir, "BOTPROMPT.md", BotPrompt)
+	writePromptFile(dir, "CHATPROMPT.md", ChatPrompt)
 }
 
 // writePromptFile writes the prompt to ~/.ai-shell/<name> if it does not exist.
@@ -79,6 +86,24 @@ func readBotPromptFile() []byte {
 	return raw
 }
 
+// readChatPromptFile reads CHATPROMPT.md from ~/.ai-shell/CHATPROMPT.md.
+// Falls back to the embedded chat prompt if the file cannot be read.
+func readChatPromptFile() []byte {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		slog.Warn("Cannot determine home directory, using embedded prompt", "err", err)
+		return []byte(ChatPrompt)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(home, ".ai-shell", "CHATPROMPT.md"))
+	if err != nil {
+		slog.Warn("Cannot read ~/.ai-shell/CHATPROMPT.md, using embedded prompt", "err", err)
+		return []byte(ChatPrompt)
+	}
+
+	return raw
+}
+
 func GetDefaultPromptBytes() []byte {
 	return []byte(BuildPrompt)
 }
@@ -92,6 +117,8 @@ func GetAgentSystemPrompt(agentName string, toolList []any) string {
 		raw = readPlanPromptFile()
 	case "bot":
 		raw = readBotPromptFile()
+	case "chat":
+		raw = readChatPromptFile()
 	case "", "build":
 		raw = readPromptFile()
 	}

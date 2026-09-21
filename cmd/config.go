@@ -155,7 +155,7 @@ var configCmd = &cobra.Command{
 func init() {
 	configCmd.Flags().String("provider", "", "Set LLM provider (ollama, gemini, openrouter, litertlm)")
 	configCmd.Flags().String("model", "", "Set LLM model name")
-	configCmd.Flags().String("agent", "", "Set active agent (build, plan)")
+	configCmd.Flags().String("agent", "", "Set active agent (build, plan, chat)")
 	configCmd.Flags().Bool("agent-files", false, "Enable or disable AGENTS.md support")
 	configCmd.Flags().Bool("skills", false, "Enable or disable skills (~/.agents/skills, ./skills) support")
 	configCmd.Flags().String("log-level", "", "Set log level (debug, info, warn, error)")

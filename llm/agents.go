@@ -281,6 +281,15 @@ var botAgentTools = map[string]bool{
 	"KVList":     true,
 }
 
+var chatAgentTools = map[string]bool{
+	"RunCommand": false,
+	"WriteFile":  false,
+	"ReadFile":   false,
+	"KVSet":      false,
+	"KVGet":      false,
+	"KVList":     false,
+}
+
 // GetAgentDefs returns the list of built-in agents. The first entry (build) is
 // the default agent.
 func GetAgentDefs() []AgentDef {
@@ -306,6 +315,11 @@ func GetAgentDefs() []AgentDef {
 			Name:        "bot",
 			Description: "Telegram bot: read-only with KV store (ReadFile, KVGet, KVList, KVSet)",
 			Tools:       clone(botAgentTools),
+		},
+		{
+			Name:        "chat",
+			Description: "Plain chat: no tools, conversation only",
+			Tools:       clone(chatAgentTools),
 		},
 	}
 }
