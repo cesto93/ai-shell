@@ -19,6 +19,11 @@ import (
 type LlamacppCaller struct {
 	Model    string
 	Executor ToolExecutor
+	// MaxTokens caps generated tokens; <=0 means llamacppDefaultMaxTokens.
+	MaxTokens int
+	// NoThink pre-fills an empty <think> block so reasoning models answer
+	// directly instead of thinking out loud (for short-form tasks).
+	NoThink bool
 
 	once      sync.Once
 	initErr   error
@@ -36,11 +41,24 @@ type LlamacppCaller struct {
 const llamacppDefaultCtxSize = 4096
 const llamacppDefaultMaxTokens = 2048
 
+// Repetition penalty for the default sampler chain: pure greedy decoding
+// degenerates into repetition loops ("point point point...").
+const llamacppPenaltyLastN = 64
+const llamacppRepeatPenalty = 1.1
+
 func NewLlamacppCaller(model string, executor ToolExecutor) *LlamacppCaller {
 	return &LlamacppCaller{
 		Model:    model,
 		Executor: executor,
 	}
+}
+
+// maxTokens returns the generation cap for this caller.
+func (l *LlamacppCaller) maxTokens() int32 {
+	if l.MaxTokens > 0 {
+		return int32(l.MaxTokens)
+	}
+	return llamacppDefaultMaxTokens
 }
 
 func (l *LlamacppCaller) Call(ctx context.Context, systemPrompt string, messages []Message, tools []any) ([]Message, error) {
@@ -51,8 +69,12 @@ func (l *LlamacppCaller) Call(ctx context.Context, systemPrompt string, messages
 }
 
 // CallStructured generates output constrained by a GBNF grammar derived from
-// the JSON schema in the OpenAI-style response_format. The grammar sampler is
-// added after the greedy sampler so it filters candidate tokens.
+// the JSON schema in the OpenAI-style response_format. The grammar sampler
+// must come first in the chain: it masks out non-conforming logits so the
+// greedy sampler that follows can only pick valid tokens. Adding it after
+// would let greedy pick an invalid token (e.g. a <think> prefix from a
+// reasoning model), which llama.cpp reports by throwing a C++ exception that
+// aborts the process (SIGABRT).
 func (l *LlamacppCaller) CallStructured(ctx context.Context, systemPrompt string, messages []Message, tools []any, responseFormat any) ([]Message, error) {
 	if err := l.ensureInit(); err != nil {
 		return nil, fmt.Errorf("llamacpp: %w", err)
@@ -64,12 +86,12 @@ func (l *LlamacppCaller) CallStructured(ctx context.Context, systemPrompt string
 	slog.Debug("llamacpp: structured output grammar", "grammar", grammar)
 
 	chain := llama.SamplerChainInit(llama.SamplerChainDefaultParams())
-	llama.SamplerChainAdd(chain, llama.SamplerInitGreedy())
 	grammarSampler := llama.SamplerInitGrammar(l.vocab, grammar, "root")
 	if grammarSampler == 0 {
 		return nil, fmt.Errorf("llamacpp: grammar sampler failed to initialize (unsupported or invalid grammar)")
 	}
 	llama.SamplerChainAdd(chain, grammarSampler)
+	llama.SamplerChainAdd(chain, llama.SamplerInitGreedy())
 	defer llama.SamplerFree(chain)
 
 	return l.chat(ctx, systemPrompt, messages, chain)
@@ -206,9 +228,13 @@ func imagesPresent(messages []Message) bool {
 }
 
 func (l *LlamacppCaller) generate(ctx context.Context, prompt string, smplr llama.Sampler) ([]Message, error) {
-	tokens := llama.Tokenize(l.vocab, prompt, true, true)
+	tokens := llama.Tokenize(l.vocab, l.maybeNoThink(prompt), true, true)
 	if len(tokens) == 0 {
 		return nil, fmt.Errorf("tokenization failed")
+	}
+	if len(tokens) > llamacppDefaultCtxSize {
+		return nil, fmt.Errorf("llamacpp: prompt too long (%d tokens > context size %d), shorten the input",
+			len(tokens), llamacppDefaultCtxSize)
 	}
 
 	select {
@@ -216,10 +242,43 @@ func (l *LlamacppCaller) generate(ctx context.Context, prompt string, smplr llam
 		return nil, ctx.Err()
 	default:
 	}
-	if _, err := llama.Decode(l.lctx, llama.BatchGetOne(tokens)); err != nil {
-		return nil, fmt.Errorf("llamacpp decode: %w", err)
+	if err := l.decodePrompt(ctx, tokens); err != nil {
+		return nil, err
 	}
 	return l.sample(ctx, smplr, len(tokens))
+}
+
+// decodePrompt feeds the tokenized prompt to the context in chunks of at most
+// n_batch tokens with explicit positions. Decoding the whole prompt as one
+// batch aborts the process when it exceeds n_batch
+// (GGML_ASSERT(n_tokens_all <= cparams.n_batch)). Only the final token needs
+// logits, since sampling starts from it.
+func (l *LlamacppCaller) decodePrompt(ctx context.Context, tokens []llama.Token) error {
+	batch := llama.BatchInit(llamacppDefaultCtxSize, 0, 1)
+	defer func() { _ = llama.BatchFree(batch) }()
+
+	for offset := 0; offset < len(tokens); {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		if err := batch.Clear(); err != nil {
+			return fmt.Errorf("llamacpp decode: %w", err)
+		}
+		n := min(int(llamacppDefaultCtxSize), len(tokens)-offset)
+		for i := range n {
+			last := offset+i == len(tokens)-1
+			if err := batch.Add(tokens[offset+i], llama.Pos(offset+i), []llama.SeqId{0}, last); err != nil {
+				return fmt.Errorf("llamacpp decode: %w", err)
+			}
+		}
+		offset += n
+		if _, err := llama.Decode(l.lctx, batch); err != nil {
+			return fmt.Errorf("llamacpp decode: %w", err)
+		}
+	}
+	return nil
 }
 
 // generateVision evaluates a multimodal prompt (text + images) through the
@@ -232,6 +291,7 @@ func (l *LlamacppCaller) generateVision(ctx context.Context, inp *visionInput, s
 	if l.mtmdCtx == 0 {
 		return nil, fmt.Errorf("llamacpp: multimodal context not initialized")
 	}
+	inp.prompt = l.maybeNoThink(inp.prompt)
 
 	chunks := mtmd.InputChunksInit()
 	defer mtmd.InputChunksFree(chunks)
@@ -282,7 +342,7 @@ func (l *LlamacppCaller) generateVision(ctx context.Context, inp *visionInput, s
 func (l *LlamacppCaller) sample(ctx context.Context, smplr llama.Sampler, promptTokens int) ([]Message, error) {
 	var response strings.Builder
 	completionTokens := 0
-	for pos := int32(0); pos < llamacppDefaultMaxTokens; pos++ {
+	for pos := int32(0); pos < l.maxTokens(); pos++ {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -332,6 +392,29 @@ func formatContent(content any) string {
 	default:
 		return fmt.Sprintf("%v", v)
 	}
+}
+
+// emptyThinkBlock is a pre-filled empty reasoning block. Appending it to the
+// rendered prompt disables thinking for reasoning models, mirroring what
+// enable_thinking=false does in llama.cpp's chat template renderer: the model
+// continues after the closed block instead of opening a <think> section.
+const emptyThinkBlock = "<think>\n\n</think>\n\n"
+
+// maybeNoThink appends emptyThinkBlock to prompt when NoThink is set and the
+// model's chat template is a reasoning template (contains a <think> marker).
+// Plain-text templates are returned unchanged, as are prompts that already
+// end with the block (idempotent).
+func (l *LlamacppCaller) maybeNoThink(prompt string) string {
+	if !l.NoThink {
+		return prompt
+	}
+	if !strings.Contains(l.template, "<think>") {
+		return prompt
+	}
+	if strings.HasSuffix(prompt, emptyThinkBlock) {
+		return prompt
+	}
+	return prompt + emptyThinkBlock
 }
 
 func (l *LlamacppCaller) applyChatTemplate(chatMsgs []llama.ChatMessage, addAssistant bool) string {
@@ -404,6 +487,8 @@ func (l *LlamacppCaller) initialize() error {
 	l.lctx = lctx
 
 	chain := llama.SamplerChainInit(llama.SamplerChainDefaultParams())
+	llama.SamplerChainAdd(chain, llama.SamplerInitPenalties(
+		llama.VocabNTokens(l.vocab), llamacppPenaltyLastN, llamacppRepeatPenalty, 0, 0))
 	llama.SamplerChainAdd(chain, llama.SamplerInitGreedy())
 	l.smplr = chain
 

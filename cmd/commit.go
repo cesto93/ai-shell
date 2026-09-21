@@ -36,12 +36,34 @@ func commitCallLLM(cfg *config.Config, systemPrompt string, messages []llm.Messa
 		if lc, ok := caller.(*llm.LitertLMCaller); ok {
 			lc.Backend = cfg.LitertLM.Backend
 		}
+		if lc, ok := caller.(*llm.LlamacppCaller); ok {
+			lc.MaxTokens = commitMaxTokens
+			lc.NoThink = true
+		}
 		return caller.Call(context.Background(), systemPrompt, messages, nil)
 	})
 }
 
 var commitAll bool
 var dryRun bool
+
+// commitMaxTokens bounds commit-message generation on local models:
+// reasoning models otherwise spend minutes thinking out loud.
+const commitMaxTokens = 512
+
+// commitMaxDiffChars caps the staged diff sent to the model so prompts fit
+// small local contexts (~8k chars ≈ 2-3k tokens). Truncation is marked so the
+// model knows the diff is incomplete.
+const commitMaxDiffChars = 8000
+
+// truncateDiff cuts s to maxChars runes, appending a marker when truncated.
+func truncateDiff(s string, maxChars int) string {
+	r := []rune(s)
+	if len(r) <= maxChars {
+		return s
+	}
+	return string(r[:maxChars]) + "\n\n[... diff truncated to fit the model context ...]"
+}
 
 var commitCmd = &cobra.Command{
 	Use:   "commit",
@@ -87,6 +109,11 @@ func runCommit() (rErr error) {
 	}
 	initLogger(cfg)
 
+	// Local models have small contexts (llamacpp: 4k tokens); truncate huge
+	// diffs so the prompt fits instead of failing. Cloud providers ignore the
+	// marker and just see a shorter diff.
+	diff := truncateDiff(strings.TrimSpace(string(diffOutput)), commitMaxDiffChars)
+
 	systemPrompt := "You are a helpful assistant that writes concise git commit messages."
 	userPrompt := fmt.Sprintf(`Generate a concise git commit message for the following staged changes.
 
@@ -98,7 +125,7 @@ The first line should be a concise summary under 72 characters.
 If more detail is needed, add a blank line followed by bullet points or a short body.
 Use the imperative mood ("add" not "added").
 Only output the commit message, nothing else.`,
-		strings.TrimSpace(string(diffOutput)),
+		diff,
 	)
 
 	messages := []llm.Message{
@@ -129,6 +156,7 @@ Only output the commit message, nothing else.`,
 	}
 
 	msg := strings.TrimSpace(content)
+	msg = stripThinkBlock(msg)
 	msg = stripCodeFences(msg)
 
 	if msg == "" {
@@ -165,6 +193,22 @@ Only output the commit message, nothing else.`,
 }
 
 var fenceRe = regexp.MustCompile("(?m)^```[a-zA-Z]*\\s*\\n?|\\n?```\\s*$")
+
+// thinkRe matches a reasoning model's <think>...</think> section, which must
+// not leak into the commit message.
+var thinkRe = regexp.MustCompile(`(?s)<think>.*?</think>`)
+
+// stripThinkBlock removes <think>...</think> sections (and a dangling
+// unclosed tag with everything after it, e.g. when generation was capped
+// mid-thought) from model output.
+func stripThinkBlock(s string) string {
+	s = thinkRe.ReplaceAllString(s, "")
+	if i := strings.Index(s, "<think>"); i >= 0 {
+		s = s[:i]
+	}
+	s = strings.ReplaceAll(s, "</think>", "")
+	return strings.TrimSpace(s)
+}
 
 func stripCodeFences(s string) string {
 	s = strings.TrimSpace(s)
