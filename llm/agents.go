@@ -374,10 +374,14 @@ func NewAgentFor(agentName, model, provider string, cfgTools map[string]bool) *A
 
 // NewAgentForSession creates an Agent like NewAgentFor, additionally applying
 // the session's inference backend, AGENTS.md support, and skills support
-// settings.
+// settings. The chat agent is conversation-only, so it skips AGENTS.md and
+// skills context entirely to keep the prompt minimal.
 func NewAgentForSession(agentName, model, provider string, cfgTools map[string]bool, backend string, agentFiles, skills bool) *Agent {
 	a := NewAgentFor(agentName, model, provider, cfgTools)
 	a.Backend = backend
+	if GetAgentDef(agentName).Name == "chat" {
+		return a
+	}
 	a.AgentFiles = GetAgentFiles(agentFiles)
 	a.Skills = GetSkillsPrompt(skills)
 	return a

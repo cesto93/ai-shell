@@ -41,11 +41,7 @@ Current working directory: {{.Cwd}}.
 Available tools:
 {{.Tools}}`
 
-const ChatPrompt = `You are a helpful conversational assistant.
-Answer questions directly in plain conversation. You have no tools available — do not attempt to read files, execute commands, or access any external state. Just respond with helpful text.
-
-The user machine OS is {{.Distro}} and uses the {{.Shell}} shell.
-Current working directory: {{.Cwd}}.`
+const ChatPrompt = `You are a helpful conversational assistant.`
 
 func init() {
 	dir, err := config.AiShellDir()
