@@ -417,15 +417,34 @@ func (l *LlamacppCaller) maybeNoThink(prompt string) string {
 	return prompt + emptyThinkBlock
 }
 
+// llamacppFallbackTemplate is the builtin template used when the model's
+// own chat template fails to render (e.g. it uses Jinja features newer than
+// the bundled llama.cpp, as seen with Spark-X2.5). Output formatting may
+// differ from the native template, hence the warning on fallback.
+const llamacppFallbackTemplate = "chatml"
+
 func (l *LlamacppCaller) applyChatTemplate(chatMsgs []llama.ChatMessage, addAssistant bool) string {
+	if prompt := renderChatTemplate(l.template, chatMsgs, addAssistant); prompt != "" {
+		return prompt
+	}
+	if l.template == llamacppFallbackTemplate {
+		return ""
+	}
+	slog.Warn("llamacpp: model chat template failed to render, "+
+		"falling back to builtin template",
+		"model", l.Model, "fallback", llamacppFallbackTemplate)
+	return renderChatTemplate(llamacppFallbackTemplate, chatMsgs, addAssistant)
+}
+
+func renderChatTemplate(template string, chatMsgs []llama.ChatMessage, addAssistant bool) string {
 	buf := make([]byte, 131072)
-	n := llama.ChatApplyTemplate(l.template, chatMsgs, addAssistant, buf)
+	n := llama.ChatApplyTemplate(template, chatMsgs, addAssistant, buf)
 	if n <= 0 {
 		return ""
 	}
 	if n >= int32(len(buf)) {
 		buf = make([]byte, n+1)
-		n = llama.ChatApplyTemplate(l.template, chatMsgs, addAssistant, buf)
+		n = llama.ChatApplyTemplate(template, chatMsgs, addAssistant, buf)
 		if n <= 0 {
 			return ""
 		}
