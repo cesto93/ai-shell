@@ -269,9 +269,9 @@ var planAgentTools = map[string]bool{
 	"RunCommand": false,
 	"WriteFile":  false,
 	"ReadFile":   true,
-	"KVSet":      true,
-	"KVGet":      true,
-	"KVList":     true,
+	"KVSet":      false,
+	"KVGet":      false,
+	"KVList":     false,
 }
 
 var botAgentTools = map[string]bool{

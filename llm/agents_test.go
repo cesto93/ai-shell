@@ -314,10 +314,13 @@ func TestPlanAgentTools(t *testing.T) {
 	if names["WriteFile"] {
 		t.Error("plan agent should not enable WriteFile")
 	}
-	for _, expected := range []string{"ReadFile", "KVSet", "KVGet", "KVList"} {
-		if !names[expected] {
-			t.Errorf("plan agent should enable %s", expected)
+	for _, disabled := range []string{"KVSet", "KVGet", "KVList"} {
+		if names[disabled] {
+			t.Errorf("plan agent should not enable %s", disabled)
 		}
+	}
+	if !names["ReadFile"] {
+		t.Error("plan agent should enable ReadFile")
 	}
 }
 
@@ -349,8 +352,8 @@ func TestNewAgentFor(t *testing.T) {
 	if plan == nil {
 		t.Fatal("NewAgentFor(plan) returned nil")
 	}
-	if len(plan.Tools) != 4 {
-		t.Errorf("NewAgentFor(plan) returned %d tools, want 4", len(plan.Tools))
+	if len(plan.Tools) != 1 {
+		t.Errorf("NewAgentFor(plan) returned %d tools, want 1", len(plan.Tools))
 	}
 	if !strings.Contains(plan.Prompt, "planning agent") {
 		t.Errorf("plan agent prompt missing planning role, got: %s", plan.Prompt)
