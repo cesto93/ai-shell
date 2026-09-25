@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"ai-shell/config"
 	"ai-shell/llm"
@@ -444,30 +445,144 @@ func (m *ShellModel) handleMenuKeys(key string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *ShellModel) viewWidth() int {
+	if m.width > 0 {
+		return m.width
+	}
+	return 80
+}
+
+// wrapShellText word-wraps text to the given display width, preserving
+// existing newlines. Bubbletea renders the View in an alternate screen with
+// explicit cursor positioning, so lines wider than the terminal are clipped
+// instead of soft-wrapped by the terminal. Without this, long AI answers are
+// cut off laterally.
+func wrapShellText(text string, width int) string {
+	if width <= 0 {
+		return text
+	}
+	paras := strings.Split(text, "\n")
+	out := make([]string, 0, len(paras))
+	for _, para := range paras {
+		out = append(out, wrapShellLine(para, width)...)
+	}
+	return strings.Join(out, "\n")
+}
+
+// wrapShellTextWithPrefix wraps text so that every line (including the
+// prefix on the first line and a matching indent on continuations) fits in
+// width. It returns the individual lines.
+func wrapShellTextWithPrefix(prefix, text string, width int) []string {
+	pw := utf8.RuneCountInString(prefix)
+	bw := width - pw
+	if bw < 1 {
+		bw = 1
+	}
+	indent := strings.Repeat(" ", pw)
+	paras := strings.Split(text, "\n")
+	var out []string
+	for pi, para := range paras {
+		for li, l := range wrapShellLine(para, bw) {
+			if pi == 0 && li == 0 {
+				out = append(out, prefix+l)
+			} else {
+				out = append(out, indent+l)
+			}
+		}
+	}
+	return out
+}
+
+// wrapShellLine wraps a single line (no newlines) on spaces, hard-splitting
+// words longer than the width. Leading indentation is preserved on
+// continuation lines.
+func wrapShellLine(line string, width int) []string {
+	if width <= 0 {
+		return []string{line}
+	}
+	if utf8.RuneCountInString(line) <= width {
+		return []string{line}
+	}
+	trimmed := strings.TrimLeft(line, " \t")
+	if trimmed == "" {
+		return []string{line}
+	}
+	indentLen := utf8.RuneCountInString(line) - utf8.RuneCountInString(trimmed)
+	var indent string
+	effWidth := width
+	if indentLen < width {
+		indent = line[:len(line)-len(trimmed)]
+		effWidth = width - indentLen
+	}
+	var lines []string
+	var cur string
+	flush := func() {
+		if cur != "" {
+			lines = append(lines, indent+cur)
+			cur = ""
+		}
+	}
+	for _, word := range strings.Fields(trimmed) {
+		for utf8.RuneCountInString(word) > effWidth {
+			flush()
+			r := []rune(word)
+			lines = append(lines, indent+string(r[:effWidth]))
+			word = string(r[effWidth:])
+		}
+		switch {
+		case cur == "":
+			cur = word
+		case utf8.RuneCountInString(cur)+1+utf8.RuneCountInString(word) <= effWidth:
+			cur += " " + word
+		default:
+			flush()
+			cur = word
+		}
+	}
+	flush()
+	if len(lines) == 0 {
+		return []string{line}
+	}
+	return lines
+}
+
 func (m *ShellModel) View() string {
 	if m.quitting {
 		return fmt.Sprintf("%sGoodbye!%s\n", systemStyle.Render(""), "")
 	}
 
 	var sb strings.Builder
+	w := m.viewWidth()
 
 	for _, msg := range m.messages {
 		switch msg.role {
 		case "system":
-			sb.WriteString(systemStyle.Render(msg.content))
+			sb.WriteString(systemStyle.Render(wrapShellText(msg.content, w)))
 			sb.WriteString("\n")
 		case "user":
-			sb.WriteString(userStyle.Render("You: " + msg.content))
+			sb.WriteString(userStyle.Render(strings.Join(
+				wrapShellTextWithPrefix("You: ", msg.content, w), "\n")))
 			sb.WriteString("\n")
 		case "assistant":
-			sb.WriteString(aiStyle.Render("AI: "))
-			sb.WriteString(msg.content)
+			lines := wrapShellTextWithPrefix("AI: ", msg.content, w)
+			for i, l := range lines {
+				if i == 0 {
+					sb.WriteString(aiStyle.Render("AI: "))
+					sb.WriteString(strings.TrimPrefix(l, "AI: "))
+				} else {
+					sb.WriteString(l)
+				}
+				if i < len(lines)-1 {
+					sb.WriteString("\n")
+				}
+			}
 			sb.WriteString("\n")
 		case "tool":
-			sb.WriteString(cmdStyle.Render(msg.content))
+			sb.WriteString(cmdStyle.Render(wrapShellText(msg.content, w)))
 			sb.WriteString("\n")
 		case "error":
-			sb.WriteString(errorStyle.Render("Error: " + msg.content))
+			sb.WriteString(errorStyle.Render(strings.Join(
+				wrapShellTextWithPrefix("Error: ", msg.content, w), "\n")))
 			sb.WriteString("\n")
 		}
 	}
@@ -492,7 +607,8 @@ func (m *ShellModel) View() string {
 	}
 
 	if m.waitingConfirm {
-		sb.WriteString(systemStyle.Render(fmt.Sprintf("[LLM wants to execute: %s]", m.pendingCommand)))
+		sb.WriteString(systemStyle.Render(wrapShellText(
+			fmt.Sprintf("[LLM wants to execute: %s]", m.pendingCommand), w)))
 		sb.WriteString("\n")
 		sb.WriteString(dimStyle.Render("Confirm execution? [y/N]"))
 		sb.WriteString("\n")
