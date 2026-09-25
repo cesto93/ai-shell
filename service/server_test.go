@@ -163,6 +163,51 @@ func TestServerChatSystemPromptOverride(t *testing.T) {
 	}
 }
 
+func TestServerChatThinkEffortPassthrough(t *testing.T) {
+	var gotAgent *llm.Agent
+	srv := NewServer()
+	srv.callLLM = func(_ context.Context, agent *llm.Agent, _ llm.ToolExecutor, messages []llm.Message) ([]llm.Message, error) {
+		gotAgent = agent
+		return messages, nil
+	}
+	startTestServer(t, srv)
+
+	c := newTestClient(t)
+	_, err := c.Chat(context.Background(), ChatRequest{
+		Messages:    []llm.Message{{Role: "user", Content: "x"}},
+		Agent:       "build",
+		Model:       "m",
+		Provider:    "ollama",
+		ThinkEffort: "low",
+	})
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if gotAgent == nil {
+		t.Fatal("callLLM was not invoked")
+	}
+	if gotAgent.ThinkEffort != llm.ThinkEffortLow {
+		t.Errorf("ThinkEffort = %q, want low", gotAgent.ThinkEffort)
+	}
+}
+
+func TestServerChatInvalidThinkEffort(t *testing.T) {
+	srv := NewServer()
+	startTestServer(t, srv)
+
+	c := newTestClient(t)
+	_, err := c.Chat(context.Background(), ChatRequest{
+		Messages:    []llm.Message{{Role: "user", Content: "x"}},
+		Agent:       "build",
+		Model:       "m",
+		Provider:    "ollama",
+		ThinkEffort: "ultra",
+	})
+	if err == nil {
+		t.Fatal("Chat: want error for invalid think effort, got nil")
+	}
+}
+
 func TestServerChatLLMErrorIsReturned(t *testing.T) {
 	srv := NewServer()
 	srv.callLLM = func(_ context.Context, _ *llm.Agent, _ llm.ToolExecutor, _ []llm.Message) ([]llm.Message, error) {

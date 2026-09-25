@@ -31,6 +31,9 @@ type ChatRequest struct {
 	Skills          bool
 	Confirm         bool
 	AllowedCommands []string
+	// ThinkEffort is the unified reasoning-effort level
+	// ("": provider default).
+	ThinkEffort string
 }
 
 func dial() (*grpc.ClientConn, error) {
@@ -61,6 +64,7 @@ func toProtoRequest(req ChatRequest) *proto.ChatRequest {
 		Skills:          req.Skills,
 		Confirm:         req.Confirm,
 		AllowedCommands: req.AllowedCommands,
+		ThinkEffort:     req.ThinkEffort,
 	}
 }
 

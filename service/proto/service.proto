@@ -72,6 +72,9 @@ message ChatRequest {
   bool confirm = 9;
   repeated string allowed_commands = 10;
   bool skills = 11;
+  // think_effort is the unified reasoning-effort level
+  // (none, minimal, low, medium, high, xhigh, max; empty = provider default).
+  string think_effort = 12;
 }
 
 message ChatResponse {

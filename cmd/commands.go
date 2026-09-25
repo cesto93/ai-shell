@@ -147,7 +147,7 @@ func runStructuredCommand(cfg *config.Config, cmd *config.CommandInfo, args []st
 	slog.Debug("provider", "name", cfg.LLM.Provider, "model", cfg.LLM.Model)
 	slog.Debug("schema", "path", cmd.Schema)
 
-	caller := llm.NewProviderCallerRaw(cfg.LLM.Provider, cfg.LLM.Model, llm.NoopExecutor{})
+	caller := llm.NewProviderCallerRawWithThink(cfg.LLM.Provider, cfg.LLM.Model, llm.NoopExecutor{}, llm.ThinkEffort(cfg.LLM.ThinkEffort))
 	if lc, ok := caller.(*llm.LitertLMCaller); ok {
 		lc.Backend = cfg.LitertLM.Backend
 	}
@@ -192,7 +192,7 @@ func customCommandCallLLM(cfg *config.Config, messages []llm.Message) ([]llm.Mes
 	return chatWithServiceFallback(req, func(err error) error {
 		return fmt.Errorf("LLM call failed: %w", err)
 	}, func() ([]llm.Message, error) {
-		agent := llm.NewAgentForSession(cfg.Agent, cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools, cfg.LitertLM.Backend, cfg.AgentFiles, cfg.Skills)
+		agent := llm.NewAgentForSession(cfg.Agent, cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools, cfg.LitertLM.Backend, cfg.AgentFiles, cfg.Skills, llm.ThinkEffort(cfg.LLM.ThinkEffort))
 		slog.Debug("system prompt", "prompt", agent.Prompt)
 		return agent.CallLLM(context.Background(), &llm.ToolExecutorPolicy{}, messages)
 	})

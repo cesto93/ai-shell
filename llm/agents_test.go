@@ -366,7 +366,7 @@ func TestNewAgentFor(t *testing.T) {
 }
 
 func TestNewAgentForSessionChatSkipsContext(t *testing.T) {
-	agent := NewAgentForSession("chat", "test-model", "ollama", nil, "cpu", true, true)
+	agent := NewAgentForSession("chat", "test-model", "ollama", nil, "cpu", true, true, "")
 	if agent.AgentFiles != "" {
 		t.Errorf("chat agent should skip AGENTS.md, got %q", agent.AgentFiles)
 	}

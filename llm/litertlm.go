@@ -36,6 +36,10 @@ type LitertLMCaller struct {
 	Model    string
 	Executor ToolExecutor
 	Backend  string
+	// ThinkEffort is the unified reasoning-effort level. The litertlm-go
+	// binding exposes no thinking control, so it is accepted and ignored
+	// (logged at debug) to keep the param usable across all providers.
+	ThinkEffort ThinkEffort
 }
 
 func NewLitertLMCaller(model string, executor ToolExecutor) *LitertLMCaller {
@@ -62,6 +66,9 @@ func (l *LitertLMCaller) CallStructured(ctx context.Context, systemPrompt string
 func (l *LitertLMCaller) call(ctx context.Context, systemPrompt string, messages []Message, tools []any) ([]Message, error) {
 	if len(messages) == 0 {
 		return nil, fmt.Errorf("litertlm: no messages to send")
+	}
+	if l.ThinkEffort != "" {
+		slog.Debug("litertlm: think effort not supported, ignoring", "effort", l.ThinkEffort)
 	}
 	client, err := l.client(ctx)
 	if err != nil {

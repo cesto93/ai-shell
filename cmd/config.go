@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"ai-shell/config"
+	"ai-shell/llm"
 
 	"github.com/spf13/cobra"
 )
@@ -22,6 +23,7 @@ var configCmd = &cobra.Command{
   ai-shell config --confirm=false
   ai-shell config --allowed-commands "ls,pwd,git,curl"
   ai-shell config --backend gpu
+  ai-shell config --think-effort low
   ai-shell config --add-cmd "hello=say hello world"
   ai-shell config --rm-cmd "hello"
   ai-shell config --enable-tool WriteFile
@@ -95,6 +97,16 @@ var configCmd = &cobra.Command{
 			changed = true
 		}
 
+		if fl.Changed("think-effort") {
+			v, _ := fl.GetString("think-effort")
+			effort, err := llm.ParseThinkEffort(v)
+			if err != nil {
+				return err
+			}
+			cfg.LLM.ThinkEffort = string(effort)
+			changed = true
+		}
+
 		if fl.Changed("enable-tool") {
 			v, _ := fl.GetString("enable-tool")
 			if !isKnownTool(v) {
@@ -162,6 +174,7 @@ func init() {
 	configCmd.Flags().Bool("confirm", false, "Require confirmation for tool execution")
 	configCmd.Flags().StringSlice("allowed-commands", nil, "Comma-separated list of commands that skip confirmation")
 	configCmd.Flags().String("backend", "", "LiteRT-LM inference backend (cpu, gpu)")
+	configCmd.Flags().String("think-effort", "", "Reasoning effort (none, minimal, low, medium, high, xhigh, max; empty = provider default)")
 	configCmd.Flags().String("enable-tool", "", "Enable a tool by name")
 	configCmd.Flags().String("disable-tool", "", "Disable a tool by name")
 	configCmd.Flags().String("add-cmd", "", "Add a custom command (format: name=prompt)")

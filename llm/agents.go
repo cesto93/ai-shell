@@ -16,6 +16,8 @@ type Agent struct {
 	Provider   string
 	Tools      []any
 	Backend    string
+	// ThinkEffort is the unified reasoning-effort level ("" = provider default).
+	ThinkEffort ThinkEffort
 }
 
 // GetAllTools returns the full list of tools for the agent.
@@ -373,12 +375,13 @@ func NewAgentFor(agentName, model, provider string, cfgTools map[string]bool) *A
 }
 
 // NewAgentForSession creates an Agent like NewAgentFor, additionally applying
-// the session's inference backend, AGENTS.md support, and skills support
-// settings. The chat agent is conversation-only, so it skips AGENTS.md and
-// skills context entirely to keep the prompt minimal.
-func NewAgentForSession(agentName, model, provider string, cfgTools map[string]bool, backend string, agentFiles, skills bool) *Agent {
+// the session's inference backend, think effort, AGENTS.md support, and
+// skills support settings. The chat agent is conversation-only, so it skips
+// AGENTS.md and skills context entirely to keep the prompt minimal.
+func NewAgentForSession(agentName, model, provider string, cfgTools map[string]bool, backend string, agentFiles, skills bool, thinkEffort ThinkEffort) *Agent {
 	a := NewAgentFor(agentName, model, provider, cfgTools)
 	a.Backend = backend
+	a.ThinkEffort = thinkEffort
 	if GetAgentDef(agentName).Name == "chat" {
 		return a
 	}

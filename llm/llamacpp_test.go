@@ -39,6 +39,19 @@ func TestMaybeNoThink(t *testing.T) {
 	}
 }
 
+func TestMaybeNoThinkEffortNone(t *testing.T) {
+	thinkingTemplate := "{% if message %}<think>reasoning</think>{% endif %}"
+	prompt := "<|im_start|>assistant\n"
+	l := &LlamacppCaller{ThinkEffort: ThinkEffortNone, template: thinkingTemplate}
+	if got := l.maybeNoThink(prompt); got != prompt+emptyThinkBlock {
+		t.Errorf("maybeNoThink() with effort none = %q, want block appended", got)
+	}
+	l = &LlamacppCaller{ThinkEffort: ThinkEffortLow, template: thinkingTemplate}
+	if got := l.maybeNoThink(prompt); got != prompt {
+		t.Errorf("maybeNoThink() with effort low = %q, want unchanged", got)
+	}
+}
+
 func TestMaxTokens(t *testing.T) {
 	if got := (&LlamacppCaller{}).maxTokens(); got != llamacppDefaultMaxTokens {
 		t.Errorf("maxTokens() default = %d, want %d", got, llamacppDefaultMaxTokens)

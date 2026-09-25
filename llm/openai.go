@@ -20,14 +20,26 @@ type OpenAICaller struct {
 	Model    string
 	Executor ToolExecutor
 	Client   *http.Client
+	// ThinkEffort is the unified reasoning-effort level ("": provider default).
+	ThinkEffort ThinkEffort
+}
+
+// OpenAIReasoning is the OpenRouter-style reasoning object. It is sent
+// alongside reasoning_effort so one param covers OpenRouter (which prefers
+// `reasoning`), Ollama (which accepts both), and Gemini (which reads
+// `reasoning_effort`); unknown fields are ignored elsewhere.
+type OpenAIReasoning struct {
+	Effort string `json:"effort"`
 }
 
 type OpenAIRequest struct {
-	Model          string    `json:"model"`
-	Messages       []Message `json:"messages"`
-	Tools          []any     `json:"tools,omitempty"`
-	Temperature    float64   `json:"temperature,omitempty"`
-	ResponseFormat any       `json:"response_format,omitempty"`
+	Model           string           `json:"model"`
+	Messages        []Message        `json:"messages"`
+	Tools           []any            `json:"tools,omitempty"`
+	Temperature     float64          `json:"temperature,omitempty"`
+	ResponseFormat  any              `json:"response_format,omitempty"`
+	ReasoningEffort *string          `json:"reasoning_effort,omitempty"`
+	Reasoning       *OpenAIReasoning `json:"reasoning,omitempty"`
 }
 
 type OpenAIResponse struct {
@@ -57,13 +69,30 @@ type OpenAIUsageCompletionDetails struct {
 const openAIMaxToolHops = 10
 
 func NewOpenAICaller(baseURL, apiKey, model string, executor ToolExecutor) *OpenAICaller {
+	return NewOpenAICallerWithThink(baseURL, apiKey, model, executor, "")
+}
+
+// NewOpenAICallerWithThink is like NewOpenAICaller with a unified think
+// effort applied to every chat-completions request ("": provider default).
+func NewOpenAICallerWithThink(baseURL, apiKey, model string, executor ToolExecutor, think ThinkEffort) *OpenAICaller {
 	return &OpenAICaller{
-		BaseURL:  baseURL,
-		APIKey:   apiKey,
-		Model:    model,
-		Executor: executor,
-		Client:   &http.Client{Timeout: 60 * time.Second},
+		BaseURL:     baseURL,
+		APIKey:      apiKey,
+		Model:       model,
+		Executor:    executor,
+		Client:      &http.Client{Timeout: 60 * time.Second},
+		ThinkEffort: think,
 	}
+}
+
+// reasoningFields returns the reasoning_effort + reasoning pair for the
+// caller's think effort, or nils when unset (provider default).
+func (o *OpenAICaller) reasoningFields() (*string, *OpenAIReasoning) {
+	if o.ThinkEffort == "" {
+		return nil, nil
+	}
+	effort := string(o.ThinkEffort)
+	return &effort, &OpenAIReasoning{Effort: effort}
 }
 
 func (o *OpenAICaller) isOpenRouter() bool {
@@ -122,11 +151,14 @@ func (o *OpenAICaller) call(ctx context.Context, systemPrompt string, messages [
 		if hops > 0 {
 			rf = nil
 		}
+		reasoningEffort, reasoning := o.reasoningFields()
 		reqBody := OpenAIRequest{
-			Model:          o.Model,
-			Messages:       allMessages,
-			Tools:          tools,
-			ResponseFormat: rf,
+			Model:           o.Model,
+			Messages:        allMessages,
+			Tools:           tools,
+			ResponseFormat:  rf,
+			ReasoningEffort: reasoningEffort,
+			Reasoning:       reasoning,
 		}
 
 		jsonBody, err := json.Marshal(reqBody)

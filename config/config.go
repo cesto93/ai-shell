@@ -39,9 +39,10 @@ type Config struct {
 	AgentFiles bool   `mapstructure:"agent_files"`
 	Skills     bool   `mapstructure:"skills"`
 	LLM        struct {
-		Provider   string   `mapstructure:"provider"`
-		Model      string   `mapstructure:"model"`
-		InputTypes []string `mapstructure:"input_types"`
+		Provider    string   `mapstructure:"provider"`
+		Model       string   `mapstructure:"model"`
+		InputTypes  []string `mapstructure:"input_types"`
+		ThinkEffort string   `mapstructure:"think_effort"`
 	} `mapstructure:"llm"`
 	Shell struct {
 		Confirm         bool     `mapstructure:"confirm"`
@@ -162,9 +163,10 @@ func LoadConfig() (*Config, error) {
 				AgentFiles: true,
 				Skills:     true,
 				LLM: struct {
-					Provider   string   `mapstructure:"provider"`
-					Model      string   `mapstructure:"model"`
-					InputTypes []string `mapstructure:"input_types"`
+					Provider    string   `mapstructure:"provider"`
+					Model       string   `mapstructure:"model"`
+					InputTypes  []string `mapstructure:"input_types"`
+					ThinkEffort string   `mapstructure:"think_effort"`
 				}{
 					Provider:   "ollama",
 					Model:      "granite4:3b-h",
@@ -226,7 +228,26 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 
+	config.LLM.ThinkEffort = normalizeThinkEffort(config.LLM.ThinkEffort)
+
 	return &config, nil
+}
+
+// normalizeThinkEffort lowercases/trims llm.think_effort; unknown values are
+// reset to "" (provider default) with a warning so old configs keep loading.
+func normalizeThinkEffort(s string) string {
+	v := strings.ToLower(strings.TrimSpace(s))
+	if v == "" {
+		return ""
+	}
+	switch v {
+	case "none", "minimal", "low", "medium", "high", "xhigh", "max":
+		return v
+	default:
+		slog.Warn("invalid llm.think_effort, using provider default",
+			"value", s)
+		return ""
+	}
 }
 
 var getConfigPathFunc = getConfigPath
@@ -304,9 +325,10 @@ func SaveConfig(cfg *Config) error {
 		AgentFiles bool   `yaml:"agent_files"`
 		Skills     bool   `yaml:"skills"`
 		LLM        struct {
-			Provider   string   `yaml:"provider"`
-			Model      string   `yaml:"model"`
-			InputTypes []string `yaml:"input_types,omitempty"`
+			Provider    string   `yaml:"provider"`
+			Model       string   `yaml:"model"`
+			InputTypes  []string `yaml:"input_types,omitempty"`
+			ThinkEffort string   `yaml:"think_effort,omitempty"`
 		} `yaml:"llm"`
 		Shell struct {
 			Confirm         bool     `yaml:"confirm"`
@@ -328,6 +350,7 @@ func SaveConfig(cfg *Config) error {
 	out.LLM.Provider = cfg.LLM.Provider
 	out.LLM.Model = cfg.LLM.Model
 	out.LLM.InputTypes = cfg.LLM.InputTypes
+	out.LLM.ThinkEffort = cfg.LLM.ThinkEffort
 	out.Shell.Confirm = cfg.Shell.Confirm
 	out.Shell.AllowedCommands = cfg.Shell.AllowedCommands
 	out.LitertLM.Backend = cfg.LitertLM.Backend

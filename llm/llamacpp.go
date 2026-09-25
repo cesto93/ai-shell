@@ -24,6 +24,11 @@ type LlamacppCaller struct {
 	// NoThink pre-fills an empty <think> block so reasoning models answer
 	// directly instead of thinking out loud (for short-form tasks).
 	NoThink bool
+	// ThinkEffort is the unified reasoning-effort level ("": provider
+	// default). Only "none" changes llamacpp behavior (equivalent to
+	// NoThink); graded levels keep thinking enabled since llama.cpp exposes
+	// an on/off thinking switch, not graded effort.
+	ThinkEffort ThinkEffort
 
 	once      sync.Once
 	initErr   error
@@ -400,12 +405,13 @@ func formatContent(content any) string {
 // continues after the closed block instead of opening a <think> section.
 const emptyThinkBlock = "<think>\n\n</think>\n\n"
 
-// maybeNoThink appends emptyThinkBlock to prompt when NoThink is set and the
-// model's chat template is a reasoning template (contains a <think> marker).
-// Plain-text templates are returned unchanged, as are prompts that already
-// end with the block (idempotent).
+// maybeNoThink appends emptyThinkBlock to prompt when thinking is disabled
+// (NoThink set or ThinkEffort "none") and the model's chat template is a
+// reasoning template (contains a <think> marker). Plain-text templates are
+// returned unchanged, as are prompts that already end with the block
+// (idempotent).
 func (l *LlamacppCaller) maybeNoThink(prompt string) string {
-	if !l.NoThink {
+	if !l.NoThink && l.ThinkEffort != ThinkEffortNone {
 		return prompt
 	}
 	if !strings.Contains(l.template, "<think>") {

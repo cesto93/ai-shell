@@ -1,6 +1,10 @@
 package llm
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -65,6 +69,75 @@ func TestOpenAIRequestSerialization(t *testing.T) {
 	}
 	if req.Temperature != 0.7 {
 		t.Errorf("Temperature = %f, want 0.7", req.Temperature)
+	}
+}
+
+func TestOpenAIThinkEffortSent(t *testing.T) {
+	var got OpenAIRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req OpenAIRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		got = req
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"hi"}}]}`))
+	}))
+	defer srv.Close()
+
+	caller := NewOpenAICallerWithThink(srv.URL, "", "m", &mockExecutor{}, ThinkEffortLow)
+	if _, err := caller.Call(context.Background(), "sys", []Message{{Role: "user", Content: "hi"}}, nil); err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	if got.ReasoningEffort == nil || *got.ReasoningEffort != "low" {
+		t.Errorf("reasoning_effort = %+v, want low", got.ReasoningEffort)
+	}
+	if got.Reasoning == nil || got.Reasoning.Effort != "low" {
+		t.Errorf("reasoning = %+v, want {low}", got.Reasoning)
+	}
+}
+
+func TestOpenAIThinkEffortOmittedByDefault(t *testing.T) {
+	var got OpenAIRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req OpenAIRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		got = req
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"hi"}}]}`))
+	}))
+	defer srv.Close()
+
+	caller := NewOpenAICaller(srv.URL, "", "m", &mockExecutor{})
+	if _, err := caller.Call(context.Background(), "sys", []Message{{Role: "user", Content: "hi"}}, nil); err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	if got.ReasoningEffort != nil {
+		t.Errorf("reasoning_effort = %q, want omitted", *got.ReasoningEffort)
+	}
+	if got.Reasoning != nil {
+		t.Errorf("reasoning = %+v, want omitted", got.Reasoning)
+	}
+}
+
+func TestProviderCallerWithThinkPropagates(t *testing.T) {
+	c := NewProviderCallerWithThink("ollama", "m", nil, ThinkEffortHigh)
+	oc, ok := c.(*OpenAICaller)
+	if !ok {
+		t.Fatalf("caller type = %T, want *OpenAICaller", c)
+	}
+	if oc.ThinkEffort != ThinkEffortHigh {
+		t.Errorf("ThinkEffort = %q, want high", oc.ThinkEffort)
+	}
+	lc := NewProviderCallerWithThink("llamacpp", "m", nil, ThinkEffortNone)
+	llc, ok := lc.(*LlamacppCaller)
+	if !ok {
+		t.Fatalf("caller type = %T, want *LlamacppCaller", lc)
+	}
+	if !llc.NoThink {
+		t.Error("llamacpp think=none should set NoThink")
 	}
 }
 

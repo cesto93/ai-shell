@@ -53,15 +53,18 @@ func (s *Server) Chat(ctx context.Context, req *proto.ChatRequest) (*proto.ChatR
 	messages := messagesFromProto(req.Messages)
 
 	var agent *llm.Agent
-	if req.SystemPrompt != "" {
+	if think, err := llm.ParseThinkEffort(req.ThinkEffort); err != nil {
+		return &proto.ChatResponse{Error: err.Error()}, nil
+	} else if req.SystemPrompt != "" {
 		agent = &llm.Agent{
-			Prompt:   req.SystemPrompt,
-			Model:    req.Model,
-			Provider: req.Provider,
-			Backend:  req.Backend,
+			Prompt:      req.SystemPrompt,
+			Model:       req.Model,
+			Provider:    req.Provider,
+			Backend:     req.Backend,
+			ThinkEffort: think,
 		}
 	} else {
-		agent = llm.NewAgentForSession(req.Agent, req.Model, req.Provider, req.Tools, req.Backend, req.AgentFiles, req.Skills)
+		agent = llm.NewAgentForSession(req.Agent, req.Model, req.Provider, req.Tools, req.Backend, req.AgentFiles, req.Skills, think)
 	}
 
 	executor := &ServiceExecutor{

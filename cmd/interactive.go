@@ -33,6 +33,11 @@ func PrintConfig() {
 	fmt.Printf("Skills: %s%v%s\n", ColorGreen, cfg.Skills, ColorReset)
 	fmt.Printf("Provider: %s%s%s\n", ColorGreen, cfg.LLM.Provider, ColorReset)
 	fmt.Printf("Model: %s%s%s\n", ColorGreen, cfg.LLM.Model, ColorReset)
+	thinkEffort := cfg.LLM.ThinkEffort
+	if thinkEffort == "" {
+		thinkEffort = "(provider default)"
+	}
+	fmt.Printf("Think Effort: %s%s%s\n", ColorGreen, thinkEffort, ColorReset)
 	fmt.Printf("Confirm Commands: %s%v%s\n", ColorGreen, cfg.Shell.Confirm, ColorReset)
 	fmt.Printf("Allowed Commands: %s%s%s\n", ColorGreen, strings.Join(cfg.Shell.AllowedCommands, ","), ColorReset)
 

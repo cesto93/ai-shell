@@ -112,6 +112,45 @@ llm:
 	}
 }
 
+func TestThinkEffortNormalization(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"", ""},
+		{"low", "low"},
+		{" Low ", "low"},
+		{"HIGH", "high"},
+		{"xhigh", "xhigh"},
+		{"max", "max"},
+		{"none", "none"},
+		{"minimal", "minimal"},
+		{"ultra", ""},
+		{"off", ""},
+	}
+	for _, tt := range cases {
+		if got := normalizeThinkEffort(tt.in); got != tt.want {
+			t.Errorf("normalizeThinkEffort(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestSaveConfigPreservesThinkEffort(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.yaml")
+	cfg := &Config{ConfigFile: configFile, LogLevel: "info"}
+	cfg.LLM.Provider = "ollama"
+	cfg.LLM.Model = "m"
+	cfg.LLM.ThinkEffort = "low"
+	if err := SaveConfig(cfg); err != nil {
+		t.Fatalf("SaveConfig: %v", err)
+	}
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Fatalf("read saved config: %v", err)
+	}
+	if !strings.Contains(string(data), "think_effort") || !strings.Contains(string(data), "low") {
+		t.Errorf("saved config missing think_effort: low:\n%s", data)
+	}
+}
+
 func TestSaveModel(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "ai-shell")
@@ -740,9 +779,10 @@ func TestSaveConfig(t *testing.T) {
 		ConfigFile: configFile,
 		LogLevel:   "info",
 		LLM: struct {
-			Provider   string   `mapstructure:"provider"`
-			Model      string   `mapstructure:"model"`
-			InputTypes []string `mapstructure:"input_types"`
+			Provider    string   `mapstructure:"provider"`
+			Model       string   `mapstructure:"model"`
+			InputTypes  []string `mapstructure:"input_types"`
+			ThinkEffort string   `mapstructure:"think_effort"`
 		}{
 			Provider: "ollama",
 			Model:    "test-model",
@@ -790,9 +830,10 @@ func TestSaveConfigEmptyPath(t *testing.T) {
 	cfg := &Config{
 		LogLevel: "info",
 		LLM: struct {
-			Provider   string   `mapstructure:"provider"`
-			Model      string   `mapstructure:"model"`
-			InputTypes []string `mapstructure:"input_types"`
+			Provider    string   `mapstructure:"provider"`
+			Model       string   `mapstructure:"model"`
+			InputTypes  []string `mapstructure:"input_types"`
+			ThinkEffort string   `mapstructure:"think_effort"`
 		}{
 			Provider: "gemini",
 			Model:    "gemini-3.7-flash",

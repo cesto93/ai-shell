@@ -1229,7 +1229,7 @@ func (m *ShellModel) ElaborateMessage() {
 		}
 	}
 
-	agent := llm.NewAgentForSession(m.cfg.Agent, m.cfg.LLM.Model, m.cfg.LLM.Provider, m.cfg.Tools, m.cfg.LitertLM.Backend, m.cfg.AgentFiles, m.cfg.Skills)
+	agent := llm.NewAgentForSession(m.cfg.Agent, m.cfg.LLM.Model, m.cfg.LLM.Provider, m.cfg.Tools, m.cfg.LitertLM.Backend, m.cfg.AgentFiles, m.cfg.Skills, llm.ThinkEffort(m.cfg.LLM.ThinkEffort))
 
 	executor := &ShellExecutorForLLM{m: m}
 
@@ -1325,7 +1325,7 @@ func (m *ShellModel) runStructuredMessage(ctx context.Context, messages []llm.Me
 
 	systemPrompt := "You extract structured data from documents and images. Return only valid JSON matching the provided schema."
 
-	caller := llm.NewProviderCallerRaw(m.cfg.LLM.Provider, m.cfg.LLM.Model, llm.NoopExecutor{})
+	caller := llm.NewProviderCallerRawWithThink(m.cfg.LLM.Provider, m.cfg.LLM.Model, llm.NoopExecutor{}, llm.ThinkEffort(m.cfg.LLM.ThinkEffort))
 	if lc, ok := caller.(*llm.LitertLMCaller); ok {
 		lc.Backend = m.cfg.LitertLM.Backend
 	}

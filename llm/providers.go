@@ -53,25 +53,53 @@ func newProviderCaller(provider, model string, executor ToolExecutor) (Caller, b
 }
 
 func NewProviderCaller(provider, model string, executor ToolExecutor) Caller {
-	if c, ok := newProviderCaller(provider, model, executor); ok {
-		return c
-	}
-	cfg := getProviderConfig(provider)
-	return NewOpenAICaller(cfg.BaseURL, cfg.APIKey, model, executor)
+	return NewProviderCallerWithThink(provider, model, executor, "")
 }
 
 func NewProviderCallerRaw(provider, model string, executor ToolExecutor) RawCaller {
+	return NewProviderCallerRawWithThink(provider, model, executor, "")
+}
+
+// NewProviderCallerWithThink is like NewProviderCaller with a unified think
+// effort applied to the returned caller ("": provider default).
+func NewProviderCallerWithThink(provider, model string, executor ToolExecutor, think ThinkEffort) Caller {
 	if c, ok := newProviderCaller(provider, model, executor); ok {
+		applyThinkEffort(c, think)
+		return c
+	}
+	cfg := getProviderConfig(provider)
+	return NewOpenAICallerWithThink(cfg.BaseURL, cfg.APIKey, model, executor, think)
+}
+
+// NewProviderCallerRawWithThink is the RawCaller variant of
+// NewProviderCallerWithThink.
+func NewProviderCallerRawWithThink(provider, model string, executor ToolExecutor, think ThinkEffort) RawCaller {
+	if c, ok := newProviderCaller(provider, model, executor); ok {
+		applyThinkEffort(c, think)
 		if rc, ok := c.(RawCaller); ok {
 			return rc
 		}
 	}
 	cfg := getProviderConfig(provider)
-	return NewOpenAICaller(cfg.BaseURL, cfg.APIKey, model, executor)
+	return NewOpenAICallerWithThink(cfg.BaseURL, cfg.APIKey, model, executor, think)
+}
+
+// applyThinkEffort sets the think effort on in-process callers that support
+// it. OpenAI-compatible callers are constructed with it directly.
+func applyThinkEffort(c Caller, think ThinkEffort) {
+	switch v := c.(type) {
+	case *LlamacppCaller:
+		v.ThinkEffort = think
+		if think == ThinkEffortNone {
+			v.NoThink = true
+		}
+	case *LitertLMCaller:
+		v.ThinkEffort = think
+	}
 }
 
 func (a *Agent) CallLLM(ctx context.Context, executor ToolExecutor, messages []Message) ([]Message, error) {
-	caller := NewProviderCaller(a.Provider, a.Model, executor)
+	caller := NewProviderCallerWithThink(a.Provider, a.Model, executor, a.ThinkEffort)
 	if lc, ok := caller.(*LitertLMCaller); ok {
 		lc.Backend = a.Backend
 	}

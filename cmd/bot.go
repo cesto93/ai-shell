@@ -614,7 +614,7 @@ func botCallLLM(ctx context.Context, cfg *config.Config, messages []llm.Message)
 		slog.Debug("service unavailable, falling back to local bot execution", "err", err)
 	}
 
-	agent := llm.NewAgentForSession("bot", cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools, cfg.LitertLM.Backend, cfg.AgentFiles, cfg.Skills)
+	agent := llm.NewAgentForSession("bot", cfg.LLM.Model, cfg.LLM.Provider, cfg.Tools, cfg.LitertLM.Backend, cfg.AgentFiles, cfg.Skills, llm.ThinkEffort(cfg.LLM.ThinkEffort))
 	executor := &botExecutor{cfg: cfg}
 	return agent.CallLLM(ctx, executor, messages)
 }
