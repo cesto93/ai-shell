@@ -19,6 +19,7 @@ import (
 	"ai-shell/service"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -48,6 +49,24 @@ var (
 	highlightStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFFFFF")).
 			Background(lipgloss.Color("#444444"))
+
+	userHeaderStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#FFFFFF"))
+
+	aiHeaderStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#00BFFF"))
+
+	userBlockStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#888888")).
+			Padding(0, 1)
+
+	aiBlockStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#00BFFF")).
+			Padding(0, 1)
 )
 
 var availableCommands = []string{
@@ -216,6 +235,10 @@ type ShellModel struct {
 	mu                 sync.Mutex
 	teaProgram         *tea.Program
 	input              textinput.Model
+	viewport           viewport.Model
+	ready              bool
+	followOutput       bool
+	lastMsgCount       int
 	messages           []Message
 	history            []string
 	historyIndex       int
@@ -264,6 +287,7 @@ func NewShellModel() (*ShellModel, error) {
 		cfg:                cfg,
 		commands:           config.LoadCommands(cfg),
 		confirmationChan:   make(chan bool, 1),
+		followOutput:       true,
 	}
 
 	return m, nil
@@ -291,6 +315,26 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		if !m.ready {
+			h := msg.Height - 4
+			if h < 1 {
+				h = 1
+			}
+			m.viewport = viewport.New(msg.Width, h)
+			m.ready = true
+			m.followOutput = true
+		} else {
+			m.viewport.Width = msg.Width
+		}
+		return m, nil
+
+	case tea.MouseMsg:
+		if m.ready {
+			var cmd tea.Cmd
+			m.viewport, cmd = m.viewport.Update(msg)
+			m.followOutput = m.viewport.AtBottom()
+			return m, cmd
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -305,6 +349,24 @@ func (m *ShellModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case tea.KeyEnter:
 			return m.handleEnterKey()
+
+		case tea.KeyPgUp:
+			return m.scrollTranscript(-1)
+
+		case tea.KeyPgDown:
+			return m.scrollTranscript(1)
+
+		case tea.KeyShiftUp:
+			return m.scrollLines(-3)
+
+		case tea.KeyShiftDown:
+			return m.scrollLines(3)
+
+		case tea.KeyHome:
+			return m.jumpTranscript(true)
+
+		case tea.KeyEnd:
+			return m.jumpTranscript(false)
 
 		case tea.KeyUp:
 			if m.menu.kind != menuNone {
@@ -435,6 +497,51 @@ func (m *ShellModel) handleMenuNav(dir int) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// scrollTranscript moves the transcript viewport by half a page. Scrolling up
+// detaches the auto-follow tail; scrolling back to the bottom re-attaches it.
+func (m *ShellModel) scrollTranscript(dir int) (tea.Model, tea.Cmd) {
+	if !m.ready {
+		return m, nil
+	}
+	if dir < 0 {
+		m.viewport.HalfViewUp()
+	} else {
+		m.viewport.HalfViewDown()
+	}
+	m.followOutput = m.viewport.AtBottom()
+	return m, nil
+}
+
+// scrollLines moves the transcript viewport by n lines (negative scrolls
+// up). Used for fine-grained gestures like Shift+Up/Down.
+func (m *ShellModel) scrollLines(n int) (tea.Model, tea.Cmd) {
+	if !m.ready {
+		return m, nil
+	}
+	if n < 0 {
+		m.viewport.ScrollUp(-n)
+	} else {
+		m.viewport.ScrollDown(n)
+	}
+	m.followOutput = m.viewport.AtBottom()
+	return m, nil
+}
+
+// jumpTranscript jumps to the top (top=true) or tails the latest output.
+func (m *ShellModel) jumpTranscript(top bool) (tea.Model, tea.Cmd) {
+	if !m.ready {
+		return m, nil
+	}
+	if top {
+		m.viewport.GotoTop()
+		m.followOutput = false
+	} else {
+		m.viewport.GotoBottom()
+		m.followOutput = true
+	}
+	return m, nil
+}
+
 func (m *ShellModel) handleMenuKeys(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case "j", "down":
@@ -546,36 +653,43 @@ func wrapShellLine(line string, width int) []string {
 	return lines
 }
 
-func (m *ShellModel) View() string {
-	if m.quitting {
-		return fmt.Sprintf("%sGoodbye!%s\n", systemStyle.Render(""), "")
+// renderTurnBlock renders a user or AI turn as a rounded bordered block that
+// fits the outer width (border + padding included). Note lipgloss Width
+// covers content + padding but not the border, hence outer-2.
+func renderTurnBlock(header string, headerStyle, blockStyle lipgloss.Style, content string, outer int) string {
+	if outer < 20 {
+		return headerStyle.Render(header+": ") + wrapShellText(content, outer)
 	}
+	inner := outer - 4 // border (2) + padding (2)
+	wrapped := wrapShellText(content, inner)
+	body := headerStyle.Render(header) + "\n" + wrapped
+	return blockStyle.Width(outer - 2).Render(body)
+}
 
+func renderUserBlock(content string, outer int) string {
+	return renderTurnBlock("You", userHeaderStyle, userBlockStyle, content, outer)
+}
+
+func renderAIBlock(content string, outer int) string {
+	return renderTurnBlock("AI", aiHeaderStyle, aiBlockStyle, content, outer)
+}
+
+// renderTranscript builds the scrollable body: turn blocks, plain status
+// lines, menus and suggestions. The input line and its status stay pinned in
+// the footer (renderFooter).
+func (m *ShellModel) renderTranscript(msgs []Message, w int) string {
 	var sb strings.Builder
-	w := m.viewWidth()
 
-	for _, msg := range m.messages {
+	for _, msg := range msgs {
 		switch msg.role {
 		case "system":
 			sb.WriteString(systemStyle.Render(wrapShellText(msg.content, w)))
 			sb.WriteString("\n")
 		case "user":
-			sb.WriteString(userStyle.Render(strings.Join(
-				wrapShellTextWithPrefix("You: ", msg.content, w), "\n")))
+			sb.WriteString(renderUserBlock(msg.content, w))
 			sb.WriteString("\n")
 		case "assistant":
-			lines := wrapShellTextWithPrefix("AI: ", msg.content, w)
-			for i, l := range lines {
-				if i == 0 {
-					sb.WriteString(aiStyle.Render("AI: "))
-					sb.WriteString(strings.TrimPrefix(l, "AI: "))
-				} else {
-					sb.WriteString(l)
-				}
-				if i < len(lines)-1 {
-					sb.WriteString("\n")
-				}
-			}
+			sb.WriteString(renderAIBlock(msg.content, w))
 			sb.WriteString("\n")
 		case "tool":
 			sb.WriteString(cmdStyle.Render(wrapShellText(msg.content, w)))
@@ -606,9 +720,22 @@ func (m *ShellModel) View() string {
 		sb.WriteString("\n")
 	}
 
+	return sb.String()
+}
+
+// renderFooter builds the pinned bottom area: an optional scroll hint plus
+// the confirmation prompt, loading status or input line.
+func (m *ShellModel) renderFooter() string {
+	var sb strings.Builder
+
+	if hint := m.scrollHint(); hint != "" {
+		sb.WriteString(dimStyle.Render(hint))
+		sb.WriteString("\n")
+	}
+
 	if m.waitingConfirm {
 		sb.WriteString(systemStyle.Render(wrapShellText(
-			fmt.Sprintf("[LLM wants to execute: %s]", m.pendingCommand), w)))
+			fmt.Sprintf("[LLM wants to execute: %s]", m.pendingCommand), m.viewWidth())))
 		sb.WriteString("\n")
 		sb.WriteString(dimStyle.Render("Confirm execution? [y/N]"))
 		sb.WriteString("\n")
@@ -617,10 +744,65 @@ func (m *ShellModel) View() string {
 		sb.WriteString("\n")
 	} else {
 		sb.WriteString(m.input.View())
+		sb.WriteString("\n")
 	}
-	sb.WriteString("\n")
 
 	return sb.String()
+}
+
+// scrollHint reports the transcript scroll state for the footer. It returns
+// "" when everything fits on screen. A persistent hint matters because the
+// viewport has no visible scrollbar and plain Up/Down navigate input history,
+// so users otherwise never discover PgUp/PgDn/wheel scrolling.
+func (m *ShellModel) scrollHint() string {
+	if !m.ready {
+		return ""
+	}
+	if m.viewport.TotalLineCount() <= m.viewport.Height {
+		return ""
+	}
+	if m.followOutput {
+		pct := int(m.viewport.ScrollPercent()*100 + 0.5)
+		return fmt.Sprintf("scroll %d%% • PgUp/PgDn or Shift+Up/Down or wheel", pct)
+	}
+	return "PgUp/PgDn scroll • End follows latest"
+}
+
+func (m *ShellModel) View() string {
+	if m.quitting {
+		return fmt.Sprintf("%sGoodbye!%s\n", systemStyle.Render(""), "")
+	}
+
+	m.mu.Lock()
+	msgs := append([]Message(nil), m.messages...)
+	m.mu.Unlock()
+
+	w := m.viewWidth()
+	body := m.renderTranscript(msgs, w)
+	footer := m.renderFooter()
+
+	if !m.ready || m.height <= 0 {
+		return body + footer
+	}
+
+	// New turns re-attach the tail so answers stay visible.
+	if len(msgs) != m.lastMsgCount {
+		m.followOutput = true
+		m.lastMsgCount = len(msgs)
+	}
+
+	m.viewport.Width = w
+	m.viewport.SetContent(body)
+	h := m.height - lipgloss.Height(footer) - 1
+	if h < 1 {
+		h = 1
+	}
+	m.viewport.Height = h
+	if m.followOutput {
+		m.viewport.GotoBottom()
+	}
+
+	return m.viewport.View() + "\n" + footer
 }
 
 func (m *ShellModel) renderMenu(sb *strings.Builder) {
@@ -1036,6 +1218,9 @@ func (m *ShellModel) showHelp() {
 	sb.WriteString("  /<command>    - Execute a shell command\n")
 	sb.WriteString("  @<file>       - Autocomplete file paths\n")
 	sb.WriteString("  <text>        - Send text to the AI for a response\n")
+	sb.WriteString("  PgUp/PgDn     - Scroll the transcript (mouse wheel works too)\n")
+	sb.WriteString("  Shift+Up/Down - Scroll a few lines\n")
+	sb.WriteString("  Home/End      - Jump to top / follow latest\n")
 
 	if len(m.commands) > 0 {
 		sb.WriteString("\nUser Commands:\n")
@@ -1559,7 +1744,7 @@ func RunShell() error {
 		return fmt.Errorf("failed to create shell model: %w", err)
 	}
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	m.SetProgram(p)
 
 	_, err = p.Run()
