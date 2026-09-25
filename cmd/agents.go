@@ -13,24 +13,49 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var agentsSet string
+
 var agentsCmd = &cobra.Command{
 	Use:   "agents",
 	Short: "List all available agents",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runAgents()
+		return runAgents(cmd)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(agentsCmd)
+	agentsCmd.Flags().StringVarP(&agentsSet, "set", "s", "", "Set the current agent")
 }
 
-func runAgents() error {
+func runAgents(cmd *cobra.Command) error {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 	initLogger(cfg)
+
+	if cmd.Flags().Changed("set") {
+		if strings.TrimSpace(agentsSet) == "" {
+			return fmt.Errorf("--set requires a non-empty agent name")
+		}
+		found := false
+		for _, def := range llm.GetAgentDefs() {
+			if def.Name == agentsSet {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("agent %q not found", agentsSet)
+		}
+		cfg.Agent = agentsSet
+		if err := config.SaveConfig(cfg); err != nil {
+			return fmt.Errorf("failed to set agent: %w", err)
+		}
+		fmt.Printf("Agent set to %s\n", agentsSet)
+		return nil
+	}
 
 	defs := llm.GetAgentDefs()
 	if len(defs) == 0 {

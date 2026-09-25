@@ -116,6 +116,7 @@ Persistent `--debug` flag on the root command. `cmd.initLogger(cfg)` temporarily
 
 - Usable as `ai-shell agents`
 - Lists `llm.GetAgentDefs()` in a table (AGENT, DESCRIPTION, TOOLS); current agent prefixed with `* `; sorted; `text/tabwriter`
+- `-s` / `--set <agent>` validates against `llm.GetAgentDefs()` and persists via `config.SaveConfig`
 
 ## Stats command (cmd/stats.go)
 
