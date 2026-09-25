@@ -27,7 +27,7 @@ Docker: `Dockerfile` (multi-stage `golang:1.26-bookworm` → `debian:bookworm-sl
 
 | Directory | Contents |
 |-----------|----------|
-| `cmd/` | Cobra commands: default (TUI shell), `config`, `commit`, `pull`, `models`, `commands`, `agents`, `stats`, `context`, `service`, `bot` (Telegram) |
+| `cmd/` | Cobra commands: default (TUI shell), `config`, `commit`, `models` (with `pull` subcommand), `commands`, `agents`, `stats`, `context`, `service`, `bot` (Telegram) |
 | `config/` | Viper YAML config, model lists (OpenRouter free models fetched live, 10 min cache), `.env` loading via `gotenv`. Free OpenRouter models filtered by zero pricing and `architecture.output_modalities` (audio-only excluded); `InputTypes` from `input_modalities` |
 | `llm/` | `Agent`, `Caller`, `RawCaller` (adds `CallStructured`), `ToolExecutor`, 6 tool definitions, `NewProviderCaller`/`NewProviderCallerRaw` factory (shared `newProviderCaller` helper), `ProviderConfig`, system prompts (`BuildPrompt`, `PlanPrompt`, `BotPrompt`, `ChatPrompt`), `LlamacppCaller`, `LitertLMCaller`. Tool dispatch via `ToolExecutorPolicy` (`llm/executor.go`, pluggable confirm/execute hooks) shared by shell/CLI/service; `NewConfirmPolicy` helper; `NoopExecutor` runs nothing. Shared `decodeDataURL` in `llm/decode.go` (validates `data:` prefix/`;base64`, supports padded+unpadded). Agents: `build` (all tools), `plan` (ReadFile+KV only), `bot` (ReadFile+KV only with Telegram prompt), `chat` (no tools) via `GetAgentDefs`/`GetAgentDef` (returns cloned tool maps); `NewAgentFor` intersects agent allowed tools with user toggles; `NewAgentForSession` adds backend + think effort + AGENTS.md + skills (chat skips AGENTS.md/skills). `OpenAICaller` has 60s timeout, 10-hop tool limit, `TrimSuffix` baseURL, `LimitReader` 10MiB, empty `ToolCallID` fallback, `response_format` omitted after hop 0, explicit `Body.Close` (no defer-in-loop), persists `usage` via `stats.RecordUsage`. Unified think effort (`llm/think.go`: none/minimal/low/medium/high/xhigh/max, `""` = provider default) is sent as `reasoning_effort` + `reasoning.effort` on OpenAI-compatible providers (Ollama/Gemini/OpenRouter), maps to `NoThink` on llamacpp when `none`, and is ignored (debug-logged) on litertlm. `WithThink` factory variants (`NewProviderCallerWithThink`, `NewProviderCallerRawWithThink`, `NewOpenAICallerWithThink`) carry it; plain `NewProviderCaller` defaults to unset. `IsAllowedCommandForPolicy` trims first; `GetAgentDefs` clones maps |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt with 1s timeout), `GetDistro`, `GetShell` |
@@ -96,10 +96,13 @@ Persistent `--debug` flag on the root command. `cmd.initLogger(cfg)` temporarily
 
 > Removed. Structured extraction is now a structured command (frontmatter `schema:` field). See `cmd/commands.go` and `cmd/shell.go`. File reading helpers live in `cmd/input.go` (`readInputFile`, `readPDF`, `isImage`, `encodeImage`, `buildCommandContent`, `buildCommandTextAndImages`).
 
-## Pull command (cmd/pull.go)
+## Models command (cmd/models.go, cmd/models_pull.go)
 
-- Usable as `ai-shell pull <repo> <model> [mmproj]`
-- Downloads from HuggingFace; `.litertlm` → `~/.ai-shell/models/litertlm/`, else `.gguf` → `~/.ai-shell/models/llamacpp/`
+- Usable as `ai-shell models` or `ai-shell models pull <repo> <model> [mmproj]`
+- Lists models in a table (Model, Provider, Size, Input Types); current model prefixed with `* `
+- `-s` / `--set <model>` sets the current model; `-d` / `--delete <model>` deletes a local GGUF/`.litertlm` file (also removes paired mmproj for llamacpp)
+- For llamacpp, Size from GGUF file info. Input types: gemini hardcoded; openrouter from API `input_modalities`; llamacpp `text, image` when an `mmproj-*` file matches; ollama/litertlm `-`
+- `pull` downloads from HuggingFace; `.litertlm` → `~/.ai-shell/models/litertlm/`, else `.gguf` → `~/.ai-shell/models/llamacpp/`
 - Validates `repo` (`owner/name`) and `filename` (no path traversal); `http.Client` with 10 min timeout; progress bar; auto-updates config via `config.SaveModelWithProvider` (second file auto-detected as vision projector); cleans up partial files on failure (explicit `Close` before `Remove`)
 
 ## Skills command (cmd/skills.go)
@@ -113,13 +116,6 @@ Persistent `--debug` flag on the root command. `cmd.initLogger(cfg)` temporarily
 
 - Usable as `ai-shell agents`
 - Lists `llm.GetAgentDefs()` in a table (AGENT, DESCRIPTION, TOOLS); current agent prefixed with `* `; sorted; `text/tabwriter`
-
-## Models command (cmd/models.go)
-
-- Usable as `ai-shell models`
-- Lists models in a table (Model, Provider, Size, Input Types); current model prefixed with `* `
-- `-s` / `--set <model>` sets the current model; `-d` / `--delete <model>` deletes a local GGUF/`.litertlm` file (also removes paired mmproj for llamacpp)
-- For llamacpp, Size from GGUF file info. Input types: gemini hardcoded; openrouter from API `input_modalities`; llamacpp `text, image` when an `mmproj-*` file matches; ollama/litertlm `-`
 
 ## Stats command (cmd/stats.go)
 
@@ -167,5 +163,5 @@ Persistent `--debug` flag on the root command. `cmd.initLogger(cfg)` temporarily
  - `config.GetOpenRouterModels()` is mutex-protected (10 min TTL, lock not held during fetch); `config.LoadCommands` merges home then cwd (cwd wins); `cmd/commands` lists merged commands. `SaveModelWithProvider` uses `LookupModelInfo`.
  - `cmd/bot.go`: `splitTelegramMessage` is rune-aware (4096 char limit, rune-level cut); `parseAllowList` returns nil for empty allowlist; Telegram poll uses bounded concurrency (10); `sendMessageChunk` validates `json.Marshal`/`ReadAll` errors; `sendChatAction` defers close + checks status; per-chat history capped at 50; `KV` bbolt has 1s timeout. `botExecutor`/`ServiceExecutor` share `llm.NewConfirmPolicy`.
  - `cmd/shell.go`: `ElaborateMessage` uses `sync.Mutex` for `messages`, explicit `Body.Close` pattern, `sync.Once` for `cancelChan`, `select` non-blocking confirmation send, history `Up=+1/Down=-1` with `saveHistory` trailing newline + error handling. `runStructuredMessage` uses shared `structuredResponseFormat`/`prettyJSONOrRaw` via `cmd/structured_helpers.go`.
- - `cmd/pull.go`: `validateRepo` uses strict regex, `O_EXCL` create to avoid TOCTOU, error body included on non-200.
+ - `cmd/models_pull.go`: `validateRepo` uses strict regex, `O_EXCL` create to avoid TOCTOU, error body included on non-200.
  - `cmd/commit.go`: `Backend` included in service request, staged changes reset via named-return defer on dry-run/error, fence stripping via regex, `git commit` var renamed `gitCommit`.

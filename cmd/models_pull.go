@@ -17,7 +17,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var pullCmd = &cobra.Command{
+var modelsPullCmd = &cobra.Command{
 	Use:   "pull <repo> <model> [mmproj]",
 	Short: "Download model file(s) from a HuggingFace repo",
 	Long: `Download one or more model files from a HuggingFace repository to the local models directory.
@@ -40,7 +40,7 @@ auto-detected by scanning the models dir.`,
 }
 
 func init() {
-	rootCmd.AddCommand(pullCmd)
+	modelsCmd.AddCommand(modelsPullCmd)
 }
 
 func runPull(repo string, filenames []string) error {
