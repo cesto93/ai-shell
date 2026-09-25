@@ -42,6 +42,8 @@ message RPCContentPart {
   string image_url = 3;
   string input_audio_data = 4;
   string input_audio_format = 5;
+  // Gemini thought signature (extra_content.google.thought_signature).
+  string thought_signature = 6;
 }
 
 message RPCToolCall {
@@ -49,6 +51,8 @@ message RPCToolCall {
   string type = 2;
   string name = 3;
   string arguments = 4;
+  // Gemini thought signature (extra_content.google.thought_signature).
+  string thought_signature = 5;
 }
 
 message RPCMessage {
@@ -56,6 +60,8 @@ message RPCMessage {
   RPCContent content = 2;
   string tool_call_id = 3;
   repeated RPCToolCall tool_calls = 4;
+  // Gemini thought signature at message level (extra_content.google).
+  string thought_signature = 5;
 }
 
 message ChatRequest {

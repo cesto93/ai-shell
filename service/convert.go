@@ -7,12 +7,46 @@ import (
 
 // convert.go translates between llm.Message and the wire protocol types.
 
+// thoughtSignatureOfToolCall extracts the Gemini thought signature, if any.
+func thoughtSignatureOfToolCall(tc llm.OpenAIToolCall) string {
+	if tc.ExtraContent != nil && tc.ExtraContent.Google != nil {
+		return tc.ExtraContent.Google.ThoughtSignature
+	}
+	return ""
+}
+
+func setToolCallThoughtSignature(tc *llm.OpenAIToolCall, sig string) {
+	if sig == "" {
+		return
+	}
+	tc.ExtraContent = &llm.ExtraContent{
+		Google: &llm.GoogleExtraContent{ThoughtSignature: sig},
+	}
+}
+
+func thoughtSignatureOfMessage(m llm.Message) string {
+	if m.ExtraContent != nil && m.ExtraContent.Google != nil {
+		return m.ExtraContent.Google.ThoughtSignature
+	}
+	return ""
+}
+
+func setMessageThoughtSignature(m *llm.Message, sig string) {
+	if sig == "" {
+		return
+	}
+	m.ExtraContent = &llm.ExtraContent{
+		Google: &llm.GoogleExtraContent{ThoughtSignature: sig},
+	}
+}
+
 func toolCallToProto(tc llm.OpenAIToolCall) *proto.RPCToolCall {
 	return &proto.RPCToolCall{
-		Id:        tc.ID,
-		Type:      tc.Type,
-		Name:      tc.Function.Name,
-		Arguments: tc.Function.Arguments,
+		Id:               tc.ID,
+		Type:             tc.Type,
+		Name:             tc.Function.Name,
+		Arguments:        tc.Function.Arguments,
+		ThoughtSignature: thoughtSignatureOfToolCall(tc),
 	}
 }
 
@@ -22,6 +56,7 @@ func toolCallFromProto(tc *proto.RPCToolCall) llm.OpenAIToolCall {
 	out.Type = tc.Type
 	out.Function.Name = tc.Name
 	out.Function.Arguments = tc.Arguments
+	setToolCallThoughtSignature(&out, tc.ThoughtSignature)
 	return out
 }
 
@@ -34,6 +69,9 @@ func contentPartToProto(p llm.ContentPart) *proto.RPCContentPart {
 		out.InputAudioData = p.InputAudio.Data
 		out.InputAudioFormat = p.InputAudio.Format
 	}
+	if p.ExtraContent != nil && p.ExtraContent.Google != nil {
+		out.ThoughtSignature = p.ExtraContent.Google.ThoughtSignature
+	}
 	return out
 }
 
@@ -45,13 +83,19 @@ func contentPartFromProto(p *proto.RPCContentPart) llm.ContentPart {
 	if p.InputAudioData != "" || p.InputAudioFormat != "" {
 		out.InputAudio = &llm.InputAudio{Data: p.InputAudioData, Format: p.InputAudioFormat}
 	}
+	if p.ThoughtSignature != "" {
+		out.ExtraContent = &llm.ExtraContent{
+			Google: &llm.GoogleExtraContent{ThoughtSignature: p.ThoughtSignature},
+		}
+	}
 	return out
 }
 
 func messageToProto(m llm.Message) *proto.RPCMessage {
 	out := &proto.RPCMessage{
-		Role:       m.Role,
-		ToolCallId: m.ToolCallID,
+		Role:             m.Role,
+		ToolCallId:       m.ToolCallID,
+		ThoughtSignature: thoughtSignatureOfMessage(m),
 	}
 	for _, tc := range m.ToolCalls {
 		out.ToolCalls = append(out.ToolCalls, toolCallToProto(tc))
@@ -74,6 +118,7 @@ func messageFromProto(p *proto.RPCMessage) llm.Message {
 		Role:       p.Role,
 		ToolCallID: p.ToolCallId,
 	}
+	setMessageThoughtSignature(&out, p.ThoughtSignature)
 	for _, tc := range p.ToolCalls {
 		out.ToolCalls = append(out.ToolCalls, toolCallFromProto(tc))
 	}

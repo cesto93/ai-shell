@@ -236,6 +236,8 @@ type RPCContentPart struct {
 	ImageUrl         string                 `protobuf:"bytes,3,opt,name=image_url,json=imageUrl,proto3" json:"image_url,omitempty"`
 	InputAudioData   string                 `protobuf:"bytes,4,opt,name=input_audio_data,json=inputAudioData,proto3" json:"input_audio_data,omitempty"`
 	InputAudioFormat string                 `protobuf:"bytes,5,opt,name=input_audio_format,json=inputAudioFormat,proto3" json:"input_audio_format,omitempty"`
+	// Gemini thought signature (extra_content.google.thought_signature).
+	ThoughtSignature string `protobuf:"bytes,6,opt,name=thought_signature,json=thoughtSignature,proto3" json:"thought_signature,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -305,14 +307,23 @@ func (x *RPCContentPart) GetInputAudioFormat() string {
 	return ""
 }
 
+func (x *RPCContentPart) GetThoughtSignature() string {
+	if x != nil {
+		return x.ThoughtSignature
+	}
+	return ""
+}
+
 type RPCToolCall struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
-	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Arguments     string                 `protobuf:"bytes,4,opt,name=arguments,proto3" json:"arguments,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Type      string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	Name      string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Arguments string                 `protobuf:"bytes,4,opt,name=arguments,proto3" json:"arguments,omitempty"`
+	// Gemini thought signature (extra_content.google.thought_signature).
+	ThoughtSignature string `protobuf:"bytes,5,opt,name=thought_signature,json=thoughtSignature,proto3" json:"thought_signature,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *RPCToolCall) Reset() {
@@ -373,14 +384,23 @@ func (x *RPCToolCall) GetArguments() string {
 	return ""
 }
 
+func (x *RPCToolCall) GetThoughtSignature() string {
+	if x != nil {
+		return x.ThoughtSignature
+	}
+	return ""
+}
+
 type RPCMessage struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Role          string                 `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`
-	Content       *RPCContent            `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
-	ToolCallId    string                 `protobuf:"bytes,3,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
-	ToolCalls     []*RPCToolCall         `protobuf:"bytes,4,rep,name=tool_calls,json=toolCalls,proto3" json:"tool_calls,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Role       string                 `protobuf:"bytes,1,opt,name=role,proto3" json:"role,omitempty"`
+	Content    *RPCContent            `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
+	ToolCallId string                 `protobuf:"bytes,3,opt,name=tool_call_id,json=toolCallId,proto3" json:"tool_call_id,omitempty"`
+	ToolCalls  []*RPCToolCall         `protobuf:"bytes,4,rep,name=tool_calls,json=toolCalls,proto3" json:"tool_calls,omitempty"`
+	// Gemini thought signature at message level (extra_content.google).
+	ThoughtSignature string `protobuf:"bytes,5,opt,name=thought_signature,json=thoughtSignature,proto3" json:"thought_signature,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *RPCMessage) Reset() {
@@ -439,6 +459,13 @@ func (x *RPCMessage) GetToolCalls() []*RPCToolCall {
 		return x.ToolCalls
 	}
 	return nil
+}
+
+func (x *RPCMessage) GetThoughtSignature() string {
+	if x != nil {
+		return x.ThoughtSignature
+	}
+	return ""
 }
 
 type ChatRequest struct {
@@ -715,18 +742,20 @@ const file_service_proto_service_proto_rawDesc = "" +
 	"\x05parts\x18\x02 \x01(\v2!.aishield.service.RPCContentPartsH\x00R\x05partsB\x06\n" +
 	"\x04kind\"I\n" +
 	"\x0fRPCContentParts\x126\n" +
-	"\x05parts\x18\x01 \x03(\v2 .aishield.service.RPCContentPartR\x05parts\"\xad\x01\n" +
+	"\x05parts\x18\x01 \x03(\v2 .aishield.service.RPCContentPartR\x05parts\"\xda\x01\n" +
 	"\x0eRPCContentPart\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x1b\n" +
 	"\timage_url\x18\x03 \x01(\tR\bimageUrl\x12(\n" +
 	"\x10input_audio_data\x18\x04 \x01(\tR\x0einputAudioData\x12,\n" +
-	"\x12input_audio_format\x18\x05 \x01(\tR\x10inputAudioFormat\"c\n" +
+	"\x12input_audio_format\x18\x05 \x01(\tR\x10inputAudioFormat\x12+\n" +
+	"\x11thought_signature\x18\x06 \x01(\tR\x10thoughtSignature\"\x90\x01\n" +
 	"\vRPCToolCall\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1c\n" +
-	"\targuments\x18\x04 \x01(\tR\targuments\"\xb8\x01\n" +
+	"\targuments\x18\x04 \x01(\tR\targuments\x12+\n" +
+	"\x11thought_signature\x18\x05 \x01(\tR\x10thoughtSignature\"\xe5\x01\n" +
 	"\n" +
 	"RPCMessage\x12\x12\n" +
 	"\x04role\x18\x01 \x01(\tR\x04role\x126\n" +
@@ -734,7 +763,8 @@ const file_service_proto_service_proto_rawDesc = "" +
 	"\ftool_call_id\x18\x03 \x01(\tR\n" +
 	"toolCallId\x12<\n" +
 	"\n" +
-	"tool_calls\x18\x04 \x03(\v2\x1d.aishield.service.RPCToolCallR\ttoolCalls\"\xe9\x03\n" +
+	"tool_calls\x18\x04 \x03(\v2\x1d.aishield.service.RPCToolCallR\ttoolCalls\x12+\n" +
+	"\x11thought_signature\x18\x05 \x01(\tR\x10thoughtSignature\"\xe9\x03\n" +
 	"\vChatRequest\x128\n" +
 	"\bmessages\x18\x01 \x03(\v2\x1c.aishield.service.RPCMessageR\bmessages\x12#\n" +
 	"\rsystem_prompt\x18\x02 \x01(\tR\fsystemPrompt\x12\x14\n" +

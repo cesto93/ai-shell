@@ -107,3 +107,65 @@ func TestMessagesSliceRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestThoughtSignatureRoundTrip(t *testing.T) {
+	mkToolCall := func(sig string) llm.OpenAIToolCall {
+		var tc llm.OpenAIToolCall
+		tc.ID = "call_1"
+		tc.Type = "function"
+		tc.Function.Name = "ReadFile"
+		tc.Function.Arguments = "{}"
+		if sig != "" {
+			tc.ExtraContent = &llm.ExtraContent{
+				Google: &llm.GoogleExtraContent{ThoughtSignature: sig},
+			}
+		}
+		return tc
+	}
+	in := llm.Message{
+		Role:    "assistant",
+		Content: "thinking",
+		ExtraContent: &llm.ExtraContent{
+			Google: &llm.GoogleExtraContent{ThoughtSignature: "MSG_SIG"},
+		},
+		ToolCalls: []llm.OpenAIToolCall{mkToolCall("SIG_A")},
+	}
+
+	got := messageFromProto(messageToProto(in))
+
+	if got.ExtraContent == nil || got.ExtraContent.Google == nil ||
+		got.ExtraContent.Google.ThoughtSignature != "MSG_SIG" {
+		t.Errorf("message signature = %+v, want MSG_SIG", got.ExtraContent)
+	}
+	if len(got.ToolCalls) != 1 {
+		t.Fatalf("tool calls = %d, want 1", len(got.ToolCalls))
+	}
+	tc := got.ToolCalls[0]
+	if tc.ExtraContent == nil || tc.ExtraContent.Google == nil ||
+		tc.ExtraContent.Google.ThoughtSignature != "SIG_A" {
+		t.Errorf("tool call signature = %+v, want SIG_A", tc.ExtraContent)
+	}
+
+	// Content-part signatures round-trip too.
+	partIn := llm.Message{
+		Role: "user",
+		Content: []llm.ContentPart{
+			{
+				Type: "text",
+				Text: "hi",
+				ExtraContent: &llm.ExtraContent{
+					Google: &llm.GoogleExtraContent{ThoughtSignature: "PART_SIG"},
+				},
+			},
+		},
+	}
+	partGot := messageFromProto(messageToProto(partIn))
+	parts, ok := partGot.Content.([]llm.ContentPart)
+	if !ok || len(parts) != 1 {
+		t.Fatalf("parts = %T %v, want 1 part", partGot.Content, partGot.Content)
+	}
+	if parts[0].ExtraContent == nil || parts[0].ExtraContent.Google == nil ||
+		parts[0].ExtraContent.Google.ThoughtSignature != "PART_SIG" {
+		t.Errorf("part signature = %+v, want PART_SIG", parts[0].ExtraContent)
+	}
+}

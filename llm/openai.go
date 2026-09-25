@@ -106,14 +106,51 @@ func (o *OpenAICaller) isOpenRouter() bool {
 	return strings.Contains(o.BaseURL, "openrouter.ai")
 }
 
+func (o *OpenAICaller) isGemini() bool {
+	return strings.Contains(o.BaseURL, "generativelanguage.googleapis.com")
+}
+
 func (o *OpenAICaller) providerName() string {
 	switch {
 	case o.isOpenRouter():
 		return "openrouter"
-	case strings.Contains(o.BaseURL, "generativelanguage.googleapis.com"):
+	case o.isGemini():
 		return "gemini"
 	default:
 		return "ollama"
+	}
+}
+
+// geminiSkipThoughtSignature opts out of thought-signature validation for a
+// single tool call. Per Google's docs this degrades reasoning quality and is
+// a last resort, so we only use it to backfill histories that have no
+// signature at all (old transcripts, cross-provider replays, or models that
+// omitted it) instead of failing every follow-up request with a 400.
+const geminiSkipThoughtSignature = "skip_thought_signature_validator"
+
+// ensureGeminiThoughtSignatures backfills a skip sentinel on the first tool
+// call of any assistant message that lacks a thought signature. Gemini 3
+// requires the first functionCall part in each step of the current turn to
+// carry a signature; parallel calls after the first need none. Messages that
+// already carry a signature are left untouched so reasoning state is
+// preserved verbatim.
+func ensureGeminiThoughtSignatures(messages []Message) {
+	for i := range messages {
+		if len(messages[i].ToolCalls) == 0 {
+			continue
+		}
+		tc := &messages[i].ToolCalls[0]
+		if tc.ExtraContent != nil && tc.ExtraContent.Google != nil &&
+			tc.ExtraContent.Google.ThoughtSignature != "" {
+			continue
+		}
+		if tc.ExtraContent == nil {
+			tc.ExtraContent = &ExtraContent{}
+		}
+		if tc.ExtraContent.Google == nil {
+			tc.ExtraContent.Google = &GoogleExtraContent{}
+		}
+		tc.ExtraContent.Google.ThoughtSignature = geminiSkipThoughtSignature
 	}
 }
 
@@ -157,6 +194,12 @@ func (o *OpenAICaller) call(ctx context.Context, systemPrompt string, messages [
 		// or when tools are still expected.
 		if hops > 0 {
 			rf = nil
+		}
+		// Gemini 3 validates thought signatures on every tool hop: replay the
+		// signatures returned by the model verbatim, and backfill histories
+		// that predate them so old transcripts don't 400 forever.
+		if o.isGemini() {
+			ensureGeminiThoughtSignatures(allMessages)
 		}
 		reasoningEffort, reasoning := o.reasoningFields()
 		reqBody := OpenAIRequest{

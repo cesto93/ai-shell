@@ -182,3 +182,123 @@ func (m *mockExecutor) IsAllowedCommand(cmd string) bool {
 func (m *mockExecutor) AskConfirmation(cmd string) bool {
 	return true
 }
+
+func TestThoughtSignatureUnmarshalPreserved(t *testing.T) {
+	raw := `{"role":"assistant","content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"ReadFile","arguments":"{}"},"extra_content":{"google":{"thought_signature":"SIG_A"}}}]}` //nolint:lll
+	var msg Message
+	if err := json.Unmarshal([]byte(raw), &msg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(msg.ToolCalls) != 1 {
+		t.Fatalf("tool calls = %d, want 1", len(msg.ToolCalls))
+	}
+	tc := msg.ToolCalls[0]
+	if tc.ExtraContent == nil || tc.ExtraContent.Google == nil ||
+		tc.ExtraContent.Google.ThoughtSignature != "SIG_A" {
+		t.Fatalf("thought signature not preserved: %+v", tc.ExtraContent)
+	}
+	out, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var roundTrip Message
+	if err := json.Unmarshal(out, &roundTrip); err != nil {
+		t.Fatalf("re-unmarshal: %v", err)
+	}
+	sig := roundTrip.ToolCalls[0].ExtraContent.Google.ThoughtSignature
+	if sig != "SIG_A" {
+		t.Errorf("round-trip signature = %q, want SIG_A", sig)
+	}
+}
+
+func TestEnsureGeminiThoughtSignatures(t *testing.T) {
+	mkCall := func(sig string) OpenAIToolCall {
+		var tc OpenAIToolCall
+		tc.ID = "call_1"
+		tc.Type = "function"
+		tc.Function.Name = "ReadFile"
+		tc.Function.Arguments = "{}"
+		if sig != "" {
+			tc.ExtraContent = &ExtraContent{
+				Google: &GoogleExtraContent{ThoughtSignature: sig},
+			}
+		}
+		return tc
+	}
+
+	// Existing signatures are preserved verbatim.
+	msgs := []Message{{Role: "assistant", ToolCalls: []OpenAIToolCall{mkCall("SIG_A")}}}
+	ensureGeminiThoughtSignatures(msgs)
+	if got := msgs[0].ToolCalls[0].ExtraContent.Google.ThoughtSignature; got != "SIG_A" {
+		t.Errorf("existing signature = %q, want SIG_A", got)
+	}
+
+	// Missing signatures get the skip sentinel so old histories don't 400.
+	msgs = []Message{{Role: "assistant", ToolCalls: []OpenAIToolCall{mkCall("")}}}
+	ensureGeminiThoughtSignatures(msgs)
+	if got := msgs[0].ToolCalls[0].ExtraContent.Google.ThoughtSignature; got != geminiSkipThoughtSignature {
+		t.Errorf("backfilled signature = %q, want %q", got, geminiSkipThoughtSignature)
+	}
+
+	// Parallel calls: only the first needs a signature; the rest stay empty.
+	msgs = []Message{{Role: "assistant", ToolCalls: []OpenAIToolCall{mkCall("SIG_A"), mkCall("")}}}
+	ensureGeminiThoughtSignatures(msgs)
+	if got := msgs[0].ToolCalls[0].ExtraContent.Google.ThoughtSignature; got != "SIG_A" {
+		t.Errorf("first signature = %q, want SIG_A", got)
+	}
+	if msgs[0].ToolCalls[1].ExtraContent != nil {
+		t.Errorf("second parallel call should stay signature-free, got %+v",
+			msgs[0].ToolCalls[1].ExtraContent)
+	}
+
+	// Messages without tool calls are untouched.
+	msgs = []Message{{Role: "user", Content: "hi"}}
+	ensureGeminiThoughtSignatures(msgs)
+	if msgs[0].ExtraContent != nil {
+		t.Errorf("non-tool message should stay untouched, got %+v", msgs[0].ExtraContent)
+	}
+}
+
+func TestGeminiSecondHopReplaysSignature(t *testing.T) {
+	var secondHop OpenAIRequest
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req OpenAIRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		if calls == 1 {
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"ReadFile","arguments":"{}"},"extra_content":{"google":{"thought_signature":"SIG_A"}}}]}}]}`)) //nolint:lll
+			return
+		}
+		secondHop = req
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"done"}}]}`))
+	}))
+	defer srv.Close()
+
+	// Signature preservation is provider-agnostic: the assistant message
+	// returned by hop 0 must be replayed verbatim on hop 1.
+	caller := NewOpenAICaller(srv.URL, "", "m", &mockExecutor{})
+	if _, err := caller.Call(context.Background(), "sys",
+		[]Message{{Role: "user", Content: "hi"}}, nil); err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("calls = %d, want 2", calls)
+	}
+	found := false
+	for _, m := range secondHop.Messages {
+		for _, tc := range m.ToolCalls {
+			if tc.ExtraContent != nil && tc.ExtraContent.Google != nil &&
+				tc.ExtraContent.Google.ThoughtSignature == "SIG_A" {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Errorf("second hop replayed messages lack thought_signature SIG_A: %+v",
+			secondHop.Messages)
+	}
+}
