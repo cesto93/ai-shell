@@ -92,8 +92,36 @@ func TestOpenAIThinkEffortSent(t *testing.T) {
 	if got.ReasoningEffort == nil || *got.ReasoningEffort != "low" {
 		t.Errorf("reasoning_effort = %+v, want low", got.ReasoningEffort)
 	}
-	if got.Reasoning == nil || got.Reasoning.Effort != "low" {
-		t.Errorf("reasoning = %+v, want {low}", got.Reasoning)
+	if got.Reasoning != nil {
+		t.Errorf("reasoning = %+v, want omitted (non-OpenRouter sends reasoning_effort only)", got.Reasoning)
+	}
+}
+
+func TestOpenAIThinkEffortSentOpenRouter(t *testing.T) {
+	caller := NewOpenAICallerWithThink(
+		"https://openrouter.ai/api/v1",
+		"", "m", &mockExecutor{}, ThinkEffortLow,
+	)
+	reasoningEffort, reasoning := caller.reasoningFields()
+	if reasoningEffort != nil {
+		t.Errorf("reasoning_effort = %+v, want omitted on OpenRouter", reasoningEffort)
+	}
+	if reasoning == nil || reasoning.Effort != "low" {
+		t.Errorf("reasoning = %+v, want {low} on OpenRouter", reasoning)
+	}
+}
+
+func TestOpenAIThinkEffortSentGemini(t *testing.T) {
+	caller := NewOpenAICallerWithThink(
+		"https://generativelanguage.googleapis.com/v1beta/openai",
+		"", "m", &mockExecutor{}, ThinkEffortLow,
+	)
+	reasoningEffort, reasoning := caller.reasoningFields()
+	if reasoningEffort == nil || *reasoningEffort != "low" {
+		t.Errorf("reasoning_effort = %+v, want low on Gemini", reasoningEffort)
+	}
+	if reasoning != nil {
+		t.Errorf("reasoning = %+v, want omitted on Gemini (rejected with 400)", reasoning)
 	}
 }
 

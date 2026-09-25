@@ -24,10 +24,11 @@ type OpenAICaller struct {
 	ThinkEffort ThinkEffort
 }
 
-// OpenAIReasoning is the OpenRouter-style reasoning object. It is sent
-// alongside reasoning_effort so one param covers OpenRouter (which prefers
-// `reasoning`), Ollama (which accepts both), and Gemini (which reads
-// `reasoning_effort`); unknown fields are ignored elsewhere.
+// OpenAIReasoning is the OpenRouter-style reasoning object (Chat Completions
+// extension). It is only sent to OpenRouter; Gemini's OpenAI-compatible
+// endpoint strictly validates the payload and rejects unknown fields like
+// `reasoning` with a 400, while it natively supports `reasoning_effort`.
+// Ollama and other OpenAI-compatible endpoints get `reasoning_effort` only.
 type OpenAIReasoning struct {
 	Effort string `json:"effort"`
 }
@@ -85,14 +86,20 @@ func NewOpenAICallerWithThink(baseURL, apiKey, model string, executor ToolExecut
 	}
 }
 
-// reasoningFields returns the reasoning_effort + reasoning pair for the
-// caller's think effort, or nils when unset (provider default).
+// reasoningFields returns the think-effort fields for this caller's provider,
+// or nils when unset (provider default). OpenRouter gets `reasoning` only,
+// every other OpenAI-compatible provider gets `reasoning_effort` only: the
+// two are equivalent shorthands on OpenRouter and must not differ, while
+// Gemini rejects the unknown `reasoning` field with a 400.
 func (o *OpenAICaller) reasoningFields() (*string, *OpenAIReasoning) {
 	if o.ThinkEffort == "" {
 		return nil, nil
 	}
 	effort := string(o.ThinkEffort)
-	return &effort, &OpenAIReasoning{Effort: effort}
+	if o.isOpenRouter() {
+		return nil, &OpenAIReasoning{Effort: effort}
+	}
+	return &effort, nil
 }
 
 func (o *OpenAICaller) isOpenRouter() bool {
