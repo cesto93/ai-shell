@@ -21,7 +21,7 @@ make docker-down        # stop ai-shell compose stack (docker compose down)
 go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
 ```
 
-Docker: `Dockerfile` (multi-stage `golang:1.26-bookworm` → `debian:bookworm-slim`, `CGO_ENABLED=0`, `ENTRYPOINT ["ai-shell"]`) and `docker-compose.yml` (builds `Dockerfile` as `ai-shell:latest`, `stdin_open`/`tty` for the TUI, mounts `./:/workspace` plus named volumes `ai-shell-config`/`ai-shell-data` for `~/.config/ai-shell` and `~/.ai-shell`, `env_file: .env`, `OLLAMA_HOST` → `host.docker.internal` via `extra_hosts: host-gateway`).
+Docker: `Dockerfile` (multi-stage `golang:1.26-bookworm` → `debian:bookworm-slim`, `CGO_ENABLED=0`, `ENTRYPOINT ["ai-shell"]`) and `docker-compose.yml` (bot-only: single `ai-shell-bot` service uses remote `ghcr.io/cesto93/ai-shell:latest` with `command: ["bot"]` and `restart: unless-stopped` (`docker compose up -d`); mounts `./:/workspace` plus named volumes `ai-shell-config`/`ai-shell-data` for `~/.config/ai-shell` and `~/.ai-shell`, `env_file: .env`, `OLLAMA_HOST` → `host.docker.internal` via `extra_hosts: host-gateway`).
 
 ## Packages
 

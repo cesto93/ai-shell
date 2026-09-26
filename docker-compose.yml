@@ -1,16 +1,11 @@
 services:
-  ai-shell:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: ai-shell:latest
-    container_name: ai-shell
-    stdin_open: true
-    tty: true
+  ai-shell-bot:
+    image: ghcr.io/cesto93/ai-shell:latest
+    container_name: ai-shell-bot
+    command: ["bot"]
+    restart: unless-stopped
     working_dir: /workspace
     volumes:
-      # Mount the project/workspace into the container for live iteration.
-      # Change to a different host path if you want an isolated workspace.
       - .:/workspace
       # Persist config, usage stats, KV store and model/lib caches
       - ai-shell-config:/root/.config/ai-shell
