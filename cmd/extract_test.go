@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ai-shell/config"
+	"edgebot/config"
 )
 
 func TestRunStructuredCommandWithRealLLM(t *testing.T) {
@@ -77,7 +77,7 @@ Total: $1,234.56`
 				t.Fatal(err)
 			}
 
-			commandsDir := filepath.Join(tmpDir, ".ai-shell", "commands")
+			commandsDir := filepath.Join(tmpDir, ".edgebot", "commands")
 			if err := os.MkdirAll(commandsDir, 0755); err != nil {
 				t.Fatal(err)
 			}

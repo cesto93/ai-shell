@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	"ai-shell/config"
-	"ai-shell/llm"
+	"edgebot/config"
+	"edgebot/llm"
 
 	"github.com/spf13/cobra"
 )
@@ -14,20 +14,20 @@ import (
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Show or modify configuration settings",
-	Long:  `Show the current ai-shell configuration, or modify it by passing flags to set specific config fields.`,
-	Example: `  ai-shell config
-  ai-shell config --provider gemini --model gemini-2.0-flash
-  ai-shell config --log-level debug
-  ai-shell config --agent plan
-  ai-shell config --agent-files=false
-  ai-shell config --confirm=false
-  ai-shell config --allowed-commands "ls,pwd,git,curl"
-  ai-shell config --backend gpu
-  ai-shell config --think-effort low
-  ai-shell config --add-cmd "hello=say hello world"
-  ai-shell config --rm-cmd "hello"
-  ai-shell config --enable-tool WriteFile
-  ai-shell config --disable-tool KVGet`,
+	Long:  `Show the current edgebot configuration, or modify it by passing flags to set specific config fields.`,
+	Example: `  edgebot config
+  edgebot config --provider gemini --model gemini-2.0-flash
+  edgebot config --log-level debug
+  edgebot config --agent plan
+  edgebot config --agent-files=false
+  edgebot config --confirm=false
+  edgebot config --allowed-commands "ls,pwd,git,curl"
+  edgebot config --backend gpu
+  edgebot config --think-effort low
+  edgebot config --add-cmd "hello=say hello world"
+  edgebot config --rm-cmd "hello"
+  edgebot config --enable-tool WriteFile
+  edgebot config --disable-tool KVGet`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.LoadConfig()
 		if err != nil {

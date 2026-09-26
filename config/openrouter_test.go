@@ -120,7 +120,7 @@ func TestGetOpenRouterModelsFetchError(t *testing.T) {
 
 func TestSaveModelWithOpenRouter(t *testing.T) {
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "ai-shell")
+	configPath := filepath.Join(tmpDir, "edgebot")
 	if err := os.MkdirAll(configPath, 0755); err != nil {
 		t.Fatalf("Failed to create temp config dir: %v", err)
 	}

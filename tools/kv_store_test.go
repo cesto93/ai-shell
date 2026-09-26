@@ -9,7 +9,7 @@ import (
 
 func TestKVStore(t *testing.T) {
 	// Setup temporary DB
-	tmpDir, err := os.MkdirTemp("", "ai-shell-test-*")
+	tmpDir, err := os.MkdirTemp("", "edgebot-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}

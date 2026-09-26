@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"ai-shell/config"
+	"edgebot/config"
 
 	"github.com/spf13/cobra"
 )
@@ -26,8 +26,8 @@ The repo is the HuggingFace repository path (e.g., unsloth/Qwen3.5-2B-GGUF).
 The filenames are the specific model files to download (e.g., Qwen3.5-2B-Q4_K_M.gguf).
 
 The destination is chosen by each filename extension: .litertlm files are saved
-to ~/.ai-shell/models/litertlm/ and registered as LiteRT-LM models; anything
-else is saved to ~/.ai-shell/models/llamacpp/ as a GGUF model.
+to ~/.edgebot/models/litertlm/ and registered as LiteRT-LM models; anything
+else is saved to ~/.edgebot/models/llamacpp/ as a GGUF model.
 
 Up to two files may be downloaded per repo: when a single file is pulled the
 config is updated to use this model; when two files are pulled the first is

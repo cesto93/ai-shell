@@ -1,6 +1,6 @@
 .git
 .gitignore
-ai-shell
+edgebot
 coverage.out
 coverage.html
 *.profraw
@@ -8,4 +8,4 @@ config.yaml
 .env
 data/
 .antigravitycli/
-.ai-shell/
+.edgebot/

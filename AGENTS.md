@@ -9,19 +9,19 @@ Entry point: `main.go` → `cmd.Execute()`. Default command launches Bubbletea T
 ## Commands
 
 ```
-make build              # go build -o ai-shell .
+make build              # go build -o edgebot .
 make install            # go install .
-make install-yzma       # install yzma CLI + llama.cpp libs to ~/.ai-shell/lib
-make install-litertlm   # download LiteRT-LM C-API lib + aux/GPU libs to ~/.ai-shell/lib
+make install-yzma       # install yzma CLI + llama.cpp libs to ~/.edgebot/lib
+make install-litertlm   # download LiteRT-LM C-API lib + aux/GPU libs to ~/.edgebot/lib
 make proto              # regenerate service/proto/*.pb.go (needs protoc + plugins)
 make coverage           # test + HTML report
-make docker-build       # build ai-shell:latest image (docker build -t ai-shell:latest .)
-make docker-up          # start ai-shell via docker compose (docker compose up -d)
-make docker-down        # stop ai-shell compose stack (docker compose down)
-go fmt ./... && go vet ./... && go build -o ai-shell . && go test ./...
+make docker-build       # build edgebot:latest image (docker build -t edgebot:latest .)
+make docker-up          # start edgebot via docker compose (docker compose up -d)
+make docker-down        # stop edgebot compose stack (docker compose down)
+go fmt ./... && go vet ./... && go build -o edgebot . && go test ./...
 ```
 
-Docker: `Dockerfile` (multi-stage `golang:1.26-bookworm` → `debian:bookworm-slim`, `CGO_ENABLED=0`, `ENTRYPOINT ["ai-shell"]`) and `docker-compose.yml` (bot-only: single `ai-shell-bot` service uses remote `ghcr.io/cesto93/ai-shell:latest` with `command: ["bot"]` and `restart: unless-stopped` (`docker compose up -d`); mounts `./:/workspace` plus named volumes `ai-shell-config`/`ai-shell-data` for `~/.config/ai-shell` and `~/.ai-shell`, `env_file: .env`, `OLLAMA_HOST` → `host.docker.internal` via `extra_hosts: host-gateway`).
+Docker: `Dockerfile` (multi-stage `golang:1.26-bookworm` → `debian:bookworm-slim`, `CGO_ENABLED=0`, `ENTRYPOINT ["edgebot"]`) and `docker-compose.yml` (bot-only: single `edgebot-bot` service uses remote `ghcr.io/cesto93/edgebot:latest` with `command: ["bot"]` and `restart: unless-stopped` (`docker compose up -d`); mounts `./:/workspace` plus named volumes `edgebot-config`/`edgebot-data` for `~/.config/edgebot` and `~/.edgebot`, `env_file: .env`, `OLLAMA_HOST` → `host.docker.internal` via `extra_hosts: host-gateway`).
 
 ## Packages
 
@@ -31,20 +31,20 @@ Docker: `Dockerfile` (multi-stage `golang:1.26-bookworm` → `debian:bookworm-sl
 | `config/` | Viper YAML config, model lists (OpenRouter free models fetched live, 10 min cache), `.env` loading via `gotenv`. Free OpenRouter models filtered by zero pricing and `architecture.output_modalities` (audio-only excluded); `InputTypes` from `input_modalities` |
 | `llm/` | `Agent`, `Caller`, `RawCaller` (adds `CallStructured`), `ToolExecutor`, 6 tool definitions, `NewProviderCaller`/`NewProviderCallerRaw` factory (shared `newProviderCaller` helper), `ProviderConfig`, system prompts (`BuildPrompt`, `PlanPrompt`, `BotPrompt`, `ChatPrompt`), `LlamacppCaller`, `LitertLMCaller`. Tool dispatch via `ToolExecutorPolicy` (`llm/executor.go`, pluggable confirm/execute hooks) shared by shell/CLI/service; `NewConfirmPolicy` helper; `NoopExecutor` runs nothing. Shared `decodeDataURL` in `llm/decode.go` (validates `data:` prefix/`;base64`, supports padded+unpadded). Agents: `build` (all tools), `plan` (ReadFile only), `bot` (ReadFile+KV only with Telegram prompt), `chat` (no tools) via `GetAgentDefs`/`GetAgentDef` (returns cloned tool maps); `NewAgentFor` intersects agent allowed tools with user toggles; `NewAgentForSession` adds backend + think effort + AGENTS.md + skills (chat skips AGENTS.md/skills). `OpenAICaller` has 60s timeout, 10-hop tool limit, `TrimSuffix` baseURL, `LimitReader` 10MiB, empty `ToolCallID` fallback, `response_format` omitted after hop 0, explicit `Body.Close` (no defer-in-loop), persists `usage` via `stats.RecordUsage`. Gemini thought signatures (`llm/types.go` `ExtraContent`, `llm/openai.go` `ensureGeminiThoughtSignatures`): `tool_calls[].extra_content.google.thought_signature` (+ message/part level) is replayed verbatim each hop; missing first-call signatures on Gemini are backfilled with `skip_thought_signature_validator` so old transcripts don't 400. Unified think effort (`llm/think.go`: none/minimal/low/medium/high/xhigh/max, `""` = provider default) is sent as `reasoning.effort` on OpenRouter and `reasoning_effort` on other OpenAI-compatible providers (Ollama/Gemini; Gemini rejects unknown `reasoning` with 400), maps to `NoThink` on llamacpp when `none`, and is ignored (debug-logged) on litertlm. `WithThink` factory variants (`NewProviderCallerWithThink`, `NewProviderCallerRawWithThink`, `NewOpenAICallerWithThink`) carry it; plain `NewProviderCaller` defaults to unset. `IsAllowedCommandForPolicy` trims first; `GetAgentDefs` clones maps |
 | `tools/` | `RunCommand` (bash -c), `ReadFile`, `WriteFile`, KV store (bbolt with 1s timeout), `GetDistro`, `GetShell` |
-| `stats/` | Persistent token usage store (bbolt at `~/.config/ai-shell/usage.db`): `RecordUsage`, `GetStats`, `Reset` |
-| `service/` | gRPC service over a unix socket at `~/.ai-shell/service.sock` (`MaxMsgSize` in `socket.go`). `server.go` (`Server`, swappable `callLLM`) builds the agent via `llm.NewAgentForSession` and runs tools via `ServiceExecutor`; `client.go` (`Client`, `IsActive`, `Chat`, `Stop`, `ErrUnavailable`); `convert.go` maps `llm.Message` ↔ proto including Gemini `thought_signature` (tool/message/part level). `ChatRequest.think_effort` carries the session think effort (invalid values rejected as response errors). Wire types in `service/proto/` (committed; `make proto` to regenerate) |
+| `stats/` | Persistent token usage store (bbolt at `~/.config/edgebot/usage.db`): `RecordUsage`, `GetStats`, `Reset` |
+| `service/` | gRPC service over a unix socket at `~/.edgebot/service.sock` (`MaxMsgSize` in `socket.go`). `server.go` (`Server`, swappable `callLLM`) builds the agent via `llm.NewAgentForSession` and runs tools via `ServiceExecutor`; `client.go` (`Client`, `IsActive`, `Chat`, `Stop`, `ErrUnavailable`); `convert.go` maps `llm.Message` ↔ proto including Gemini `thought_signature` (tool/message/part level). `ChatRequest.think_effort` carries the session think effort (invalid values rejected as response errors). Wire types in `service/proto/` (committed; `make proto` to regenerate) |
 
 ## Config layering
 
-1. `~/.config/ai-shell/.env` (global)
+1. `~/.config/edgebot/.env` (global)
 2. `./.env` (local overrides)
-3. `config.yaml` from `./` or `~/.config/ai-shell/`
+3. `config.yaml` from `./` or `~/.config/edgebot/`
 
-`.env.example` documents the recognized env vars. Defaults: provider=ollama, model=granite4:3b-h, log_level=info, confirm=true, allowed_commands=ls,pwd, agent=build, agent_files=true, skills=true, llm.think_effort="" (provider default). litertlm backend defaults to `cpu`. All 6 tools enabled by default. Set via `ai-shell config --think-effort low` (empty resets).
+`.env.example` documents the recognized env vars. Defaults: provider=ollama, model=granite4:3b-h, log_level=info, confirm=true, allowed_commands=ls,pwd, agent=build, agent_files=true, skills=true, llm.think_effort="" (provider default). litertlm backend defaults to `cpu`. All 6 tools enabled by default. Set via `edgebot config --think-effort low` (empty resets).
 
-`agent_files` toggles AGENTS.md support: `llm.GetAgentFiles(true)` loads `~/.config/ai-shell/AGENTS.md` and `./AGENTS.md` as extra system-prompt instructions. Toggle via `ai-shell config --agent-files=false`.
+`agent_files` toggles AGENTS.md support: `llm.GetAgentFiles(true)` loads `~/.config/edgebot/AGENTS.md` and `./AGENTS.md` as extra system-prompt instructions. Toggle via `edgebot config --agent-files=false`.
 
-`skills` toggles skills support: `llm.GetSkills(true)` scans `~/.agents/skills/*/SKILL.md` and `./skills/*/SKILL.md` (standard agent-skills layout with YAML frontmatter `name`/`description`). Only a compact index (`llm.GetSkillsPrompt`) is injected into the system prompt; the model reads full SKILL.md contents on demand via `ReadFile`. Toggle via `ai-shell config --skills=false`.
+`skills` toggles skills support: `llm.GetSkills(true)` scans `~/.agents/skills/*/SKILL.md` and `./skills/*/SKILL.md` (standard agent-skills layout with YAML frontmatter `name`/`description`). Only a compact index (`llm.GetSkillsPrompt`) is injected into the system prompt; the model reads full SKILL.md contents on demand via `ReadFile`. Toggle via `edgebot config --skills=false`.
 
 Logging uses `log/slog`; call `config.InitLogger(cfg.LogLevel)` after `LoadConfig()`.
 
@@ -73,21 +73,21 @@ Persistent `--debug` flag on the root command. `cmd.initLogger(cfg)` temporarily
 
 ## Config command (cmd/config.go)
 
-- Usable as `ai-shell config` (shows current config via `PrintConfig`) or `ai-shell config --flag value`
+- Usable as `edgebot config` (shows current config via `PrintConfig`) or `edgebot config --flag value`
 - Flags: `--provider`, `--model`, `--agent`, `--agent-files`, `--skills`, `--log-level`, `--confirm`, `--allowed-commands`, `--backend`, `--think-effort`, `--enable-tool`, `--disable-tool`, `--add-cmd`, `--rm-cmd`
 - `--model` without `--provider` auto-detects provider via `config.LookupModelInfo`; `--add-cmd` uses `name=prompt` format
 
 ## Commands command (cmd/commands.go)
 
-- Usable as `ai-shell commands` (lists custom commands) or `ai-shell commands --run <name> [args...]`; `-o` / `--output` writes structured output to a file
-- `--run` looks up via `config.LoadCommands` (merges `.ai-shell/commands/*.md` files and config `commands` map)
+- Usable as `edgebot commands` (lists custom commands) or `edgebot commands --run <name> [args...]`; `-o` / `--output` writes structured output to a file
+- `--run` looks up via `config.LoadCommands` (merges `.edgebot/commands/*.md` files and config `commands` map)
 - Command args that are existing files are read into the prompt (`cmd/input.go`): images become multimodal `[]ContentPart`, `.txt`/`.md`/`.pdf` appended as text
 - **Structured commands**: a command file whose frontmatter has a `schema: <path>` field (resolved relative to the command file dir) runs via `CallStructured` with a `response_format: json_schema` envelope, bypassing the service. This replaces the removed `extract` command.
 - Regular commands use `llm.NewAgentForSession` with `llm.ToolExecutorPolicy{}` (no confirmation); prints final assistant text to stdout
 
 ## Commit command (cmd/commit.go)
 
-- Usable as `ai-shell commit` or via `go run . commit`
+- Usable as `edgebot commit` or via `go run . commit`
 - `-A` / `--all` stages all changes; `-d` / `--dry-run` prints without committing (and unstages if used with `-A`)
 - Sends `git log --oneline -5` + `git diff --cached` as context; uses `llm.NewProviderCaller` with `llm.NoopExecutor` (no tools)
 - Diff truncated to `commitMaxDiffChars` runes (marked) so prompts fit small local contexts; `<think>` sections stripped via `stripThinkBlock` (also drops dangling unclosed tags); llamacpp capped to `commitMaxTokens` with `NoThink` set
@@ -99,48 +99,48 @@ Persistent `--debug` flag on the root command. `cmd.initLogger(cfg)` temporarily
 
 ## Models command (cmd/models.go, cmd/models_pull.go)
 
-- Usable as `ai-shell models` or `ai-shell models pull <repo> <model> [mmproj]`
+- Usable as `edgebot models` or `edgebot models pull <repo> <model> [mmproj]`
 - Lists models in a table (Model, Provider, Size, Input Types); current model prefixed with `* `
 - `-s` / `--set <model>` sets the current model; `-d` / `--delete <model>` deletes a local GGUF/`.litertlm` file (also removes paired mmproj for llamacpp)
 - For llamacpp, Size from GGUF file info. Input types: gemini hardcoded; openrouter from API `input_modalities`; llamacpp `text, image` when an `mmproj-*` file matches; ollama/litertlm `-`
-- `pull` downloads from HuggingFace; `.litertlm` → `~/.ai-shell/models/litertlm/`, else `.gguf` → `~/.ai-shell/models/llamacpp/`
+- `pull` downloads from HuggingFace; `.litertlm` → `~/.edgebot/models/litertlm/`, else `.gguf` → `~/.edgebot/models/llamacpp/`
 - Validates `repo` (`owner/name`) and `filename` (no path traversal); `http.Client` with 10 min timeout; progress bar; auto-updates config via `config.SaveModelWithProvider` (second file auto-detected as vision projector); cleans up partial files on failure (explicit `Close` before `Remove`)
 
 ## Skills command (cmd/skills.go)
 
-- Usable as `ai-shell skills`
+- Usable as `edgebot skills`
 - Lists `llm.GetSkills(cfg.Skills)` in a table (NAME, DESCRIPTION, PATH)
 - Warns when `skills` is disabled in config
 - `--pull <git-url>` shallow-clones the repo (`git clone --depth 1`, via the shared `execCommand` mock) and installs every directory containing a `SKILL.md` into `~/.agents/skills/`; existing skills with the same dir name are replaced (reported as Updated), then the list prints. Handles both `skills/<name>/SKILL.md` repos (e.g. run-llama/llamaparse-agent-skills) and root-level skill dirs
 
 ## Agents command (cmd/agents.go)
 
-- Usable as `ai-shell agents`
+- Usable as `edgebot agents`
 - Lists `llm.GetAgentDefs()` in a table (AGENT, DESCRIPTION, TOOLS); current agent prefixed with `* `; sorted; `text/tabwriter`
 - `-s` / `--set <agent>` validates against `llm.GetAgentDefs()` and persists via `config.SaveConfig`
 
 ## Stats command (cmd/stats.go)
 
-- Usable as `ai-shell stats`
+- Usable as `edgebot stats`
 - Aggregated token usage table (CALLS, INPUT, OUTPUT, CACHED, REASONING, TOTAL, COST + TOTAL row) from `stats.GetStats()`
 - `--reset` clears all usage
 
 ## Context command (cmd/context.go)
 
-- Usable as `ai-shell context`
+- Usable as `edgebot context`
 - Shows AGENTS.md files read into context (path, word count, token estimate) plus the active agent's system prompt size
 - `--prompt` prints the system prompt; `--agents` prints the AGENTS.md texts; `--skills` prints the skills index sent to the agent (with per-skill descriptions)
 - Uses `llm.GetAgentFileInfo(cfg.AgentFiles)`; warns when `agent_files` is disabled. Also lists skills via `llm.GetSkills(cfg.Skills)` and their index token cost; warns when `skills` is disabled
 
 ## Service command (cmd/service.go)
 
-- Usable as `ai-shell service` (foreground), `service --stop`, or `service --status`
-- grpc-go server on unix socket `~/.ai-shell/service.sock`; stale socket removed when no live service answers `Ping`
+- Usable as `edgebot service` (foreground), `service --stop`, or `service --status`
+- grpc-go server on unix socket `~/.edgebot/service.sock`; stale socket removed when no live service answers `Ping`
 - Sessions route through the service when `service.IsActive()` (shell, custom commands, commit); `cmd/service_helpers.go` provides `chatRequestFromConfig` and `chatWithServiceFallback` (falls back to local on `service.ErrUnavailable`)
 
 ## Bot command (cmd/bot.go)
 
-- Usable as `ai-shell bot` (Telegram long-polling bot)
+- Usable as `edgebot bot` (Telegram long-polling bot)
 - Token from `--token` or `TELEGRAM_BOT_TOKEN` env (loaded via `.env`); `--allow-from` / `TELEGRAM_ALLOWED_CHAT_IDS` restricts to chat IDs or @usernames (empty = allow everyone); validates via `getMe`
 - Long polls `getUpdates` (30s), per-chat `[]llm.Message` history with `/reset` and `/help` handling; sends `typing` chat action and splits replies >4096 chars
 - Pure `net/http` Telegram client (no external deps): `telegramClient` (`getMe`, `getUpdates`, `sendMessage`, `sendChatAction`)
@@ -149,20 +149,20 @@ Persistent `--debug` flag on the root command. `cmd.initLogger(cfg)` temporarily
 ## CI workflows (.github/workflows)
 
 - `ci.yml`: runs format/vet/build/test
-- `docker.yml`: on push to `main`/`master` or `v*.*.*` tags, builds multi-arch (`linux/amd64`, `linux/arm64`) image via Buildx/QEMU and pushes to `ghcr.io/<owner>/ai-shell` (`latest` on default branch, short SHA, tag ref)
+- `docker.yml`: on push to `main`/`master` or `v*.*.*` tags, builds multi-arch (`linux/amd64`, `linux/arm64`) image via Buildx/QEMU and pushes to `ghcr.io/<owner>/edgebot` (`latest` on default branch, short SHA, tag ref)
 
 ## Key gotchas
 
 - `config.LoadConfig()` may return partial defaults on error — check both return values
 - `.env` files loaded at startup via `gotenv.Load()` — place API keys there, not in config.yaml
-- KV store at `~/.config/ai-shell/kv_store.db`; usage stats at `~/.config/ai-shell/usage.db`
- - System prompts are Go constants in `llm/prompt.go`, copied to `~/.ai-shell/BUILDPROMPT.md`/`PLANPROMPT.md`/`BOTPROMPT.md`/`CHATPROMPT.md` on first run — always read from there, never local file
+- KV store at `~/.config/edgebot/kv_store.db`; usage stats at `~/.config/edgebot/usage.db`
+ - System prompts are Go constants in `llm/prompt.go`, copied to `~/.edgebot/BUILDPROMPT.md`/`PLANPROMPT.md`/`BOTPROMPT.md`/`CHATPROMPT.md` on first run — always read from there, never local file
 - 100 char soft line limit, Go 1.26.0+
- - Llamacpp: `model` config is the GGUF filename without extension (`.gguf` appended as fallback). Run `make install-yzma` for libs; place GGUFs in `~/.ai-shell/models/llamacpp/`. Structured output uses a GBNF grammar (`jsonSchemaToGBNF`, `llm/gbnf.go`) with `llama.SamplerInitGrammar` (grammar sampler freed via `SamplerFree`; it must be added to the sampler chain BEFORE greedy — reversed order lets greedy pick invalid tokens like a reasoning model's `<think>` prefix, which aborts the process via an uncaught C++ exception). `applyChatTemplate` (`llm/llamacpp.go`) falls back to the builtin `chatml` template with a `slog.Warn` when the model's own template fails to render (e.g. Spark-X2.5 uses Jinja features newer than the bundled llama.cpp); both text (`buildPrompt`) and vision (`buildVisionPrompt`) paths share it. Image input uses yzma's `pkg/mtmd` (`setupVision`, `buildVisionPrompt`/`generateVision`) when a vision projector (`config.FindLlamacppMMProj()`) is present; init failures degrade to text-only; token counts use `llama.Tokenize` for both paths. mmproj files are excluded from `config.GetLlamacppModels()`. Audio input is not supported. `generateVision` no longer double-frees bitmap on failure. Prefill is chunked into `n_batch` pieces with explicit positions (`decodePrompt` via `BatchInit`/`Batch.Add`); prompts longer than `n_ctx` fail cleanly instead of tripping `GGML_ASSERT`. Default sampler chain is penalties (`1.1`/`64`) + greedy. `MaxTokens` overrides the generation cap, `NoThink` pre-fills an empty `<think>` block for short-form tasks.
- - LitertLM: loads libs from `$LITERTLM_LIB` (default `~/.ai-shell/lib`) and `.litertlm` models from `~/.ai-shell/models/litertlm/`. Binding dlopens fixed filenames: `libGemmaModelConstraintProvider.so` + `liblitertlm_c_cpu.so` (cpu) / `liblitertlm_c.so` (gpu) — NOT `liblitert-lm.so`. Run `make install-litertlm` to fetch them. Backend from config `litertlm.backend` (default `cpu`), overridable via `$LITERTLM_BACKEND`. A single client is cached per (lib dir, model path, backend) with `\x00` delimiter, created on `context.Background()`, lock not held during fetch. Tools are manual-dispatch `RawTool`s (max 5 hops, errors on limit); multimodal uses `SendMulti`; `CallStructured` prompt-engines the schema.
+ - Llamacpp: `model` config is the GGUF filename without extension (`.gguf` appended as fallback). Run `make install-yzma` for libs; place GGUFs in `~/.edgebot/models/llamacpp/`. Structured output uses a GBNF grammar (`jsonSchemaToGBNF`, `llm/gbnf.go`) with `llama.SamplerInitGrammar` (grammar sampler freed via `SamplerFree`; it must be added to the sampler chain BEFORE greedy — reversed order lets greedy pick invalid tokens like a reasoning model's `<think>` prefix, which aborts the process via an uncaught C++ exception). `applyChatTemplate` (`llm/llamacpp.go`) falls back to the builtin `chatml` template with a `slog.Warn` when the model's own template fails to render (e.g. Spark-X2.5 uses Jinja features newer than the bundled llama.cpp); both text (`buildPrompt`) and vision (`buildVisionPrompt`) paths share it. Image input uses yzma's `pkg/mtmd` (`setupVision`, `buildVisionPrompt`/`generateVision`) when a vision projector (`config.FindLlamacppMMProj()`) is present; init failures degrade to text-only; token counts use `llama.Tokenize` for both paths. mmproj files are excluded from `config.GetLlamacppModels()`. Audio input is not supported. `generateVision` no longer double-frees bitmap on failure. Prefill is chunked into `n_batch` pieces with explicit positions (`decodePrompt` via `BatchInit`/`Batch.Add`); prompts longer than `n_ctx` fail cleanly instead of tripping `GGML_ASSERT`. Default sampler chain is penalties (`1.1`/`64`) + greedy. `MaxTokens` overrides the generation cap, `NoThink` pre-fills an empty `<think>` block for short-form tasks.
+ - LitertLM: loads libs from `$LITERTLM_LIB` (default `~/.edgebot/lib`) and `.litertlm` models from `~/.edgebot/models/litertlm/`. Binding dlopens fixed filenames: `libGemmaModelConstraintProvider.so` + `liblitertlm_c_cpu.so` (cpu) / `liblitertlm_c.so` (gpu) — NOT `liblitert-lm.so`. Run `make install-litertlm` to fetch them. Backend from config `litertlm.backend` (default `cpu`), overridable via `$LITERTLM_BACKEND`. A single client is cached per (lib dir, model path, backend) with `\x00` delimiter, created on `context.Background()`, lock not held during fetch. Tools are manual-dispatch `RawTool`s (max 5 hops, errors on limit); multimodal uses `SendMulti`; `CallStructured` prompt-engines the schema.
 - `/models` menu scans `config.GetLlamacppModels()` / `config.GetLitertLMModels()`; `config.IsLlamacppModel()` / `IsLitertLMModel()` used by `SaveModelWithProvider` for provider auto-detection.
  - Service: `service.IsActive()` pings the socket; `ServiceExecutor` denies non-allowed `RunCommand`s and all `WriteFile` when `confirm` is true; structured commands never route through the service. Wire types regenerate via `make proto` (not needed to build).
- - Shared `~/.ai-shell` dirs resolved via `config.AiShellDir()`, `config.LibDir()`, `config.ModelsDir(provider)`. Helpers: `config.GetCommandName(cmd)`, `config.FormatFileSize(b)` (capped at `P`, handles `b<0`).
+ - Shared `~/.edgebot` dirs resolved via `config.EdgebotDir()`, `config.LibDir()`, `config.ModelsDir(provider)`. Helpers: `config.GetCommandName(cmd)`, `config.FormatFileSize(b)` (capped at `P`, handles `b<0`).
  - `config.GetOpenRouterModels()` is mutex-protected (10 min TTL, lock not held during fetch); `config.LoadCommands` merges home then cwd (cwd wins); `cmd/commands` lists merged commands. `SaveModelWithProvider` uses `LookupModelInfo`.
  - `cmd/bot.go`: `splitTelegramMessage` is rune-aware (4096 char limit, rune-level cut); `parseAllowList` returns nil for empty allowlist; Telegram poll uses bounded concurrency (10); `sendMessageChunk` validates `json.Marshal`/`ReadAll` errors; `sendChatAction` defers close + checks status; per-chat history capped at 50; `KV` bbolt has 1s timeout. `botExecutor`/`ServiceExecutor` share `llm.NewConfirmPolicy`.
  - `cmd/shell.go`: `ElaborateMessage` uses `sync.Mutex` for `messages`, explicit `Body.Close` pattern, `sync.Once` for `cancelChan`, `select` non-blocking confirmation send, history `Up=+1/Down=-1` with `saveHistory` trailing newline + error handling. `runStructuredMessage` uses shared `structuredResponseFormat`/`prettyJSONOrRaw` via `cmd/structured_helpers.go`. `View` word-wraps the transcript to terminal width (`wrapShellText`/`wrapShellTextWithPrefix`, `viewWidth`, 80 fallback) since Bubbletea alt-screen clips over-wide lines instead of soft-wrapping. User/AI turns are bordered blocks (`renderTurnBlock`, lipgloss `Width` excludes the border so blocks use `outer-2`); the viewport height is recomputed in `View` from the footer height via `lipgloss.Height`. `scrollHint` shows a persistent `scroll %` indicator whenever content overflows (plain Up/Down navigate input history, so scrolling would otherwise be undiscoverable).

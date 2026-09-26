@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"ai-shell/stats"
+	"edgebot/stats"
 )
 
 type OpenAICaller struct {

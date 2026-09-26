@@ -1,4 +1,4 @@
-# AI-Shell
+# Edgebot
 
 An interactive shell powered by AI (**Ollama, Gemini, OpenRouter, LitertLM, Llamacpp**) that helps you with commands, explanations, and automation directly from your terminal.
 
@@ -19,7 +19,7 @@ An interactive shell powered by AI (**Ollama, Gemini, OpenRouter, LitertLM, Llam
   - **Gemini**: Requires `GEMINI_API_KEY` environment variable.
   - **OpenRouter**: Requires `OPEN_ROUTE_KEY` environment variable.
   - **LitertLM**: In-process LiteRT-LM via litertlm-go. Requires a `.litertlm` model and the LiteRT-LM shared libraries (see LitertLM Provider).
-  - **Llamacpp**: In-process llama.cpp via yzma. Requires GGUF model and yzma libs in `~/.ai-shell/models/llamacpp/` (see Installation).
+  - **Llamacpp**: In-process llama.cpp via yzma. Requires GGUF model and yzma libs in `~/.edgebot/models/llamacpp/` (see Installation).
 - **LLM Model**: By default, it expects the `granite4:3b-h` model, but this can be changed in the config.
 
 ## Installation
@@ -28,8 +28,8 @@ You can build and install the binary using the provided Makefile:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ai-shell.git
-cd ai-shell
+git clone https://github.com/yourusername/edgebot.git
+cd edgebot
 
 # Build the binary
 make build
@@ -37,7 +37,7 @@ make build
 # Or install it to your $GOPATH/bin (includes yzma libs)
 make install
 
-# Install yzma CLI and llama.cpp libraries to ~/.ai-shell/models/llamacpp/
+# Install yzma CLI and llama.cpp libraries to ~/.edgebot/models/llamacpp/
 make install-yzma
 ```
 
@@ -46,12 +46,12 @@ make install-yzma
 Start the interactive shell by running:
 
 ```bash
-ai-shell
+edgebot
 ```
 
 ### Interactive Commands
 
-Within the `ai-shell >` prompt, you can use the following commands (with or without the `/` prefix):
+Within the `edgebot >` prompt, you can use the following commands (with or without the `/` prefix):
 
 - **Type anything**: Send a request to the AI (e.g., "how do I find large files?").
 - **`help`**: Show the help menu.
@@ -71,7 +71,7 @@ Within the `ai-shell >` prompt, you can use the following commands (with or with
 
 Structured extraction is now a **structured command**: a custom command whose frontmatter has a `schema:` field pointing to a JSON schema. It sends a document or image to the LLM and gets back only the data you asked for, shaped by that schema. The schema file is a standard [JSON Schema](https://json-schema.org/) document.
 
-Create a command file, e.g. `.ai-shell/commands/invoice.md`:
+Create a command file, e.g. `.edgebot/commands/invoice.md`:
 
 ```markdown
 ---
@@ -84,9 +84,9 @@ Extract the invoice from the provided file.
 The `schema:` path is resolved relative to the command file's directory. Then run it, passing input files as arguments:
 
 ```bash
-ai-shell commands --run invoice invoice.pdf
-ai-shell commands --run invoice notes.txt --output result.json
-ai-shell commands --run invoice receipt.png
+edgebot commands --run invoice invoice.pdf
+edgebot commands --run invoice notes.txt --output result.json
+edgebot commands --run invoice receipt.png
 ```
 
 For example, to pull the key fields out of an invoice, save this schema as `invoice_schema.json` next to the command:
@@ -107,7 +107,7 @@ For example, to pull the key fields out of an invoice, save this schema as `invo
 Then run:
 
 ```bash
-ai-shell commands --run invoice invoice.pdf
+edgebot commands --run invoice invoice.pdf
 ```
 
 Which returns something like:
@@ -127,7 +127,7 @@ Supported inputs: `.txt`, `.md`, `.pdf` (extracted via `pdftotext`), and images 
 
 The application looks for a `.env` file in:
 1. The current directory.
-2. `~/.config/ai-shell/.env`
+2. `~/.config/edgebot/.env`
 
 Required environment variables depending on your provider:
 - **Ollama**: No API key needed (local)
@@ -136,7 +136,7 @@ Required environment variables depending on your provider:
 
 The application also looks for a `config.yaml` file in:
 1. The current directory.
-2. `~/.config/ai-shell/config.yaml`
+2. `~/.config/edgebot/config.yaml`
 
 Default configuration:
 
@@ -159,23 +159,23 @@ shell:
 
 ## LitertLM Provider
 
-The `litertlm` provider runs LiteRT-LM inference **in-process** using the [litertlm-go](https://github.com/vladimirvivien/litertlm-go) Go binding. It loads the LiteRT-LM shared libraries and a `.litertlm` model directly into the ai-shell process — no server binary needed.
+The `litertlm` provider runs LiteRT-LM inference **in-process** using the [litertlm-go](https://github.com/vladimirvivien/litertlm-go) Go binding. It loads the LiteRT-LM shared libraries and a `.litertlm` model directly into the edgebot process — no server binary needed.
 
 ### Setup
 
-1. Download the LiteRT-LM C API release and place it in `~/.ai-shell/lib/`, then fetch the prebuilt aux/GPU libraries:
+1. Download the LiteRT-LM C API release and place it in `~/.edgebot/lib/`, then fetch the prebuilt aux/GPU libraries:
    ```bash
    make install-litertlm
    ```
-   This downloads the official `litert_lm_c_api` release from `google-ai-edge/LiteRT-LM`, extracts `lib/linux_x86_64/liblitert-lm.so`, renames it to `liblitertlm_c_cpu.so` (the filename the binding actually dlopens), and fetches the prebuilt aux/GPU libs into `~/.ai-shell/lib/`. No symlink is needed.
+   This downloads the official `litert_lm_c_api` release from `google-ai-edge/LiteRT-LM`, extracts `lib/linux_x86_64/liblitert-lm.so`, renames it to `liblitertlm_c_cpu.so` (the filename the binding actually dlopens), and fetches the prebuilt aux/GPU libs into `~/.edgebot/lib/`. No symlink is needed.
 
-2. Place a `.litertlm` model file in `~/.ai-shell/models/litertlm/`. You can download one with `ai-shell models pull`:
+2. Place a `.litertlm` model file in `~/.edgebot/models/litertlm/`. You can download one with `edgebot models pull`:
    ```bash
-   ai-shell models pull <repo> <filename.litertlm>
+   edgebot models pull <repo> <filename.litertlm>
    ```
-   Files ending in `.litertlm` are saved to `~/.ai-shell/models/litertlm/` and auto-registered as LiteRT-LM models; any other file is treated as a GGUF model for the `llamacpp` provider.
+   Files ending in `.litertlm` are saved to `~/.edgebot/models/litertlm/` and auto-registered as LiteRT-LM models; any other file is treated as a GGUF model for the `llamacpp` provider.
 
-3. Configure `~/.config/ai-shell/config.yaml`:
+3. Configure `~/.config/edgebot/config.yaml`:
    ```yaml
    llm:
      provider: "litertlm"
@@ -193,7 +193,7 @@ The `litertlm` provider runs LiteRT-LM inference **in-process** using the [liter
 
 ## Llamacpp Provider
 
-The `llamacpp` provider runs llama.cpp inference **in-process** using the [yzma](https://github.com/hybridgroup/yzma) Go binding. Unlike other providers that send HTTP requests to a server, it loads the model directly into the ai-shell process — no external service needed.
+The `llamacpp` provider runs llama.cpp inference **in-process** using the [yzma](https://github.com/hybridgroup/yzma) Go binding. Unlike other providers that send HTTP requests to a server, it loads the model directly into the edgebot process — no external service needed.
 
 ### Setup
 
@@ -201,14 +201,14 @@ The `llamacpp` provider runs llama.cpp inference **in-process** using the [yzma]
    ```bash
    make install-yzma
    ```
-   This downloads the llama.cpp `.so` files to `~/.ai-shell/models/llamacpp/`.
+   This downloads the llama.cpp `.so` files to `~/.edgebot/models/llamacpp/`.
 
-2. Place a GGUF model file in `~/.ai-shell/models/llamacpp/`. For example:
+2. Place a GGUF model file in `~/.edgebot/models/llamacpp/`. For example:
    ```bash
-   wget -O ~/.ai-shell/models/llamacpp/granite4-3b-h.Q4_K_M.gguf <url>
+   wget -O ~/.edgebot/models/llamacpp/granite4-3b-h.Q4_K_M.gguf <url>
    ```
 
-3. Configure `~/.config/ai-shell/config.yaml`:
+3. Configure `~/.config/edgebot/config.yaml`:
    ```yaml
    llm:
      provider: "llamacpp"
@@ -221,7 +221,7 @@ The `llamacpp` provider runs llama.cpp inference **in-process** using the [yzma]
 
 Attach images with `@filepath` as usual. For image input to work the model must be a vision model and a matching vision projector (`mmproj`) GGUF must be available:
 
-1. Place the `mmproj` file next to your model in `~/.ai-shell/models/llamacpp/`. It is auto-detected when its name contains `mmproj` (e.g. `mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf`) and is excluded from the model list.
+1. Place the `mmproj` file next to your model in `~/.edgebot/models/llamacpp/`. It is auto-detected when its name contains `mmproj` (e.g. `mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf`) and is excluded from the model list.
 
 2. Requires llama.cpp libraries ≥ b10273 (v1.23.0) — run `make install-yzma` again if you installed an older version.
 
@@ -236,21 +236,21 @@ Vision models with matching GGUFs include moondream2 and Qwen2.5-VL. Without a p
 
 ## Service Modality
 
-`ai-shell service` runs a lightweight gRPC server that exposes the full
-ai-shell logic (prompts, AGENTS.md files, skills, tools, and LLM calls) over a unix
-socket at `~/.ai-shell/service.sock`. When the service is running, other
-ai-shell sessions detect it and route their requests through it instead of
+`edgebot service` runs a lightweight gRPC server that exposes the full
+edgebot logic (prompts, AGENTS.md files, skills, tools, and LLM calls) over a unix
+socket at `~/.edgebot/service.sock`. When the service is running, other
+edgebot sessions detect it and route their requests through it instead of
 calling the LLM locally.
 
 ```bash
-ai-shell service           # start the service (foreground)
-ai-shell service --stop    # stop a running service
-ai-shell service --status  # show whether a service is running
+edgebot service           # start the service (foreground)
+edgebot service --stop    # stop a running service
+edgebot service --status  # show whether a service is running
 ```
 
 Sessions route through the service automatically when it is active — no extra
-configuration needed. The interactive shell, `ai-shell commands --run`, and
-`ai-shell commit` all use it when available and fall back to local execution
+configuration needed. The interactive shell, `edgebot commands --run`, and
+`edgebot commit` all use it when available and fall back to local execution
 if the service becomes unreachable. The session's own model/provider/agent
 settings are honored (e.g. switching models with `/models` still works), while
 the service supplies the prompts, AGENTS.md context, skills index, tool execution, and the
@@ -259,11 +259,11 @@ LLM calls from its working directory.
 Tool confirmation is honored inside the service: with the default
 `shell.confirm: true`, commands outside `allowed_commands` and all file
 writes are denied (the service cannot prompt interactively). Set
-`ai-shell config --confirm=false` to let the service auto-execute everything.
+`edgebot config --confirm=false` to let the service auto-execute everything.
 
 ## How it works
 
-AI-Shell uses a unified OpenAI-compatible API to communicate with your LLM models. It uses a system prompt to inform the LLM about your environment (e.g., "running on Ubuntu 22.04 using /bin/bash"). 
+Edgebot uses a unified OpenAI-compatible API to communicate with your LLM models. It uses a system prompt to inform the LLM about your environment (e.g., "running on Ubuntu 22.04 using /bin/bash"). 
 
 When the LLM decides it needs to perform an action, it can use the following tools:
 - **`RunCommand`**: Executes a shell command and returns the output.

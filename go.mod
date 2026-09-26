@@ -1,4 +1,4 @@
-module ai-shell
+module edgebot
 
 go 1.26.2
 

@@ -33,7 +33,7 @@ func TestGetAgentFilesNoneFound(t *testing.T) {
 func TestGetAgentFilesGlobalAndRepo(t *testing.T) {
 	tmp := t.TempDir()
 
-	globalDir := filepath.Join(tmp, "ai-shell")
+	globalDir := filepath.Join(tmp, "edgebot")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestGetAgentFilesGlobalAndRepo(t *testing.T) {
 func TestGetAgentFileInfo(t *testing.T) {
 	tmp := t.TempDir()
 
-	globalDir := filepath.Join(tmp, "ai-shell")
+	globalDir := filepath.Join(tmp, "edgebot")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestGetAgentFileInfo(t *testing.T) {
 func TestGetAgentFilesEmptyFileIgnored(t *testing.T) {
 	tmp := t.TempDir()
 
-	globalDir := filepath.Join(tmp, "ai-shell")
+	globalDir := filepath.Join(tmp, "edgebot")
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		t.Fatal(err)
 	}

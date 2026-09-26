@@ -12,7 +12,7 @@ import (
 
 func TestLoadConfig(t *testing.T) {
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "ai-shell")
+	configPath := filepath.Join(tmpDir, "edgebot")
 	if err := os.MkdirAll(configPath, 0755); err != nil {
 		t.Fatalf("Failed to create temp config dir: %v", err)
 	}
@@ -153,7 +153,7 @@ func TestSaveConfigPreservesThinkEffort(t *testing.T) {
 
 func TestSaveModel(t *testing.T) {
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "ai-shell")
+	configPath := filepath.Join(tmpDir, "edgebot")
 	if err := os.MkdirAll(configPath, 0755); err != nil {
 		t.Fatalf("Failed to create temp config dir: %v", err)
 	}
@@ -203,7 +203,7 @@ shell:
 
 func TestSaveModelCreatesNewFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "ai-shell")
+	configPath := filepath.Join(tmpDir, "edgebot")
 	if err := os.MkdirAll(configPath, 0755); err != nil {
 		t.Fatalf("Failed to create temp config dir: %v", err)
 	}
@@ -337,7 +337,7 @@ func TestSelectModelInvalidInput(t *testing.T) {
 
 func TestSelectModelSavesNewModel(t *testing.T) {
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "ai-shell")
+	configPath := filepath.Join(tmpDir, "edgebot")
 	if err := os.MkdirAll(configPath, 0755); err != nil {
 		t.Fatalf("Failed to create temp config dir: %v", err)
 	}
@@ -413,7 +413,7 @@ func TestIsLitertLMModel(t *testing.T) {
 	userHomeDirFunc = func() (string, error) { return home, nil }
 	defer func() { userHomeDirFunc = origHome }()
 
-	modelDir := filepath.Join(home, ".ai-shell", "models", "litertlm")
+	modelDir := filepath.Join(home, ".edgebot", "models", "litertlm")
 	if err := os.MkdirAll(modelDir, 0755); err != nil {
 		t.Fatalf("Failed to create models dir: %v", err)
 	}
@@ -454,7 +454,7 @@ func TestGetLitertLMModels(t *testing.T) {
 	userHomeDirFunc = func() (string, error) { return home, nil }
 	defer func() { userHomeDirFunc = origHome }()
 
-	modelDir := filepath.Join(home, ".ai-shell", "models", "litertlm")
+	modelDir := filepath.Join(home, ".edgebot", "models", "litertlm")
 	if err := os.MkdirAll(modelDir, 0755); err != nil {
 		t.Fatalf("Failed to create models dir: %v", err)
 	}
@@ -558,8 +558,8 @@ func TestGetEnvPaths(t *testing.T) {
 		t.Fatalf("GetEnvPaths() returned %d paths, want at least 2", len(paths))
 	}
 
-	if paths[0] != "/tmp/test-config/ai-shell/.env" {
-		t.Errorf("First path = %q, want %q", paths[0], "/tmp/test-config/ai-shell/.env")
+	if paths[0] != "/tmp/test-config/edgebot/.env" {
+		t.Errorf("First path = %q, want %q", paths[0], "/tmp/test-config/edgebot/.env")
 	}
 	if paths[1] != ".env" {
 		t.Errorf("Second path = %q, want %q", paths[1], ".env")
@@ -720,8 +720,8 @@ func TestEnsureCommandsDir(t *testing.T) {
 		t.Fatalf("EnsureCommandsDir() error = %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(tmpDir, ".ai-shell", "commands")); os.IsNotExist(err) {
-		t.Error("EnsureCommandsDir() did not create .ai-shell/commands directory")
+	if _, err := os.Stat(filepath.Join(tmpDir, ".edgebot", "commands")); os.IsNotExist(err) {
+		t.Error("EnsureCommandsDir() did not create .edgebot/commands directory")
 	}
 }
 
@@ -763,7 +763,7 @@ func TestLookupModelInfo(t *testing.T) {
 
 func TestSaveConfig(t *testing.T) {
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "ai-shell")
+	configPath := filepath.Join(tmpDir, "edgebot")
 	if err := os.MkdirAll(configPath, 0755); err != nil {
 		t.Fatalf("Failed to create temp config dir: %v", err)
 	}
@@ -816,7 +816,7 @@ func TestSaveConfig(t *testing.T) {
 
 func TestSaveConfigEmptyPath(t *testing.T) {
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "ai-shell")
+	configPath := filepath.Join(tmpDir, "edgebot")
 	if err := os.MkdirAll(configPath, 0755); err != nil {
 		t.Fatalf("Failed to create temp config dir: %v", err)
 	}
@@ -862,7 +862,7 @@ func TestGetLlamacppModelsExcludesMMProj(t *testing.T) {
 	userHomeDirFunc = func() (string, error) { return home, nil }
 	defer func() { userHomeDirFunc = origHome }()
 
-	// Isolate from the real ~/.config/ai-shell config and avoid network
+	// Isolate from the real ~/.config/edgebot config and avoid network
 	// lookups inside LoadConfig.
 	origUserConfigDirFunc := userConfigDirFunc
 	userConfigDirFunc = func() (string, error) { return t.TempDir(), nil }
@@ -876,7 +876,7 @@ func TestGetLlamacppModelsExcludesMMProj(t *testing.T) {
 	getOpenRouterModelsFunc = func() []ModelInfo { return nil }
 	defer func() { getOpenRouterModelsFunc = origOpenRouter }()
 
-	modelsDir := filepath.Join(home, ".ai-shell", "models", "llamacpp")
+	modelsDir := filepath.Join(home, ".edgebot", "models", "llamacpp")
 	if err := os.MkdirAll(modelsDir, 0755); err != nil {
 		t.Fatalf("Failed to create models dir: %v", err)
 	}
@@ -927,7 +927,7 @@ func TestGetLlamacppModelsMatchesMMProjWithDifferentQuant(t *testing.T) {
 	getOpenRouterModelsFunc = func() []ModelInfo { return nil }
 	defer func() { getOpenRouterModelsFunc = origOpenRouter }()
 
-	modelsDir := filepath.Join(home, ".ai-shell", "models", "llamacpp")
+	modelsDir := filepath.Join(home, ".edgebot", "models", "llamacpp")
 	if err := os.MkdirAll(modelsDir, 0755); err != nil {
 		t.Fatalf("Failed to create models dir: %v", err)
 	}
@@ -974,7 +974,7 @@ func TestGetLlamacppModelsNoMMProjNoImage(t *testing.T) {
 	getOpenRouterModelsFunc = func() []ModelInfo { return nil }
 	defer func() { getOpenRouterModelsFunc = origOpenRouter }()
 
-	modelsDir := filepath.Join(home, ".ai-shell", "models", "llamacpp")
+	modelsDir := filepath.Join(home, ".edgebot", "models", "llamacpp")
 	if err := os.MkdirAll(modelsDir, 0755); err != nil {
 		t.Fatalf("Failed to create models dir: %v", err)
 	}
@@ -997,7 +997,7 @@ func TestFindLlamacppMMProj(t *testing.T) {
 	userHomeDirFunc = func() (string, error) { return home, nil }
 	defer func() { userHomeDirFunc = origHome }()
 
-	// Isolate from the real ~/.config/ai-shell config and avoid network
+	// Isolate from the real ~/.config/edgebot config and avoid network
 	// lookups inside LoadConfig.
 	origUserConfigDirFunc := userConfigDirFunc
 	userConfigDirFunc = func() (string, error) { return t.TempDir(), nil }
@@ -1011,7 +1011,7 @@ func TestFindLlamacppMMProj(t *testing.T) {
 	getOpenRouterModelsFunc = func() []ModelInfo { return nil }
 	defer func() { getOpenRouterModelsFunc = origOpenRouter }()
 
-	modelsDir := filepath.Join(home, ".ai-shell", "models", "llamacpp")
+	modelsDir := filepath.Join(home, ".edgebot", "models", "llamacpp")
 	if err := os.MkdirAll(modelsDir, 0755); err != nil {
 		t.Fatalf("Failed to create models dir: %v", err)
 	}

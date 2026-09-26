@@ -7,7 +7,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"ai-shell/config"
+	"edgebot/config"
 
 	"github.com/spf13/cobra"
 )
@@ -48,7 +48,7 @@ func runModels(cmd *cobra.Command) error {
 			fmt.Printf("Deleted %s\n", p)
 		}
 		if cfg.LLM.Model == modelsDelete {
-			fmt.Printf("Note: %q is still the configured model; run 'ai-shell config --model <model>' to pick another.\n", modelsDelete)
+			fmt.Printf("Note: %q is still the configured model; run 'edgebot config --model <model>' to pick another.\n", modelsDelete)
 		}
 		return nil
 	}

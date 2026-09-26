@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"ai-shell/config"
-	"ai-shell/llm"
-	"ai-shell/service"
+	"edgebot/config"
+	"edgebot/llm"
+	"edgebot/service"
 
 	"github.com/spf13/cobra"
 )

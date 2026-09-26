@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"ai-shell/llm"
+	"edgebot/llm"
 )
 
 // readInputFile reads a text-based input file into a string. PDFs are

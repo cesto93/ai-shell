@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"ai-shell/tools"
+	"edgebot/tools"
 )
 
 // ToolExecutorPolicy implements ToolExecutor with pluggable confirmation hooks

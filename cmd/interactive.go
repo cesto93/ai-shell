@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"ai-shell/config"
-	"ai-shell/llm"
+	"edgebot/config"
+	"edgebot/llm"
 )
 
 const (
@@ -16,7 +16,7 @@ const (
 	ColorYellow = "\033[33m"
 	ColorReset  = "\033[0m"
 	ColorBold   = "\033[1m"
-	Prompt      = ColorBold + ColorGreen + "ai-shell > " + ColorReset
+	Prompt      = ColorBold + ColorGreen + "edgebot > " + ColorReset
 )
 
 func PrintConfig() {

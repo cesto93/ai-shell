@@ -2,11 +2,11 @@ syntax = "proto3";
 
 package aishield.service;
 
-option go_package = "ai-shell/service/proto";
+option go_package = "edgebot/service/proto";
 
-// AIService is the gRPC API exposed by the ai-shell service over a unix
+// AIService is the gRPC API exposed by the edgebot service over a unix
 // socket. Sessions send their messages and session configuration to the
-// running service, which wraps the full ai-shell logic (prompts, AGENTS.md,
+// running service, which wraps the full edgebot logic (prompts, AGENTS.md,
 // tools, and LLM calls) on the service side.
 service AIService {
   // Ping reports liveness and the service version.

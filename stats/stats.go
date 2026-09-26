@@ -42,7 +42,7 @@ func getDBPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	configPath := filepath.Join(userConfigDir, "ai-shell")
+	configPath := filepath.Join(userConfigDir, "edgebot")
 	if err := os.MkdirAll(configPath, 0755); err != nil {
 		return "", err
 	}

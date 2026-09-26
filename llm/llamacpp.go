@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"ai-shell/config"
-	"ai-shell/stats"
+	"edgebot/config"
+	"edgebot/stats"
 
 	"github.com/hybridgroup/yzma/pkg/llama"
 	"github.com/hybridgroup/yzma/pkg/mtmd"

@@ -9,14 +9,14 @@ import (
 	"path/filepath"
 	"sync"
 
-	"ai-shell/config"
-	"ai-shell/llm"
-	"ai-shell/service/proto"
+	"edgebot/config"
+	"edgebot/llm"
+	"edgebot/service/proto"
 
 	"google.golang.org/grpc"
 )
 
-// Server implements the AIService gRPC API, wrapping the ai-shell logic
+// Server implements the AIService gRPC API, wrapping the edgebot logic
 // (prompts, AGENTS.md files, tools, and LLM calls) on the service side.
 type Server struct {
 	proto.UnimplementedAIServiceServer
@@ -126,7 +126,7 @@ func Serve(ctx context.Context, s *Server) error {
 	)
 	proto.RegisterAIServiceServer(grpcServer, s)
 
-	slog.Info("ai-shell service listening", "socket", path)
+	slog.Info("edgebot service listening", "socket", path)
 
 	errCh := make(chan error, 1)
 	go func() {

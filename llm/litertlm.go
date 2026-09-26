@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"ai-shell/config"
+	"edgebot/config"
 
 	"github.com/vladimirvivien/litertlm-go/pkg/litertlm"
 )
@@ -30,8 +30,8 @@ var (
 
 // LitertLMCaller runs LiteRT-LM natively in-process through the
 // litertlm-go binding. It expects the LiteRT-LM shared libraries
-// (LITERTLM_LIB, else ~/.ai-shell/lib) and a .litertlm model file
-// (default ~/.ai-shell/models/litertlm/).
+// (LITERTLM_LIB, else ~/.edgebot/lib) and a .litertlm model file
+// (default ~/.edgebot/models/litertlm/).
 type LitertLMCaller struct {
 	Model    string
 	Executor ToolExecutor

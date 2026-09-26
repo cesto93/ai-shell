@@ -1,6 +1,6 @@
 package main
 
-import "ai-shell/cmd"
+import "edgebot/cmd"
 
 func main() {
 	cmd.Execute()

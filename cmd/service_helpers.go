@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"time"
 
-	"ai-shell/config"
-	"ai-shell/llm"
-	"ai-shell/service"
+	"edgebot/config"
+	"edgebot/llm"
+	"edgebot/service"
 )
 
 // chatRequestFromConfig builds a service.ChatRequest carrying the session

@@ -5,8 +5,8 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"ai-shell/config"
-	"ai-shell/stats"
+	"edgebot/config"
+	"edgebot/stats"
 
 	"github.com/spf13/cobra"
 )

@@ -9,8 +9,8 @@ import (
 	"text/tabwriter"
 	"unicode/utf8"
 
-	"ai-shell/config"
-	"ai-shell/llm"
+	"edgebot/config"
+	"edgebot/llm"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -114,7 +114,7 @@ func pullSkills(repo string) error {
 		return fmt.Errorf("failed to create skills directory: %w", err)
 	}
 
-	tmp, err := os.MkdirTemp("", "ai-shell-skills-")
+	tmp, err := os.MkdirTemp("", "edgebot-skills-")
 	if err != nil {
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}

@@ -1,8 +1,8 @@
 package service
 
 import (
-	"ai-shell/llm"
-	"ai-shell/service/proto"
+	"edgebot/llm"
+	"edgebot/service/proto"
 )
 
 // convert.go translates between llm.Message and the wire protocol types.

@@ -792,7 +792,7 @@ const file_service_proto_service_proto_rawDesc = "" +
 	"\tAIService\x12E\n" +
 	"\x04Ping\x12\x1d.aishield.service.PingRequest\x1a\x1e.aishield.service.PingResponse\x12E\n" +
 	"\x04Chat\x12\x1d.aishield.service.ChatRequest\x1a\x1e.aishield.service.ChatResponse\x12E\n" +
-	"\x04Stop\x12\x1d.aishield.service.StopRequest\x1a\x1e.aishield.service.StopResponseB\x18Z\x16ai-shell/service/protob\x06proto3"
+	"\x04Stop\x12\x1d.aishield.service.StopRequest\x1a\x1e.aishield.service.StopResponseB\x17Z\x15edgebot/service/protob\x06proto3"
 
 var (
 	file_service_proto_service_proto_rawDescOnce sync.Once

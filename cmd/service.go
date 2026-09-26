@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"ai-shell/config"
-	"ai-shell/service"
+	"edgebot/config"
+	"edgebot/service"
 
 	"github.com/spf13/cobra"
 )
@@ -19,16 +19,16 @@ var serviceStatus bool
 
 var serviceCmd = &cobra.Command{
 	Use:   "service",
-	Short: "Run an ai-shell gRPC service over a unix socket",
+	Short: "Run an edgebot gRPC service over a unix socket",
 	Long: `Runs a lightweight gRPC service listening on a unix socket
-(~/.ai-shell/service.sock). Other ai-shell sessions route their requests to
+(~/.edgebot/service.sock). Other edgebot sessions route their requests to
 the service when it is active, wrapping the prompts, AGENTS.md files, tools,
 and LLM calls server-side.
 
 Example:
-  ai-shell service           # start the service (foreground)
-  ai-shell service --stop    # stop a running service
-  ai-shell service --status  # show whether a service is running`,
+  edgebot service           # start the service (foreground)
+  edgebot service --stop    # stop a running service
+  edgebot service --status  # show whether a service is running`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runService()
 	},
@@ -94,7 +94,7 @@ func startService() error {
 	if path == "" {
 		return fmt.Errorf("cannot determine service socket path")
 	}
-	fmt.Printf("Starting ai-shell service on %s\n", path)
+	fmt.Printf("Starting edgebot service on %s\n", path)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

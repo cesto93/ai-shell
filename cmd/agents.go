@@ -7,8 +7,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"ai-shell/config"
-	"ai-shell/llm"
+	"edgebot/config"
+	"edgebot/llm"
 
 	"github.com/spf13/cobra"
 )

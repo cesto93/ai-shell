@@ -20,7 +20,7 @@ type AgentFileInfo struct {
 	Content string
 }
 
-// GetAgentFileInfo returns the global (~/.config/ai-shell/AGENTS.md) and
+// GetAgentFileInfo returns the global (~/.config/edgebot/AGENTS.md) and
 // repo-level (./AGENTS.md) customization files that exist and are non-empty.
 // Returns nil when support is disabled or when neither file exists.
 func GetAgentFileInfo(enabled bool) []AgentFileInfo {
@@ -31,7 +31,7 @@ func GetAgentFileInfo(enabled bool) []AgentFileInfo {
 	var files []AgentFileInfo
 
 	if uc, err := agentFilesUserConfigDir(); err == nil {
-		global := filepath.Join(uc, "ai-shell", agentFileName)
+		global := filepath.Join(uc, "edgebot", agentFileName)
 		if content, ok := readAgentFile(global); ok {
 			files = append(files, AgentFileInfo{Path: global, Content: content})
 		}
@@ -48,7 +48,7 @@ func GetAgentFileInfo(enabled bool) []AgentFileInfo {
 }
 
 // GetAgentFiles returns the combined contents of the global
-// (~/.config/ai-shell/AGENTS.md) and repo-level (./AGENTS.md) customization
+// (~/.config/edgebot/AGENTS.md) and repo-level (./AGENTS.md) customization
 // files, formatted as additional instructions. Returns "" when support is
 // disabled or when neither file exists.
 func GetAgentFiles(enabled bool) string {

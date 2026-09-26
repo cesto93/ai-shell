@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"ai-shell/llm"
+	"edgebot/llm"
 )
 
 // startTestServer runs a Server on a fresh temp socket and swaps the package

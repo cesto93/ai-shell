@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"ai-shell/config"
+	"edgebot/config"
 )
 
 // ServiceVersion is the protocol version reported by Ping.
@@ -19,7 +19,7 @@ const MaxMsgSize = 64 << 20
 var socketPathFunc = defaultSocketPath
 
 func defaultSocketPath() (string, error) {
-	dir, err := config.AiShellDir()
+	dir, err := config.EdgebotDir()
 	if err != nil {
 		return "", err
 	}

@@ -203,7 +203,7 @@ func GetDefaultSystemPrompt(enabledTools map[string]bool) string {
 	return GetAgentSystemPrompt("build", GetEnabledTools(enabledTools))
 }
 
-// readPromptFile reads BUILDPROMPT.md from ~/.ai-shell/BUILDPROMPT.md.
+// readPromptFile reads BUILDPROMPT.md from ~/.edgebot/BUILDPROMPT.md.
 // Falls back to the embedded default if the file cannot be read.
 func readPromptFile() []byte {
 	home, err := os.UserHomeDir()
@@ -212,16 +212,16 @@ func readPromptFile() []byte {
 		return GetDefaultPromptBytes()
 	}
 
-	raw, err := os.ReadFile(filepath.Join(home, ".ai-shell", "BUILDPROMPT.md"))
+	raw, err := os.ReadFile(filepath.Join(home, ".edgebot", "BUILDPROMPT.md"))
 	if err != nil {
-		slog.Warn("Cannot read ~/.ai-shell/BUILDPROMPT.md, using embedded prompt", "err", err)
+		slog.Warn("Cannot read ~/.edgebot/BUILDPROMPT.md, using embedded prompt", "err", err)
 		return GetDefaultPromptBytes()
 	}
 
 	return raw
 }
 
-// readPlanPromptFile reads PLANPROMPT.md from ~/.ai-shell/PLANPROMPT.md.
+// readPlanPromptFile reads PLANPROMPT.md from ~/.edgebot/PLANPROMPT.md.
 // Falls back to the embedded plan prompt if the file cannot be read.
 func readPlanPromptFile() []byte {
 	home, err := os.UserHomeDir()
@@ -230,9 +230,9 @@ func readPlanPromptFile() []byte {
 		return []byte(PlanPrompt)
 	}
 
-	raw, err := os.ReadFile(filepath.Join(home, ".ai-shell", "PLANPROMPT.md"))
+	raw, err := os.ReadFile(filepath.Join(home, ".edgebot", "PLANPROMPT.md"))
 	if err != nil {
-		slog.Warn("Cannot read ~/.ai-shell/PLANPROMPT.md, using embedded prompt", "err", err)
+		slog.Warn("Cannot read ~/.edgebot/PLANPROMPT.md, using embedded prompt", "err", err)
 		return []byte(PlanPrompt)
 	}
 

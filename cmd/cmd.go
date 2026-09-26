@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"ai-shell/config"
+	"edgebot/config"
 
 	"github.com/spf13/cobra"
 )
@@ -12,14 +12,14 @@ import (
 var debug bool
 
 var rootCmd = &cobra.Command{
-	Use:   "ai-shell",
+	Use:   "edgebot",
 	Short: "AI Shell is an interactive shell powered by AI",
 	Long:  `An interactive shell powered by AI that can help you with commands and explanations.`,
-	Example: `  ai-shell
-  ai-shell config
-  ai-shell commit
-  ai-shell models
-  ai-shell commands --run extract invoice.pdf`,
+	Example: `  edgebot
+  edgebot config
+  edgebot commit
+  edgebot models
+  edgebot commands --run extract invoice.pdf`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := RunShell(); err != nil {
 			fmt.Println(err)

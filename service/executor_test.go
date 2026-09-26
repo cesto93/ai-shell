@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"ai-shell/llm"
+	"edgebot/llm"
 )
 
 func TestServiceExecutorConfirmTrue(t *testing.T) {

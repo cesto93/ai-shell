@@ -28,9 +28,9 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// AIService is the gRPC API exposed by the ai-shell service over a unix
+// AIService is the gRPC API exposed by the edgebot service over a unix
 // socket. Sessions send their messages and session configuration to the
-// running service, which wraps the full ai-shell logic (prompts, AGENTS.md,
+// running service, which wraps the full edgebot logic (prompts, AGENTS.md,
 // tools, and LLM calls) on the service side.
 type AIServiceClient interface {
 	// Ping reports liveness and the service version.
@@ -83,9 +83,9 @@ func (c *aIServiceClient) Stop(ctx context.Context, in *StopRequest, opts ...grp
 // All implementations must embed UnimplementedAIServiceServer
 // for forward compatibility.
 //
-// AIService is the gRPC API exposed by the ai-shell service over a unix
+// AIService is the gRPC API exposed by the edgebot service over a unix
 // socket. Sessions send their messages and session configuration to the
-// running service, which wraps the full ai-shell logic (prompts, AGENTS.md,
+// running service, which wraps the full edgebot logic (prompts, AGENTS.md,
 // tools, and LLM calls) on the service side.
 type AIServiceServer interface {
 	// Ping reports liveness and the service version.

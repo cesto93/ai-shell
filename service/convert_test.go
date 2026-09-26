@@ -3,7 +3,7 @@ package service
 import (
 	"testing"
 
-	"ai-shell/llm"
+	"edgebot/llm"
 )
 
 func TestMessageRoundTripText(t *testing.T) {

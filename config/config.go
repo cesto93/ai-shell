@@ -78,7 +78,7 @@ func loadEnv() error {
 	// Load from user config directory first (global defaults)
 	userConfigDir, err := userConfigDirFunc()
 	if err == nil {
-		globalEnvPath := filepath.Join(userConfigDir, "ai-shell", ".env")
+		globalEnvPath := filepath.Join(userConfigDir, "edgebot", ".env")
 		if _, err := os.Stat(globalEnvPath); err == nil {
 			if err := gotenv.Load(globalEnvPath); err != nil {
 				return fmt.Errorf("error loading global .env file at %s: %w", globalEnvPath, err)
@@ -145,7 +145,7 @@ func LoadConfig() (*Config, error) {
 	userConfigDir, err := userConfigDirFunc()
 	var configPath string
 	if err == nil {
-		configPath = filepath.Join(userConfigDir, "ai-shell")
+		configPath = filepath.Join(userConfigDir, "edgebot")
 		v.AddConfigPath(configPath)
 	}
 
@@ -257,39 +257,39 @@ func getConfigPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	configPath := filepath.Join(userConfigDir, "ai-shell")
+	configPath := filepath.Join(userConfigDir, "edgebot")
 	if err := os.MkdirAll(configPath, 0755); err != nil {
 		return "", err
 	}
 	return configPath, nil
 }
 
-// AiShellDir returns ~/.ai-shell, creating it if necessary.
-func AiShellDir() (string, error) {
+// EdgebotDir returns ~/.edgebot, creating it if necessary.
+func EdgebotDir() (string, error) {
 	home, err := userHomeDirFunc()
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(home, ".ai-shell")
+	dir := filepath.Join(home, ".edgebot")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", err
 	}
 	return dir, nil
 }
 
-// LibDir returns ~/.ai-shell/lib, the directory holding the in-process
+// LibDir returns ~/.edgebot/lib, the directory holding the in-process
 // inference shared libraries (llama.cpp / LiteRT-LM).
 func LibDir() (string, error) {
-	dir, err := AiShellDir()
+	dir, err := EdgebotDir()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(dir, "lib"), nil
 }
 
-// ModelsDir returns ~/.ai-shell/models/<provider> for the given provider.
+// ModelsDir returns ~/.edgebot/models/<provider> for the given provider.
 func ModelsDir(provider string) (string, error) {
-	dir, err := AiShellDir()
+	dir, err := EdgebotDir()
 	if err != nil {
 		return "", err
 	}
@@ -433,7 +433,7 @@ var GeminiModels = []ModelInfo{
 }
 
 // GetLitertLMModels lists the native LiteRT-LM models available on disk by
-// scanning ~/.ai-shell/models/litertlm/ for .litertlm files.
+// scanning ~/.edgebot/models/litertlm/ for .litertlm files.
 func GetLitertLMModels() []ModelInfo {
 	dir, err := ModelsDir("litertlm")
 	if err != nil {
@@ -838,7 +838,7 @@ func GetEnvPaths() []string {
 
 	userConfigDir, err := userConfigDirFunc()
 	if err == nil {
-		globalEnvPath := filepath.Join(userConfigDir, "ai-shell", ".env")
+		globalEnvPath := filepath.Join(userConfigDir, "edgebot", ".env")
 		paths = append(paths, globalEnvPath)
 	}
 
@@ -916,12 +916,12 @@ func loadCommandDirs() []string {
 
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
-		dirs = append(dirs, filepath.Join(homeDir, ".ai-shell", "commands"))
+		dirs = append(dirs, filepath.Join(homeDir, ".edgebot", "commands"))
 	}
 
 	cwd, err := os.Getwd()
 	if err == nil {
-		dirs = append(dirs, filepath.Join(cwd, ".ai-shell", "commands"))
+		dirs = append(dirs, filepath.Join(cwd, ".edgebot", "commands"))
 	}
 
 	return dirs
@@ -966,7 +966,7 @@ func EnsureCommandsDir() error {
 	if err != nil {
 		return err
 	}
-	localDir := filepath.Join(cwd, ".ai-shell", "commands")
+	localDir := filepath.Join(cwd, ".edgebot", "commands")
 	return os.MkdirAll(localDir, 0755)
 }
 

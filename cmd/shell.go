@@ -14,9 +14,9 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"ai-shell/config"
-	"ai-shell/llm"
-	"ai-shell/service"
+	"edgebot/config"
+	"edgebot/llm"
+	"edgebot/service"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -214,7 +214,7 @@ func getHistoryFile() string {
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(usr.HomeDir, ".ai-shell-history")
+	return filepath.Join(usr.HomeDir, ".edgebot-history")
 }
 
 type Message struct {
@@ -274,7 +274,7 @@ func NewShellModel() (*ShellModel, error) {
 	ti := textinput.New()
 	ti.Placeholder = "Ask the AI..."
 	ti.Focus()
-	ti.Prompt = "ai-shell > "
+	ti.Prompt = "edgebot > "
 
 	historyPath := getHistoryFile()
 
@@ -478,7 +478,7 @@ func (m *ShellModel) handleEscapeKey() (tea.Model, tea.Cmd) {
 	}
 	if m.allowedCmdMode.active {
 		m.allowedCmdMode.active = false
-		m.input.Prompt = "ai-shell > "
+		m.input.Prompt = "edgebot > "
 		m.input.SetValue("")
 		return m, nil
 	}
@@ -926,7 +926,7 @@ func (m *ShellModel) handleSubmit() (tea.Model, tea.Cmd) {
 			m.messages = append(m.messages, Message{role: "system", content: fmt.Sprintf("Allowed commands updated to: %s", strings.Join(m.cfg.Shell.AllowedCommands, ","))})
 		}
 		m.allowedCmdMode.active = false
-		m.input.Prompt = "ai-shell > "
+		m.input.Prompt = "edgebot > "
 		m.input.SetValue("")
 		return m, nil
 	}

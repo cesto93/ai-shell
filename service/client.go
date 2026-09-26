@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"ai-shell/llm"
-	"ai-shell/service/proto"
+	"edgebot/llm"
+	"edgebot/service/proto"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -14,7 +14,7 @@ import (
 
 // ErrUnavailable is returned when the service cannot be reached. Sessions use
 // it to fall back to local execution.
-var ErrUnavailable = errors.New("ai-shell service unavailable")
+var ErrUnavailable = errors.New("edgebot service unavailable")
 
 // ChatRequest carries the messages and session configuration sent to the
 // service. When SystemPrompt is non-empty it overrides the agent prompt
@@ -68,7 +68,7 @@ func toProtoRequest(req ChatRequest) *proto.ChatRequest {
 	}
 }
 
-// Client is a connection to a running ai-shell service.
+// Client is a connection to a running edgebot service.
 type Client struct {
 	conn *grpc.ClientConn
 	svc  proto.AIServiceClient

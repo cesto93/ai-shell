@@ -18,9 +18,9 @@ import (
 	"syscall"
 	"time"
 
-	"ai-shell/config"
-	"ai-shell/llm"
-	"ai-shell/service"
+	"edgebot/config"
+	"edgebot/llm"
+	"edgebot/service"
 
 	"github.com/spf13/cobra"
 )
@@ -36,7 +36,7 @@ var botCmd = &cobra.Command{
 	Long: `Starts a Telegram bot that forwards incoming messages to the configured agent.
 
 The bot token is read from --token or the TELEGRAM_BOT_TOKEN environment
-variable (set it in ~/.config/ai-shell/.env or ./.env). Create a bot via
+variable (set it in ~/.config/edgebot/.env or ./.env). Create a bot via
 @BotFather on Telegram to obtain a token.
 
 Each Telegram chat gets its own conversation history. Use /reset in the chat
@@ -46,8 +46,8 @@ and WriteFile is denied (like the gRPC service).
 
 Example:
   export TELEGRAM_BOT_TOKEN=123456:ABC...
-  ai-shell bot
-  ai-shell bot --token 123456:ABC... --allow-from 123456789,@myuser`,
+  edgebot bot
+  edgebot bot --token 123456:ABC... --allow-from 123456789,@myuser`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runBot()
 	},

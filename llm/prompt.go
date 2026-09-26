@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"text/template"
 
-	"ai-shell/config"
-	"ai-shell/tools"
+	"edgebot/config"
+	"edgebot/tools"
 )
 
 const BuildPrompt = `You are an expert shell assistant operating inside a shell on the user machine.
@@ -44,7 +44,7 @@ Available tools:
 const ChatPrompt = `You are a helpful conversational assistant.`
 
 func init() {
-	dir, err := config.AiShellDir()
+	dir, err := config.EdgebotDir()
 	if err != nil {
 		return
 	}
@@ -55,7 +55,7 @@ func init() {
 	writePromptFile(dir, "CHATPROMPT.md", ChatPrompt)
 }
 
-// writePromptFile writes the prompt to ~/.ai-shell/<name> if it does not exist.
+// writePromptFile writes the prompt to ~/.edgebot/<name> if it does not exist.
 func writePromptFile(dir, name, prompt string) {
 	dest := filepath.Join(dir, name)
 	if _, err := os.Stat(dest); err == nil {
@@ -64,7 +64,7 @@ func writePromptFile(dir, name, prompt string) {
 	os.WriteFile(dest, []byte(prompt), 0o644)
 }
 
-// readBotPromptFile reads BOTPROMPT.md from ~/.ai-shell/BOTPROMPT.md.
+// readBotPromptFile reads BOTPROMPT.md from ~/.edgebot/BOTPROMPT.md.
 // Falls back to the embedded bot prompt if the file cannot be read.
 func readBotPromptFile() []byte {
 	home, err := os.UserHomeDir()
@@ -73,16 +73,16 @@ func readBotPromptFile() []byte {
 		return []byte(BotPrompt)
 	}
 
-	raw, err := os.ReadFile(filepath.Join(home, ".ai-shell", "BOTPROMPT.md"))
+	raw, err := os.ReadFile(filepath.Join(home, ".edgebot", "BOTPROMPT.md"))
 	if err != nil {
-		slog.Warn("Cannot read ~/.ai-shell/BOTPROMPT.md, using embedded prompt", "err", err)
+		slog.Warn("Cannot read ~/.edgebot/BOTPROMPT.md, using embedded prompt", "err", err)
 		return []byte(BotPrompt)
 	}
 
 	return raw
 }
 
-// readChatPromptFile reads CHATPROMPT.md from ~/.ai-shell/CHATPROMPT.md.
+// readChatPromptFile reads CHATPROMPT.md from ~/.edgebot/CHATPROMPT.md.
 // Falls back to the embedded chat prompt if the file cannot be read.
 func readChatPromptFile() []byte {
 	home, err := os.UserHomeDir()
@@ -91,9 +91,9 @@ func readChatPromptFile() []byte {
 		return []byte(ChatPrompt)
 	}
 
-	raw, err := os.ReadFile(filepath.Join(home, ".ai-shell", "CHATPROMPT.md"))
+	raw, err := os.ReadFile(filepath.Join(home, ".edgebot", "CHATPROMPT.md"))
 	if err != nil {
-		slog.Warn("Cannot read ~/.ai-shell/CHATPROMPT.md, using embedded prompt", "err", err)
+		slog.Warn("Cannot read ~/.edgebot/CHATPROMPT.md, using embedded prompt", "err", err)
 		return []byte(ChatPrompt)
 	}
 
