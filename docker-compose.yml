@@ -1,6 +1,7 @@
 services:
   edgebot-bot:
     image: ghcr.io/cesto93/edgebot:latest
+    build: .
     container_name: edgebot-bot
     command: ["bot"]
     restart: unless-stopped
@@ -13,6 +14,12 @@ services:
     env_file:
       - .env
     environment:
+      # LiteRT-LM in-process backend: provider litertlm con modello Gemma 4
+      # E2B. L'entrypoint scarica libs + modello se assenti e forza la
+      # config su questi valori all'avvio.
+      - LITERTLM_BACKEND=cpu
+      - LITERTLM_MODEL_REPO=litert-community/gemma-4-E2B-it-litert-lm
+      - LITERTLM_MODEL_FILE=gemma-4-E2B-it.litertlm
       # When Ollama runs on the host, point the container at host.docker.internal.
       # Override with OLLAMA_HOST in your .env if needed.
       - OLLAMA_HOST=http://host.docker.internal:11434

@@ -21,7 +21,7 @@ make docker-down        # stop edgebot compose stack (docker compose down)
 go fmt ./... && go vet ./... && go build -o edgebot . && go test ./...
 ```
 
-Docker: `Dockerfile` (multi-stage `golang:1.26-bookworm` → `debian:bookworm-slim`, `CGO_ENABLED=0`, `ENTRYPOINT ["edgebot"]`) and `docker-compose.yml` (bot-only: single `edgebot-bot` service uses remote `ghcr.io/cesto93/edgebot:latest` with `command: ["bot"]` and `restart: unless-stopped` (`docker compose up -d`); mounts `./:/workspace` plus named volumes `edgebot-config`/`edgebot-data` for `~/.config/edgebot` and `~/.edgebot`, `env_file: .env`, `OLLAMA_HOST` → `host.docker.internal` via `extra_hosts: host-gateway`).
+Docker: `Dockerfile` (multi-stage `golang:1.26-bookworm` → `debian:bookworm-slim`, `CGO_ENABLED=0`, `ENTRYPOINT ["docker-entrypoint.sh"]` + `unzip` per le lib LiteRT-LM) and `docker-compose.yml` (bot-only: single `edgebot-bot` service, `image: ghcr.io/cesto93/edgebot:latest` + `build: .`, `command: ["bot"]`, `restart: unless-stopped`; default litertlm con `LITERTLM_MODEL_REPO=litert-community/gemma-4-E2B-it-litert-lm`, `LITERTLM_MODEL_FILE=gemma-4-E2B-it.litertlm`, `LITERTLM_BACKEND=cpu` — l'entrypoint `docker-entrypoint.sh` installa le lib (`make install-litertlm` equivalent), fa `edgebot models pull` del `.litertlm` se assente e forza `config --provider litertlm --model gemma-4-E2B-it --backend cpu`; mounts `./:/workspace` plus named volumes `edgebot-config`/`edgebot-data` for `~/.config/edgebot` and `~/.edgebot`, `env_file: .env`, `OLLAMA_HOST` → `host.docker.internal` via `extra_hosts: host-gateway`).
 
 ## Packages
 

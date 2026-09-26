@@ -13,14 +13,16 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/edgebot .
 FROM debian:bookworm-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates bash git curl \
+    && apt-get install -y --no-install-recommends ca-certificates bash git curl unzip \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /out/edgebot /usr/local/bin/edgebot
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 WORKDIR /workspace
 
 # Persist config/data inside image volumes by default; override with bind mounts in compose
 ENV HOME=/root
 
-ENTRYPOINT ["edgebot"]
+ENTRYPOINT ["docker-entrypoint.sh"]
