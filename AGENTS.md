@@ -149,6 +149,7 @@ Persistent `--debug` flag on the root command. `cmd.initLogger(cfg)` temporarily
 ## CI workflows (.github/workflows)
 
 - `ci.yml`: runs format/vet/build/test
+- `docker.yml`: on push to `main`/`master` or `v*.*.*` tags, builds multi-arch (`linux/amd64`, `linux/arm64`) image via Buildx/QEMU and pushes to `ghcr.io/<owner>/ai-shell` (`latest` on default branch, short SHA, tag ref)
 
 ## Key gotchas
 
